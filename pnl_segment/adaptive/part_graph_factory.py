@@ -31,6 +31,21 @@ def min_var(grp_to_min_var=None, **kwargs):
     return pg
 
 
+def max_kl(grp_to_max_kl=None, **kwargs):
+    """ maximize kl distance between grp_to_max_kl
+    """
+
+    def region_init(*args, **kwargs):
+        return region.RegionKL(*args,
+                               grp_to_min_var=grp_to_max_kl,
+                               **kwargs)
+
+    pg = _build_part_graph(**kwargs,
+                           region_init=region_init)
+
+    return pg
+
+
 def _build_part_graph(f_img_dict, region_init, verbose=False,
                       f_mask=None, f_edge_constraint=None, history=False,
                       sbj_thresh=.95):

@@ -1,3 +1,5 @@
+from itertools import permutations
+
 import numpy as np
 
 
@@ -45,15 +47,18 @@ class Region:
     def get_obj(self):
         raise NotImplementedError('invalid in base class Region, see subclass')
 
+    @staticmethod
+    def get_obj_pair(reg1, reg2):
+        return (reg1 + reg2).obj - (reg1.obj + reg2.obj)
+
 
 class RegionMinVar(Region):
     def __init__(self, *args, grp_to_min_var=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if grp_to_min_var is None:
+        self.grp_to_min_var = grp_to_min_var
+        if self.grp_to_min_var is None:
             self.grp_to_min_var = set(self.feat_stat.keys())
-        else:
-            self.grp_to_min_var = grp_to_min_var
 
     def get_obj(self):
         var_sum = 0
@@ -64,6 +69,37 @@ class RegionMinVar(Region):
         # assume uniform prior of grps
         return var_sum / len(self.grp_to_min_var)
 
-    @staticmethod
-    def get_obj_pair(reg1, reg2):
-        return (reg1 + reg2).obj - (reg1.obj + reg2.obj)
+
+class RegionKL(Region):
+    def __init__(self, *args, grp_to_max_kl=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.grp_to_max_kl = grp_to_max_kl
+        if self.grp_to_max_kl is None:
+            self.grp_to_max_kl = list(self.feat_stat.keys())
+            if len(self.grp_to_max_kl) != 2:
+                raise AttributeError('grp_to_max_kl needed if > 2 grps')
+
+    def get_obj(self):
+        """ returns symmetric kullback liebler divergance (assumes normal)
+
+        https://stats.stackexchange.com/questions/60680/kl-divergence-between-two-multivariate-gaussians
+        kl(p_1, p_0) = .5 [log |sig_1| / |sig_0| -
+                       d +
+                       tr(sig_1 ^ -1 sig_0) + ...
+                       (u_1 - u_0)^T sig_1 ^ -1 (u_1 - u_0)]
+
+        note: the first term cancels for symmetric kl:
+        log |sig_1| / |sig_0| + log |sig_0| / |sig_1| = 0
+        """
+        grp_0, grp_1 = self.grp_to_max_kl
+
+        kl = len(self.feat_stat[grp_0])
+        for fs_0, fs_1 in permutations(self.feat_stat[grp_0],
+                                       self.feat_stat[grp_1]):
+            fs_1_var_inv = np.linalg.inv(fs_1.var)
+            kl += np.trace(fs_1_var_inv @ fs_0.var)
+            mu_diff = fs_1.mu - fs_0.mu
+            kl += mu_diff.T @ fs_1_var_inv @ mu_diff
+
+        return kl * len(self)
