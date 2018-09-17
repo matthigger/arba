@@ -11,9 +11,10 @@ from itertools import chain
 import mh_pytools.paralell
 import nibabel as nib
 import numpy as np
-from pnl_segment.adaptive import region, part_graph, feat_stat
-from pnl_segment.point_cloud import point_cloud_ijk
 from tqdm import tqdm
+
+from . import region, part_graph, feat_stat
+from ..point_cloud import point_cloud_ijk, ref_space
 
 
 def min_var(grp_to_min_var=None, **kwargs):
@@ -37,7 +38,7 @@ def max_kl(grp_to_max_kl=None, **kwargs):
 
     def region_init(*args, **kwargs):
         return region.RegionKL(*args,
-                               grp_to_min_var=grp_to_max_kl,
+                               grp_to_max_kl=grp_to_max_kl,
                                **kwargs)
 
     pg = _build_part_graph(**kwargs,
@@ -70,9 +71,8 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
         print('\n' * 2 + 'construct part_graph: load')
 
     if f_mask is not None:
-        raise NotImplementedError('mask not used')
         img_mask = nib.load(str(f_mask))
-        mask = img_mask.get_data()
+        mask = img_mask.get_data() > 0
 
     # get ijk_dict_tree, (ijk_dict_tree[grp][ijk_tuple] = feat_stat)
     ijk_dict_tree = dict()
@@ -81,7 +81,7 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
             print(f'----{grp}----')
         min_sbj = np.floor(sbj_thresh * len(f_img_list_iter)).astype(int)
         ijk_dict_tree[grp] = get_ijk_dict(f_img_list_iter, verbose=verbose,
-                                          min_sbj=min_sbj)
+                                          min_sbj=min_sbj, mask=mask)
 
     # get set of all ijk
     ijk_set = set()
@@ -91,7 +91,10 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     # make sure all affines / shapes are identical
     f_list = [next(chain.from_iterable(f_img_list_iter))
               for f_img_list_iter in f_img_dict.values()]
-    affine, _ = check_space(f_list)
+    ref = ref_space.get_ref(f_list[0])
+    for f in f_list[1:]:
+        if ref != ref_space.get_ref(f):
+            raise AttributeError(f'shape / affine mismatch: {f}, {f_list[0]}')
 
     # init empty graph
     if history:
@@ -109,8 +112,7 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     reg_by_ijk = dict()
     for ijk in tqdm(ijk_set, **tqdm_dict):
         # construct pc_ijk
-        pc_ijk = point_cloud_ijk.PointCloudIJK(np.atleast_2d(ijk),
-                                               affine=affine)
+        pc_ijk = point_cloud_ijk.PointCloudIJK(np.atleast_2d(ijk), ref=ref)
 
         # construct region obj
         try:
@@ -165,8 +167,8 @@ def add_edges(pg, reg_by_ijk, verbose=False, f_edge_constraint=None):
             pg.add_edge(reg1, reg2)
 
 
-def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False,
-                 check_space_flag=True, min_sbj=1):
+def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
+                 mask=None):
     """ reads in images, builds feat_stat per ijk location
 
     Args:
@@ -176,18 +178,15 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False,
                               ['FA_sbj2.nii.gz', 'MD_sbj2.nii.gz']],
         verbose (bool): toggles cmd line output
         paralell (bool): toggles paralell data load
-        check_space_flag (bool): toggles affine equal check
         min_sbj (int): min num sbj to include ijk
+        mask (array): boolean array, include only ijk entries which are True
 
     Returns:
         feat_dict (dict): keys are ijk (tuple), values are FeatStat
     """
 
-    if check_space_flag:
-        check_space(chain.from_iterable(f_img_list_iter))
-
     if paralell:
-        raise NotImplementedError('not tested')
+        raise NotImplementedError('not tested (+ mask)')
 
         def par_iter():
             x = iter(f_img_list_iter)
@@ -218,14 +217,11 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False,
         _feat_list = [nib.load(str(f_img)).get_data() for f_img in f_img_list]
         feat_list.append(np.stack(_feat_list, axis=3))
 
-    # # iterate over valid mask values
-    # for ijk in ijk_all:
-    #     ijk = tuple(ijk)
-    #     x = np.array([x[ijk] for x in feat_list])
-    #     feat_dict[ijk].append(x)
-
     # feat has shape (space, space, space, num_feat, num_sbj)
     feat = np.stack(feat_list, axis=4)
+
+    if not np.allclose(feat.shape[:3], mask.shape):
+        raise AttributeError('mask not same size as feat')
 
     # compute feat stats
     feat_stat_dict = dict()
@@ -233,6 +229,10 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False,
                  'disable': not verbose,
                  'desc': 'compute feat_stat per voxel'}
     for ijk in tqdm(np.ndindex(feat.shape[:3]), **tqdm_dict):
+        # if mask[ijk] is False, skip this value
+        if mask is not None and not mask[tuple(ijk)]:
+            continue
+
         # get x, with dim num_feat x num_sbj
         x = feat[ijk[0], ijk[1], ijk[2], :, :]
 
@@ -245,23 +245,6 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False,
 
         # add it to feat_stat_dict
         obs_greater_dim = x.shape[1] > x.shape[0]
-        feat_stat_dict[ijk] = \
-            feat_stat.FeatStat.from_array(x, obs_greater_dim)
+        feat_stat_dict[ijk] = feat_stat.FeatStat.from_array(x, obs_greater_dim)
 
     return feat_stat_dict
-
-
-def check_space(f_iter, shape=True, affine=True):
-    img_list = [nib.load(str(x)) for x in f_iter]
-    affine_list = [x.affine for x in img_list]
-    shape_list = [x.shape for x in img_list]
-
-    if affine:
-        if any(not np.allclose(a, affine_list[0]) for a in affine_list):
-            raise AttributeError('affine mismatch')
-
-    if shape:
-        if any(not np.allclose(s, shape_list[0]) for s in shape_list):
-            raise AttributeError('shape mismatch')
-
-    return affine_list[0], shape_list[0]

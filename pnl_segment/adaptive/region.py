@@ -94,12 +94,12 @@ class RegionKL(Region):
         """
         grp_0, grp_1 = self.grp_to_max_kl
 
-        kl = len(self.feat_stat[grp_0])
-        for fs_0, fs_1 in permutations(self.feat_stat[grp_0],
-                                       self.feat_stat[grp_1]):
+        kl = len(self.feat_stat[grp_0].mu)
+        for fs_0, fs_1 in permutations((self.feat_stat[grp_0],
+                                       self.feat_stat[grp_1])):
             fs_1_var_inv = np.linalg.inv(fs_1.var)
             kl += np.trace(fs_1_var_inv @ fs_0.var)
             mu_diff = fs_1.mu - fs_0.mu
             kl += mu_diff.T @ fs_1_var_inv @ mu_diff
 
-        return kl * len(self)
+        return float(kl * len(self))
