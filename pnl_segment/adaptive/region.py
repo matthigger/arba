@@ -47,10 +47,6 @@ class Region:
     def get_obj(self):
         raise NotImplementedError('invalid in base class Region, see subclass')
 
-    @staticmethod
-    def get_obj_pair(reg1, reg2):
-        return (reg1 + reg2).obj - (reg1.obj + reg2.obj)
-
 
 class RegionMinVar(Region):
     def __init__(self, *args, grp_to_min_var=None, **kwargs):
@@ -69,8 +65,14 @@ class RegionMinVar(Region):
         # assume uniform prior of grps
         return var_sum / len(self.grp_to_min_var)
 
+    @staticmethod
+    def get_obj_pair(reg1, reg2):
+        """ this obj is to be minimized """
+        delta_mean_var = (reg1 + reg2).obj - (reg1.obj + reg2.obj)
+        return delta_mean_var
 
-class RegionKL(Region):
+
+class RegionMaxKL(Region):
     def __init__(self, *args, grp_to_max_kl=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -81,7 +83,9 @@ class RegionKL(Region):
                 raise AttributeError('grp_to_max_kl needed if > 2 grps')
 
     def get_obj(self):
-        """ returns symmetric kullback liebler divergance (assumes normal)
+        """ returns symmetric kullback liebler divergance * len(self.pc_ijk)
+
+        (assumes each distribution is normal)
 
         https://stats.stackexchange.com/questions/60680/kl-divergence-between-two-multivariate-gaussians
         kl(p_1, p_0) = .5 [log |sig_1| / |sig_0| -
@@ -89,17 +93,28 @@ class RegionKL(Region):
                        tr(sig_1 ^ -1 sig_0) + ...
                        (u_1 - u_0)^T sig_1 ^ -1 (u_1 - u_0)]
 
-        note: the first term cancels for symmetric kl:
+        NOTE: the first term cancels for symmetric kl:
         log |sig_1| / |sig_0| + log |sig_0| / |sig_1| = 0
         """
         grp_0, grp_1 = self.grp_to_max_kl
 
+        # init to d
         kl = len(self.feat_stat[grp_0].mu)
+
+        # add other terms
         for fs_0, fs_1 in permutations((self.feat_stat[grp_0],
-                                       self.feat_stat[grp_1])):
-            fs_1_var_inv = np.linalg.inv(fs_1.var)
-            kl += np.trace(fs_1_var_inv @ fs_0.var)
+                                        self.feat_stat[grp_1])):
+            fs_1_cov_inv = np.linalg.inv(fs_1.cov)
+            kl += np.trace(fs_1_cov_inv @ fs_0.cov)
             mu_diff = fs_1.mu - fs_0.mu
-            kl += mu_diff.T @ fs_1_var_inv @ mu_diff
+            kl += mu_diff.T @ fs_1_cov_inv @ mu_diff
 
         return float(kl * len(self))
+
+    @staticmethod
+    def get_obj_pair(reg1, reg2):
+        """ this obj is to be minimized """
+        delta_kl = (reg1 + reg2).obj - (reg1.obj + reg2.obj)
+
+        # swap sign (we want to maximize kl)
+        return -delta_kl

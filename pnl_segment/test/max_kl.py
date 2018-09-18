@@ -5,6 +5,7 @@ from collections import defaultdict
 import nibabel as nib
 import numpy as np
 from pnl_segment.adaptive import part_graph_factory
+from mh_pytools import file
 
 # compares n_healthy to n_effect images.  all have gaussian noise added, effect
 #  has eff_size added (FA and MD) @ eff_center within eff_radius (vox)
@@ -14,6 +15,9 @@ noise_power = .01
 eff_size = .4
 eff_center = (53, 63, 36)
 eff_radius = 5
+
+# computation speed param
+edge_per_step = 50
 
 # load files
 folder = pathlib.Path(__file__).parent
@@ -73,4 +77,11 @@ for _ in range(n_effect):
                                  sample_img(f_md, eff_size=eff_size)))
 
 pg = part_graph_factory.max_kl(f_img_dict=f_img_dict, verbose=True,
-                               f_mask=f_mask)
+                               f_mask=f_mask, history=True)
+
+for n in np.geomspace(len(pg), 100, 20):
+    f_part_graph = folder / f'part_graph_{n:.0f}.p.gz'
+    _edge_per_step = np.min((edge_per_step, np.ceil(n / 300).astype(int)))
+    pg.reduce_to(n, edge_per_step=_edge_per_step)
+    print(f'saving {f_part_graph}')
+    file.save(pg, f_part_graph)

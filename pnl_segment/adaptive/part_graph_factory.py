@@ -29,6 +29,8 @@ def min_var(grp_to_min_var=None, **kwargs):
     pg = _build_part_graph(**kwargs,
                            region_init=region_init)
 
+    pg.obj_fnc = region.RegionMinVar.get_obj_pair
+
     return pg
 
 
@@ -37,12 +39,14 @@ def max_kl(grp_to_max_kl=None, **kwargs):
     """
 
     def region_init(*args, **kwargs):
-        return region.RegionKL(*args,
-                               grp_to_max_kl=grp_to_max_kl,
-                               **kwargs)
+        return region.RegionMaxKL(*args,
+                                  grp_to_max_kl=grp_to_max_kl,
+                                  **kwargs)
 
     pg = _build_part_graph(**kwargs,
                            region_init=region_init)
+
+    pg.obj_fnc = region.RegionMaxKL.get_obj_pair
 
     return pg
 

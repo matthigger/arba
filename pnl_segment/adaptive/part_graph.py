@@ -2,13 +2,12 @@ import multiprocessing
 import time
 from collections import defaultdict
 
+import mh_pytools.paralell
 import networkx as nx
 import nibabel as nib
 import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
-
-import mh_pytools.paralell
 
 
 class PartGraph(nx.Graph):
@@ -146,8 +145,10 @@ class PartGraph(nx.Graph):
         """
 
         if len(self) < num_reg_stop:
-            raise AttributeError(
-                f'already has < {num_reg_stop} nodes ({len(self)})')
+            print (f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
+
+        if edge_per_step <= 0:
+            raise AttributeError('edge_per_step must be positive')
 
         # init edges if need be
         if self._obj_edge_list is None:
