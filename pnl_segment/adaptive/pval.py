@@ -19,7 +19,7 @@ def mahalanobis2(x, mu, cov=None, cov_inv=None):
     return r2
 
 
-def get_pval(reg, grp_cmp, grp_test):
+def get_pval(reg, grp_cmp, grp_test, bessel=True):
     """ returns probability that mean of grp_test's values are from grp_cmp
 
     assumes each is normally distributed
@@ -29,20 +29,28 @@ def get_pval(reg, grp_cmp, grp_test):
                                dict of feat_stats, labeled by grp
         grp_cmp: comparison group, key of reg.feat_stat to build model from
         grp_test: test group, key of reg.feat_stat to test from model
+        bessel (bool): toggles whether bessel correction applied
 
     Returns:
         pval (float): prob
         r2 (float): mahalanobis squared of mean test to grp_cmp (is chi2)
     """
 
+    # get bessel correction (so cmp is unbiased var)
+    # https://en.wikipedia.org/wiki/Bessel%27s_correction
+    n_cmp = reg.feat_stat[grp_cmp].n
+    bessel = (n_cmp / (n_cmp - 1)) ** bessel
+
+    n_test = reg.feat_stat[grp_cmp].n
+
     cmp_mu = reg.feat_stat[grp_cmp].mu
-    cmp_cov = reg.feat_stat[grp_cmp].cov
+    cmp_cov = reg.feat_stat[grp_cmp].cov * bessel / n_test
     test_mu = reg.feat_stat[grp_test].mu
 
     r2 = mahalanobis2(x=test_mu, mu=cmp_mu, cov=cmp_cov)
-    pval = chi2.cdf(r2, df=len(cmp_mu))
+    pval = 1 - chi2.cdf(r2, df=len(cmp_mu))
 
-    return pval, r2
+    return pval, float(r2)
 
 
 if __name__ is '__main__':
