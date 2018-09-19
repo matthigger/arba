@@ -4,22 +4,20 @@ from collections import defaultdict
 
 import nibabel as nib
 import numpy as np
-from pnl_segment.adaptive import part_graph_factory
 from mh_pytools import file
+from pnl_segment.adaptive import part_graph_factory
 
 # compares n_healthy to n_effect images.  all have gaussian noise added, effect
 #  has eff_size added (FA and MD) @ eff_center within eff_radius (vox)
 n_healthy = 10
 n_effect = 10
 noise_power = .01
-eff_size = .4
+eff_size = .1
 eff_center = (53, 63, 36)
-eff_radius = 5
+eff_radius = 2
+mask_radius = 3
 
-# computation speed param
-edge_per_step = 50
-
-# load files
+# files
 folder = pathlib.Path(__file__).parent
 f_fa = str(folder / 'FA.nii.gz')
 f_md = str(folder / 'MD.nii.gz')
@@ -28,6 +26,7 @@ f_mask = str(folder / 'mask.nii.gz')
 # repeatably random
 np.random.seed(1)
 
+
 # # strip all but data and affine (its already anonymized, but can't hurt to be
 # # minimal)
 # for f in (f_fa, f_md, f_mask):
@@ -35,12 +34,28 @@ np.random.seed(1)
 #     img_copy = nib.Nifti1Image(img.get_data(), img.affine)
 #     img_copy.to_filename(f)
 
-# numpy takes std_dev...
-scale = np.sqrt(noise_power)
 
-# build slice obj of effected area
+def build_mask(r, f=None):
+    # load
+    img_mask = nib.load(f_mask)
+
+    # build mask
+    x = np.zeros(img_mask.shape)
+    area = tuple(slice(c - r, c + r) for c in eff_center)
+    x[area] = 1
+    x = np.logical_and(x, img_mask.get_data())
+
+    if f is None:
+        _, f = tempfile.mkstemp(suffix='.nii.gz')
+    img_mask = nib.Nifti1Image(x.astype(float), img_mask.affine)
+    img_mask.to_filename(str(f))
+    return f
+
+
+# compute values needed in sample_img
 eff_slice = tuple(slice(c - eff_radius, c + eff_radius) for c in eff_center)
 eff_shape = tuple([eff_radius * 2] * 3)
+scale = np.sqrt(noise_power)
 
 
 def sample_img(f, eff_size=0):
@@ -67,6 +82,11 @@ def sample_img(f, eff_size=0):
     return f
 
 
+# build masks (quicker computation)
+f_mask = build_mask(mask_radius)
+f_mask_effect = folder / 'mask_effect.nii.gz'
+build_mask(eff_radius, f=f_mask_effect)
+
 # build f_img_dict (see part_graph_factory._build_part_graph for ex)
 f_img_dict = defaultdict(list)
 for _ in range(n_healthy):
@@ -79,9 +99,6 @@ for _ in range(n_effect):
 pg = part_graph_factory.max_kl(f_img_dict=f_img_dict, verbose=True,
                                f_mask=f_mask, history=True)
 
-for n in np.geomspace(len(pg), 100, 20):
-    f_part_graph = folder / f'part_graph_{n:.0f}.p.gz'
-    _edge_per_step = np.min((edge_per_step, np.ceil(n / 300).astype(int)))
-    pg.reduce_to(n, edge_per_step=_edge_per_step)
-    print(f'saving {f_part_graph}')
-    file.save(pg, f_part_graph)
+pg.reduce_to(1, edge_per_step=1)
+f_part_graph = folder / 'part_graph.p.gz'
+file.save(pg, f_part_graph)
