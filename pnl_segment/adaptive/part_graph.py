@@ -9,6 +9,8 @@ import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
+from ..point_cloud import ref_space
+
 
 class PartGraph(nx.Graph):
     def __init__(self):
@@ -18,15 +20,17 @@ class PartGraph(nx.Graph):
         self.obj_fnc_max = np.inf
         self._obj_edge_list = None
 
-    def to_img(self, f_out, f_ref, **kwargs):
+    def to_img(self, f_out, ref, **kwargs):
         # load reference image
-        img_ref = nib.load(str(f_ref))
+        ref = ref_space.get_ref(ref)
+        if ref.shape is None:
+            raise AttributeError('ref must have shape')
 
         # build array
-        x = self.to_array(img_ref.shape, **kwargs)
+        x = self.to_array(ref.shape, **kwargs)
 
         # save
-        img_out = nib.Nifti1Image(x, img_ref.affine)
+        img_out = nib.Nifti1Image(x, ref.affine)
         img_out.to_filename(str(f_out))
 
         return img_out
@@ -126,7 +130,7 @@ class PartGraph(nx.Graph):
                                       desc='combining'):
             reg_new_dict[reg_idx] = self.combine(reg_list)
 
-    def reduce_to(self, num_reg_stop=1, edge_per_step=10, verbose=True,
+    def reduce_to(self, num_reg_stop=1, edge_per_step=1, verbose=True,
                   par_thresh=10000, update_period=10):
         """ combines neighbor nodes until only num_reg_stop remain
 
@@ -145,7 +149,7 @@ class PartGraph(nx.Graph):
         """
 
         if len(self) < num_reg_stop:
-            print (f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
+            print(f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
 
         if edge_per_step <= 0:
             raise AttributeError('edge_per_step must be positive')
@@ -286,7 +290,7 @@ class PartGraphHistory(PartGraph):
 
     def __init__(self):
         super().__init__()
-        self.tree_history = nx.Graph()
+        self.tree_history = nx.DiGraph()
 
     def combine(self, reg_iter):
         reg_sum = super().combine(reg_iter)
@@ -295,3 +299,45 @@ class PartGraphHistory(PartGraph):
             self.tree_history.add_edge(reg, reg_sum)
 
         return reg_sum
+
+    def get_min_spanning_region(self, fnc):
+        """ gets PartGraph (no history) which spans ijk with min fnc (greedy)
+
+        Args:
+            fnc (fnc): function to be minimized (accepts regions, gives obj
+                       which can be ordered
+        """
+
+        # sort a list of regions by fnc
+        reg_list = sorted([(fnc(reg), reg) for reg in self.tree_history.nodes])
+
+        # a list of all regions which contain some ijk value which has been
+        # included in min_reg_list
+        unspanned_reg = set(self.tree_history.nodes)
+
+        # get list of spanning region with min fnc
+        min_reg_list = list()
+        while unspanned_reg:
+            # get reg with min val
+            f, reg = reg_list.pop(0)
+
+            if reg in unspanned_reg:
+                # region has no intersection with any reg in min_reg_list
+                # add to min_reg_list
+                min_reg_list.append(reg)
+
+                # rm its descendants and ancestors from unspanned_reg
+                unspanned_reg -= {reg}
+                unspanned_reg -= nx.descendants(self.tree_history, reg)
+                unspanned_reg -= nx.ancestors(self.tree_history, reg)
+            else:
+                # region intersects some ijk which is already in min_reg_list
+                continue
+
+        # build part_graph
+        pg = PartGraph()
+        pg.obj_fnc = self.obj_fnc
+        pg.obj_fnc_max = np.inf
+        pg.add_nodes_from(min_reg_list)
+
+        return pg
