@@ -301,7 +301,10 @@ class PartGraphHistory(PartGraph):
         return reg_sum
 
     def get_min_spanning_region(self, fnc):
-        """ gets PartGraph (no history) which spans ijk with min fnc (greedy)
+        """ get subset of self.tree_history that covers with min fnc (greedy)
+
+        by cover, we mean that each leaf in self.tree_history has exactly one
+        region in the subset which is its descendant (dag points to root)
 
         Args:
             fnc (fnc): function to be minimized (accepts regions, gives obj
