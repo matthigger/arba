@@ -53,7 +53,7 @@ def max_kl(grp_to_max_kl=None, **kwargs):
 
 def _build_part_graph(f_img_dict, region_init, verbose=False,
                       f_mask=None, f_edge_constraint=None, history=False,
-                      sbj_thresh=.95):
+                      sbj_thresh=.95, img_label=None):
     """ init PartGraph via img
 
     Args:
@@ -78,6 +78,13 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
         img_mask = nib.load(str(f_mask))
         mask = img_mask.get_data() > 0
 
+    # init empty graph
+    if history:
+        pg = part_graph.PartGraphHistory()
+    else:
+        pg = part_graph.PartGraph()
+    pg.feat_label = img_label
+
     # get ijk_dict_tree, (ijk_dict_tree[grp][ijk_tuple] = feat_stat)
     ijk_dict_tree = dict()
     for grp, f_img_list_iter in f_img_dict.items():
@@ -85,7 +92,8 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
             print(f'----{grp}----')
         min_sbj = np.floor(sbj_thresh * len(f_img_list_iter)).astype(int)
         ijk_dict_tree[grp] = get_ijk_dict(f_img_list_iter, verbose=verbose,
-                                          min_sbj=min_sbj, mask=mask)
+                                          min_sbj=min_sbj, mask=mask,
+                                          feat_label=pg.feat_label)
 
     # get set of all ijk
     ijk_set = set()
@@ -99,12 +107,6 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     for f in f_list[1:]:
         if ref != ref_space.get_ref(f):
             raise AttributeError(f'shape / affine mismatch: {f}, {f_list[0]}')
-
-    # init empty graph
-    if history:
-        pg = part_graph.PartGraphHistory()
-    else:
-        pg = part_graph.PartGraph()
 
     if verbose:
         print('\n' * 2 + 'construct part_graph: build graph')
@@ -172,7 +174,7 @@ def add_edges(pg, reg_by_ijk, verbose=False, f_edge_constraint=None):
 
 
 def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
-                 mask=None):
+                 mask=None, feat_label=None):
     """ reads in images, builds feat_stat per ijk location
 
     Args:
@@ -184,7 +186,7 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
         paralell (bool): toggles paralell data load
         min_sbj (int): min num sbj to include ijk
         mask (array): boolean array, include only ijk entries which are True
-
+        feat_label (iter): labels each dimension (e.g. ('fa', 'md'))
     Returns:
         feat_dict (dict): keys are ijk (tuple), values are FeatStat
     """
@@ -209,6 +211,7 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
         ijk_set = frozenset().union(*[set(d.keys()) for d in res_out])
         for ijk in tqdm(ijk_set, **tqdm_dict):
             feat_stat_dict[ijk] = sum(d[ijk] for d in res_out)
+            feat_stat_dict[ijk].label = feat_label
         return feat_stat_dict
 
     # build feat_dict, keys are ijk positions, values are lists of features
@@ -250,5 +253,6 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
         # add it to feat_stat_dict
         obs_greater_dim = x.shape[1] > x.shape[0]
         feat_stat_dict[ijk] = feat_stat.FeatStat.from_array(x, obs_greater_dim)
+        feat_stat_dict[ijk].label = feat_label
 
     return feat_stat_dict

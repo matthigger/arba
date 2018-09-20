@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import multivariate_normal
 
 
 class FeatStat:
@@ -26,11 +27,12 @@ class FeatStat:
     True
     """
 
-    def __init__(self, n=0, mu=np.nan, cov=np.nan):
+    def __init__(self, n=0, mu=np.nan, cov=np.nan, label=None):
         # defaults to 'empty' set of features
         self.n = int(n)
         self.mu = np.atleast_2d(mu)
         self.cov = np.atleast_2d(cov)
+        self.label = label
 
         if self.mu.shape[0] != self.cov.shape[0]:
             if self.mu.shape[1] == self.cov.shape[0]:
@@ -45,6 +47,19 @@ class FeatStat:
         return self.n == other.n and \
                np.allclose(self.mu, other.mu) and \
                np.allclose(self.cov, other.cov)
+
+    def to_normal(self, bessel=True):
+        """ outputs max likelihood multivariate_normal based on features
+
+        Args:
+            bessel (bool): toggles bessel correction (for unbiased cov)
+
+        Returns:
+            rv (multivariate_normal): normal distribution
+        """
+        bessel = (self.n / (self.n - 1)) ** bessel
+        return multivariate_normal(mean=np.squeeze(self.mu),
+                                   cov=self.cov * bessel)
 
     @staticmethod
     def from_iter(x):
@@ -94,6 +109,8 @@ class FeatStat:
         var = self.n / n * (self.cov + self.mu @ self.mu.T) + \
               othr.n / n * (othr.cov + othr.mu @ othr.mu.T) - \
               mu @ mu.T
-        return FeatStat(n, mu, var)
+
+        # note: no checking for label, we take it from self
+        return FeatStat(n, mu, var, label=self.label)
 
     __radd__ = __add__

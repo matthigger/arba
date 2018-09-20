@@ -22,6 +22,7 @@ folder = pathlib.Path(__file__).parent
 f_fa = str(folder / 'FA.nii.gz')
 f_md = str(folder / 'MD.nii.gz')
 f_mask = str(folder / 'mask.nii.gz')
+img_label = ['FA', 'MD']
 
 # repeatably random
 np.random.seed(1)
@@ -97,7 +98,7 @@ for _ in range(n_effect):
                                  sample_img(f_md, eff_size=eff_size)))
 
 pg = part_graph_factory.max_kl(f_img_dict=f_img_dict, verbose=True,
-                               f_mask=f_mask, history=True)
+                               f_mask=f_mask, history=True, img_label=img_label)
 
 pg.reduce_to(1, edge_per_step=1)
 f_part_graph = folder / 'part_graph.p.gz'
