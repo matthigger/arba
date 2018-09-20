@@ -50,7 +50,7 @@ def get_pval(reg, grp_cmp, grp_test, bessel=True):
     r2 = mahalanobis2(x=test_mu, mu=cmp_mu, cov=cmp_cov)
     pval = 1 - chi2.cdf(r2, df=len(cmp_mu))
 
-    return pval, float(r2)
+    return float(pval), float(r2)
 
 
 if __name__ is '__main__':
