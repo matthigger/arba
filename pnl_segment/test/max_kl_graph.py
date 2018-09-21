@@ -25,22 +25,22 @@ def fnc_sort(reg):
 
 sns.set(font_scale=1.2)
 
-f_out = folder / 'size_v_mahalanobis.pdf'
-with PdfPages(f_out) as pdf:
-    pg_span = pg.get_min_spanning_region(fnc=fnc_sort)
-    size_v_mahalanobis(pg, f_mask_track=f_mask_effect,
-                       mask_label='% effect',
-                       reg_highlight=pg_span.nodes)
-    plt.show()
-    fig = plt.gcf()
-    fig.set_size_inches(12, 8)
-    pdf.savefig(fig)
+# f_out = folder / 'size_v_mahalanobis.pdf'
+# with PdfPages(f_out) as pdf:
+#     pg_span = pg.get_min_spanning_region(fnc=fnc_sort)
+#     size_v_mahalanobis(pg, f_mask_track=f_mask_effect,
+#                        mask_label='% effect',
+#                        reg_highlight=pg_span.nodes)
+#     plt.show()
+#     fig = plt.gcf()
+#     fig.set_size_inches(12, 8)
+#     pdf.savefig(fig)
 
 f_out = folder / 'max_pval_reg.pdf'
 with PdfPages(f_out) as pdf:
     reg_history_sort = sorted(pg.tree_history.nodes, key=fnc_sort)
     reg = reg_history_sort[0]
-    roi_and_prob_feat(reg, f_back=f_b0)
+    roi_and_prob_feat(reg, f_back=f_b0, f_img_dict=pg.f_img_dict)
     plt.show()
     fig = plt.gcf()
     fig.set_size_inches(14, 5)

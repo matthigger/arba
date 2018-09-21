@@ -6,6 +6,7 @@ from matplotlib import cm
 from matplotlib.colors import rgb2hex
 from matplotlib.lines import Line2D
 from nilearn import plotting
+from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
 from scipy.stats import multivariate_normal
 
 
@@ -33,7 +34,7 @@ def get_meshgrid(mv_norm, idx_to_plot, std_dev_zoom=3, n=100):
 
 
 def prob_feat(reg, grp_list=None, idx_to_plot=[0, 1], idx_label=None,
-              n_level=4, cmap=cm.Set1, ax=None, **kwargs):
+              n_level=4, cmap=cm.Set1, ax=None, f_img_dict=None, **kwargs):
     if grp_list is None:
         grp_list = reg.feat_stat.keys()
 
@@ -49,6 +50,18 @@ def prob_feat(reg, grp_list=None, idx_to_plot=[0, 1], idx_label=None,
         _, ax = plt.subplots()
     plt.sca(ax)
 
+    # plot scatter
+    if f_img_dict is not None:
+        # get raw data via original files
+        for idx, grp in enumerate(grp_list):
+            ijk_dict = get_ijk_dict(f_img_dict[grp], raw_feat=True)
+            x_raw = np.hstack(ijk_dict[tuple(ijk)] for ijk in reg.pc_ijk.x)
+
+            plt.scatter(x_raw[idx_to_plot[0], :],
+                        x_raw[idx_to_plot[1], :],
+                        color=cmap(idx), alpha=.2)
+
+    # build contour inputs
     xyp_dict = dict()
     for grp in grp_list:
         # build multivariate_normal
@@ -60,14 +73,11 @@ def prob_feat(reg, grp_list=None, idx_to_plot=[0, 1], idx_label=None,
         # find prob
         p = mv_norm.pdf(domain).reshape(len(y), len(x))
 
-        # store (allows computing levels all-together for consistency)
+        # store (allows computing levels all-together for consistency ...
+        # though not currently built this way)
         xyp_dict[grp] = x, y, p
 
-    # # compute levels
-    # p_all = np.hstack(p for _, _, p in xyp_dict.values())
-    # levels = sorted(np.percentile(p_all, 100 - np.geomspace(1, 40, n_level)))
-
-    # plot
+    # plot contours
     legend_dict = dict()
     for idx, (grp, (x, y, p)) in enumerate(xyp_dict.items()):
         color = rgb2hex(cmap(idx))
@@ -80,7 +90,7 @@ def prob_feat(reg, grp_list=None, idx_to_plot=[0, 1], idx_label=None,
 
 
 def roi_and_prob_feat(reg, f_back=None, **kwargs):
-    fig, ax = plt.subplots(1, 2, gridspec_kw={'width_ratios': [3, 1]})
+    fig, ax = plt.subplots(1, 2, gridspec_kw={'width_ratios': [2, 1]})
 
     prob_feat(reg, ax=ax[1], **kwargs)
 

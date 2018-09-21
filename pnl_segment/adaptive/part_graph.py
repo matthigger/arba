@@ -14,12 +14,14 @@ from ..point_cloud import ref_space
 
 class PartGraph(nx.Graph):
     def __init__(self, feat_label=None):
-        # see PartGraphFactory to instantiate PartGraph
+        # see PartGraphFactory to instantiate PartGraph, this should not be
+        # used directly
         super().__init__()
         self.obj_fnc = None
         self.obj_fnc_max = np.inf
         self._obj_edge_list = None
         self.feat_label = feat_label
+        self.f_img_dict = None
 
     def to_img(self, f_out, ref, **kwargs):
         # load reference image

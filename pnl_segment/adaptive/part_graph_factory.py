@@ -5,10 +5,8 @@ two sets of images (identifyign regions of max kl diff).  this difference in
 behavior is encapsulated in the region objects (pnl_segment.adaptive.region)
 """
 
-import multiprocessing
 from itertools import chain
 
-import mh_pytools.paralell
 import nibabel as nib
 import numpy as np
 from tqdm import tqdm
@@ -141,6 +139,9 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     if verbose:
         print('finished constructing part_graph' + '\n' * 2)
 
+    # store original image files
+    pg.f_img_dict = f_img_dict
+
     return pg
 
 
@@ -173,8 +174,8 @@ def add_edges(pg, reg_by_ijk, verbose=False, f_edge_constraint=None):
             pg.add_edge(reg1, reg2)
 
 
-def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
-                 mask=None, feat_label=None):
+def get_ijk_dict(f_img_list_iter, verbose=False, min_sbj=1, mask=None,
+                 feat_label=None, raw_feat=False):
     """ reads in images, builds feat_stat per ijk location
 
     Args:
@@ -183,38 +184,16 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
                              [['FA_sbj1.nii.gz', 'MD_sbj1.nii.gz'], \
                               ['FA_sbj2.nii.gz', 'MD_sbj2.nii.gz']],
         verbose (bool): toggles cmd line output
-        paralell (bool): toggles paralell data load
         min_sbj (int): min num sbj to include ijk
         mask (array): boolean array, include only ijk entries which are True
         feat_label (iter): labels each dimension (e.g. ('fa', 'md'))
+        raw_feat (bool): toggles getting raw features
     Returns:
         feat_dict (dict): keys are ijk (tuple), values are FeatStat
     """
 
-    if paralell:
-        raise NotImplementedError('not tested (+ mask)')
-
-        def par_iter():
-            x = iter(f_img_list_iter)
-            yield next(x), False
-
-        # paralell load
-        pool = multiprocessing.Pool()
-        res = pool.map_async(get_ijk_dict, par_iter)
-        desc = 'load data / compute feat stats (paralell)'
-        res_out = mh_pytools.paralell.join(res, verbose=verbose, desc=desc)
-
-        # add data together (from each run)
-        tqdm_dict = {'desc': 'join paralell feat stats (per voxel)',
-                     'disable': not verbose}
-        feat_stat_dict = dict()
-        ijk_set = frozenset().union(*[set(d.keys()) for d in res_out])
-        for ijk in tqdm(ijk_set, **tqdm_dict):
-            feat_stat_dict[ijk] = sum(d[ijk] for d in res_out)
-            feat_stat_dict[ijk].label = feat_label
-        return feat_stat_dict
-
-    # build feat_dict, keys are ijk positions, values are lists of features
+    # build feat_dict, keys are ijk positions, values are lists of features in
+    # original array format
     feat_list = list()
     tqdm_dict = {'total': len(list(f_img_list_iter)),
                  'disable': not verbose,
@@ -224,14 +203,15 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
         _feat_list = [nib.load(str(f_img)).get_data() for f_img in f_img_list]
         feat_list.append(np.stack(_feat_list, axis=3))
 
-    # feat has shape (space, space, space, num_feat, num_sbj)
+    # feat is 5d array with shape (space, space, space, num_feat, num_sbj)
     feat = np.stack(feat_list, axis=4)
 
-    if not np.allclose(feat.shape[:3], mask.shape):
+    # check mask
+    if mask is not None and not np.allclose(feat.shape[:3], mask.shape):
         raise AttributeError('mask not same size as feat')
 
     # compute feat stats
-    feat_stat_dict = dict()
+    dict_out = dict()
     tqdm_dict = {'total': np.prod(feat.shape[:3]),
                  'disable': not verbose,
                  'desc': 'compute feat_stat per voxel'}
@@ -250,9 +230,13 @@ def get_ijk_dict(f_img_list_iter, verbose=False, paralell=False, min_sbj=1,
             # not enough valid sbj
             continue
 
-        # add it to feat_stat_dict
-        obs_greater_dim = x.shape[1] > x.shape[0]
-        feat_stat_dict[ijk] = feat_stat.FeatStat.from_array(x, obs_greater_dim)
-        feat_stat_dict[ijk].label = feat_label
+        # add it to dict_out
+        if raw_feat:
+            dict_out[ijk] = x
+        else:
+            obs_greater_dim = x.shape[1] > x.shape[0]
+            fs = feat_stat.FeatStat.from_array(x, obs_greater_dim)
+            fs.label = feat_label
+            dict_out[ijk] = fs
 
-    return feat_stat_dict
+    return dict_out
