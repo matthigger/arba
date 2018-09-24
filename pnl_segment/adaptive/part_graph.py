@@ -23,7 +23,7 @@ class PartGraph(nx.Graph):
         self.feat_label = feat_label
         self.f_img_dict = None
 
-    def to_img(self, f_out, ref, **kwargs):
+    def to_nii(self, f_out, ref, **kwargs):
         # load reference image
         ref = ref_space.get_ref(ref)
         if ref.shape is None:
@@ -38,7 +38,7 @@ class PartGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, shape, fnc=None, fnc_include=None, verbose=True):
+    def to_array(self, shape, fnc=None, fnc_include=None):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
@@ -50,12 +50,8 @@ class PartGraph(nx.Graph):
             def fnc(reg):
                 return reg_to_idx[reg]
 
-        x = np.zeros(shape)
-        tqdm_dict = {'desc': 'get mask per node', 'disable': not verbose}
-        for reg in tqdm(self.nodes, **tqdm_dict):
-            if fnc_include is None or fnc_include(reg):
-                x += reg.pc_ijk.to_array(shape=shape) * fnc(reg)
-        return x
+        reg_list = filter(fnc_include, self.nodes)
+        return sum(fnc(reg) * reg.pc_ijk.to_array() for reg in reg_list)
 
     def combine(self, reg_iter):
         """ combines multiple regions into one
