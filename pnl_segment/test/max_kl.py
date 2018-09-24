@@ -9,13 +9,13 @@ from pnl_segment.adaptive import part_graph_factory
 
 # compares n_healthy to n_effect images.  all have gaussian noise added, effect
 #  has eff_size added (FA and MD) @ eff_center within eff_radius (vox)
-n_healthy = 10
-n_effect = 10
-noise_power = .01
-eff_size = .1
+n_healthy = 20
+n_effect = 20
+noise_power = .02
+eff_size = .05
 eff_center = (53, 63, 36)
 eff_radius = 2
-mask_radius = 3
+mask_radius = 4
 
 # files
 folder = pathlib.Path(__file__).parent
