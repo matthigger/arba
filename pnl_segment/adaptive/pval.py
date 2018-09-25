@@ -41,7 +41,9 @@ def get_pval(reg, grp_cmp, grp_test, bessel=True):
     n_cmp = reg.feat_stat[grp_cmp].n
     bessel = (n_cmp / (n_cmp - 1)) ** bessel
 
-    n_test = reg.feat_stat[grp_cmp].n
+    #
+    # n_test = reg.feat_stat[grp_cmp].n
+    n_test = len(reg.pc_ijk)
 
     cmp_mu = reg.feat_stat[grp_cmp].mu
     cmp_cov = reg.feat_stat[grp_cmp].cov * bessel / n_test
