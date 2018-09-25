@@ -35,7 +35,7 @@ class Regressor:
                                'md': 'sbj1_md.nii.gz'}}
 
     note: this object assumes input images are registered to common space as
-    correspondance is established per ijk
+    correspondence is established per ijk
     """
 
     @property
@@ -50,19 +50,20 @@ class Regressor:
         self.sbj_mask_dict = sbj_mask_dict
 
         # check ref space of each img
-        f_img = next(iter(self.sbj_img_tree.values().values()))
-        self.ref_space = get_ref(f_img)
+        sbj_rand = next(iter(sbj_img_tree.keys()))
+        f_rand = next(iter(self.sbj_img_tree[sbj_rand].values()))
+        self.ref_space = get_ref(f_rand)
         for sbj, d in self.sbj_img_tree.items():
             # check space on all x_feat img
             for f in d.values():
                 if self.ref_space != get_ref(f):
-                    raise AttributeError(f'ref space mismatch: {f}, {f_img}')
+                    raise AttributeError(f'ref space mismatch: {f}, {f_rand}')
 
             # check space on mask
             try:
                 f = self.sbj_mask_dict[sbj]
                 if self.ref_space != get_ref(f):
-                    raise AttributeError(f'ref space mismatch: {f}, {f_img}')
+                    raise AttributeError(f'ref space mismatch: {f}, {f_rand}')
             except KeyError:
                 # no mask given
                 pass
@@ -86,37 +87,61 @@ class Regressor:
         n_sbj = len(self.sbj_list)
         y = np.ones((n_sbj, len(self.y_label))) * np.nan
         for sbj_idx, sbj in enumerate(self.sbj_list):
-            for y_idx, y_str in enumerate(self.y_label):
-                y[sbj_idx, y_idx] = getattr(sbj, y_str)
+            y[sbj_idx, :] = self.get_y_array(sbj)
 
         # get mask datacube (space0, space1, space2, n_sbj)
         mask = np.stack((self._get_mask_array(sbj) for sbj in self.sbj_list),
                         axis=3)
 
         # get datacube x (space0, space1, space2, len(self.x_label), n_sbj)
-        x_all = 'not done'
+        x_all = np.stack([self.get_x_array(sbj) for sbj in self.sbj_list],
+                         axis=4)
 
         for ijk, _ in np.ndenumerate(mask[:, :, :, 0]):
-            mask_vector = mask[ijk, :].astype(bool)
-            x = x_all[ijk, :, mask_vector]
-            yield ijk, x, y[mask_vector, :]
+            sbj_mask_vec = mask[ijk[0], ijk[1], ijk[2], :].astype(bool)
+            if not any(sbj_mask_vec):
+                continue
+            x = x_all[ijk[0], ijk[1], ijk[2], :, sbj_mask_vec]
+            yield ijk, x, y[sbj_mask_vec, :]
         raise StopIteration
 
-        def _get_mask_array(self, sbj):
-            """ gets mask (builds array of ones if sbj not in self.sbj_mask_dict)
-            Args:
-                sbj
-            Returns:
-                mask (np.array): mask
-            """
-            try:
-                # load and return mask
-                f = self.sbj_mask_dict[sbj]
-                img = nib.load(f)
-                return img.get_data()
-            except KeyError:
-                # no mask given for sbj
-                return np.ones(shape=self.ref_space.shape)
+    def get_x_array(self, sbj):
+        """ loads data from nii files, returns array
 
-        def map_to(self):
-            """ maps images to a set of y_feat """
+        Args:
+            sbj: key to self.sbj_img_tree
+
+        Returns:
+            x (np.array): (n_i, n_j, n_k, len(self.x_label)) features from img
+        """
+        x_list = list()
+        for feat in self.x_label:
+            img = nib.load(str(self.sbj_img_tree[sbj][feat]))
+            x_list.append(img.get_data())
+        return np.stack(x_list, axis=3)
+
+    def get_y_array(self, sbj):
+        y = np.ones(len(self.y_label)) * np.nan
+        for y_idx, y_str in enumerate(self.y_label):
+            y[y_idx] = getattr(sbj, y_str)
+        return y
+
+    def _get_mask_array(self, sbj):
+        """ gets mask (builds array of ones if sbj not in self.sbj_mask_dict)
+        Args:
+            sbj
+        Returns:
+            mask (np.array): mask
+        """
+        try:
+            # load and return mask
+            f = self.sbj_mask_dict[sbj]
+            img = nib.load(str(f))
+            return img.get_data()
+        except KeyError:
+            # no mask given for sbj
+            return np.ones(shape=self.ref_space.shape)
+
+    def map_to(self):
+        """ maps images to a set of y_feat """
+        raise NotImplementedError
