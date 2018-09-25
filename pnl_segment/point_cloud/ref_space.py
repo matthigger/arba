@@ -15,7 +15,7 @@ class RefSpace:
 
     @staticmethod
     def from_trk(f_trk, validate=True):
-        affine = nib.streamlines.load(f_trk).affine
+        affine = nib.streamlines.load(str(f_trk)).affine
         if validate:
             x = affine[:3, :3]
             if np.allclose(x @ x.T, np.eye(3)):
