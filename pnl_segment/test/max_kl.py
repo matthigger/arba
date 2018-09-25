@@ -19,9 +19,10 @@ mask_radius = 6
 
 # files
 folder = pathlib.Path(__file__).parent
-f_fa = str(folder / 'FA.nii.gz')
-f_md = str(folder / 'MD.nii.gz')
-f_mask = str(folder / 'mask.nii.gz')
+folder_data = folder / 'data'
+f_fa = str(folder_data / 'FA.nii.gz')
+f_md = str(folder_data / 'MD.nii.gz')
+f_mask = str(folder_data / 'mask.nii.gz')
 img_label = ['FA', 'MD']
 
 # repeatably random
@@ -85,7 +86,7 @@ def sample_img(f, eff_size=0):
 
 # build masks (quicker computation)
 f_mask = build_mask(mask_radius)
-f_mask_effect = folder / 'mask_effect.nii.gz'
+f_mask_effect = folder_data / 'mask_effect.nii.gz'
 build_mask(eff_radius, f=f_mask_effect)
 
 # build f_img_dict (see part_graph_factory._build_part_graph for ex)
@@ -101,5 +102,5 @@ pg = part_graph_factory.max_kl(f_img_dict=f_img_dict, verbose=True,
                                f_mask=f_mask, history=True, img_label=img_label)
 
 pg.reduce_to(1, edge_per_step=1)
-f_part_graph = folder / 'part_graph.p.gz'
+f_part_graph = folder_data / 'part_graph.p.gz'
 file.save(pg, f_part_graph)

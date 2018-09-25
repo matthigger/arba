@@ -58,7 +58,7 @@ class PointCloud:
         return f'{type(self).__name__} with {len(self)} pts'
 
     def discard_doubles(self):
-        self.x = np.unique(self.x)
+        self.x = np.unique(self.x, axis=0)
 
     def __eq__(self, other):
         # note: resorting pts spoils equality
