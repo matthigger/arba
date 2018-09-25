@@ -77,24 +77,35 @@ class PolyRegressor:
 
         # init r2 score
         self.r2_score = np.ones(self.ref_space.shape) * np.nan
+        self.obs_to_var = np.ones(self.ref_space.shape) * np.nan
 
-    def fit(self, verbose=False):
+    def fit(self, verbose=False, obs_to_var_ratio=10):
+        """ fits polynomial per voxel
+
+        Args:
+            verbose (bool): toggles command line output
+            obs_to_var_ratio (int): ratio of observation to variables required
+                                    (minimum) for regression to be performed
+
+        https://stats.stackexchange.com/questions/29612/minimum-number-of-observations-for-multiple-linear-regression
+        """
         tqdm_dict = {'disable': not verbose,
                      'desc': 'fit per vox'}
         for ijk, x, y in tqdm(self.ijk_x_y_iter(), **tqdm_dict):
             # learn
             x_poly = self.poly.fit_transform(x)
 
-            if x_poly.shape[0] <= x_poly.shape[1]:
+            if x_poly.shape[0] <= x_poly.shape[1] * obs_to_var_ratio:
                 # more samples than # of parameters required
                 continue
 
-            r = LinearRegression(copy_X=False, n_jobs=-1)
+            r = LinearRegression(copy_X=False, n_jobs=-1, fit_intercept=False)
             r.fit(x_poly, y)
 
             # store
             self.ijk_regress_dict[ijk] = r
-            self.r2_score[ijk[0], ijk[1], ijk[2]] = r.score(x_poly, y)
+            self.r2_score[tuple(ijk)] = r.score(x_poly, y)
+            self.obs_to_var[tuple(ijk)] = x_poly.shape[0] / x_poly.shape[1]
 
     def ijk_x_y_iter(self):
         """ iterates over each voxel
@@ -104,30 +115,45 @@ class PolyRegressor:
             x (np.array): x features
             y (np.array): y features
         """
-        # get Y for each sbj
+        # get x for each sbj
         n_sbj = len(self.sbj_list)
-        y = np.ones((n_sbj, len(self.y_label))) * np.nan
+        x = np.ones((n_sbj, len(self.x_label))) * np.nan
         for sbj_idx, sbj in enumerate(self.sbj_list):
-            y[sbj_idx, :] = self.get_y_array(sbj)
+            x[sbj_idx, :] = self.get_x_array(sbj)
 
         # get mask datacube (space0, space1, space2, n_sbj)
         mask = np.stack((self._get_mask_array(sbj) for sbj in self.sbj_list),
                         axis=3)
 
         # get datacube x (space0, space1, space2, len(self.x_label), n_sbj)
-        x_all = np.stack([self.get_x_array(sbj) for sbj in self.sbj_list],
+        y_all = np.stack([self.get_y_array(sbj) for sbj in self.sbj_list],
                          axis=4)
 
         for ijk, _ in np.ndenumerate(mask[:, :, :, 0]):
             sbj_mask_vec = mask[ijk[0], ijk[1], ijk[2], :].astype(bool)
             if not any(sbj_mask_vec):
                 continue
-            x = x_all[ijk[0], ijk[1], ijk[2], :, sbj_mask_vec]
-            yield ijk, x, y[sbj_mask_vec, :]
+            y = y_all[ijk[0], ijk[1], ijk[2], :, sbj_mask_vec]
+            yield ijk, x[sbj_mask_vec, :], y
         raise StopIteration
 
-    def get_x_array(self, sbj):
+    def get_y_array(self, sbj):
         """ loads data from nii files, returns array
+
+        Args:
+            sbj: key to self.sbj_img_tree
+
+        Returns:
+            y (np.array): (n_i, n_j, n_k, len(self.x_label)) features from img
+        """
+        y_list = list()
+        for feat in self.y_label:
+            img = nib.load(str(self.sbj_img_tree[sbj][feat]))
+            y_list.append(img.get_data())
+        return np.stack(y_list, axis=3)
+
+    def get_x_array(self, sbj):
+        """ gets features from sbj
 
         Args:
             sbj: key to self.sbj_img_tree
@@ -135,20 +161,13 @@ class PolyRegressor:
         Returns:
             x (np.array): (n_i, n_j, n_k, len(self.x_label)) features from img
         """
-        x_list = list()
-        for feat in self.x_label:
-            img = nib.load(str(self.sbj_img_tree[sbj][feat]))
-            x_list.append(img.get_data())
-        return np.stack(x_list, axis=3)
+        x = np.ones(len(self.x_label)) * np.nan
+        for x_idx, x_str in enumerate(self.x_label):
+            x[x_idx] = getattr(sbj, x_str)
 
-    def get_y_array(self, sbj):
-        y = np.ones(len(self.y_label)) * np.nan
-        for y_idx, y_str in enumerate(self.y_label):
-            y[y_idx] = getattr(sbj, y_str)
-
-        if not np.isfinite(y).all():
+        if not np.isfinite(x).all():
             raise AttributeError('non finite y feature found')
-        return y
+        return x
 
     def _get_mask_array(self, sbj):
         """ gets mask (builds array of ones if sbj not in self.sbj_mask_dict)
@@ -165,6 +184,10 @@ class PolyRegressor:
         except KeyError:
             # no mask given for sbj
             return np.ones(shape=self.ref_space.shape)
+
+    def r2_to_nii(self, f_out):
+        img_r2 = nib.Nifti1Image(self.r2_score, self.ref_space.affine)
+        img_r2.to_filename(str(f_out))
 
     def map_to(self):
         """ maps images to a set of y_feat """
