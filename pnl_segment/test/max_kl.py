@@ -11,11 +11,11 @@ from pnl_segment.adaptive import part_graph_factory
 #  has eff_size added (FA and MD) @ eff_center within eff_radius (vox)
 n_healthy = 20
 n_effect = 20
-noise_power = .02
+noise_power = .01
 eff_size = .05
 eff_center = (53, 63, 36)
 eff_radius = 2
-mask_radius = 4
+mask_radius = 6
 
 # files
 folder = pathlib.Path(__file__).parent

@@ -60,7 +60,7 @@ def prob_feat(reg, grp_list=None, idx_to_plot=[0, 1], idx_label=None,
 
             plt.scatter(x_raw[idx_to_plot[0], :],
                         x_raw[idx_to_plot[1], :],
-                        color=cmap(idx), alpha=.2)
+                        color=cmap(idx), alpha=.1)
 
     # build contour inputs
     xyp_dict = dict()
@@ -113,18 +113,15 @@ def roi_and_prob_feat(reg, f_back=None, f_mask=None, **kwargs):
     disp.add_contours(str(f_reg_mask), filled=True, levels=[0.5], colors='g')
 
 
-def plot_segment_seq(pg_span, f_back):
+def plot_stat(reg_dict, f_back, label=None, n_slice=6):
     f_back = str(f_back)
 
     # build nii of segmentation
     _, f = tempfile.mkstemp(suffix='.nii.gz')
-    reg_list = [reg for reg in pg_span if len(reg.pc_ijk) > 1]
-    x = np.stack([reg.pc_ijk.to_array() for reg in reg_list], axis=3)
+    x = sum([reg.pc_ijk.to_array() * s for reg, s in reg_dict.items()])
     seg_img = nib.Nifti1Image(x, nib.load(f_back).affine)
     seg_img.to_filename(f)
 
-    # plot segmentation
-    xyz_list = [reg.pc_ijk.to_xyz().center for reg in reg_list]
-    cut_coords = tuple(np.mean(np.vstack(xyz_list), axis=0))
-    plotting.plot_prob_atlas(f, bg_img=f_back, threshold=.5, dim=-1,
-                             cut_coords=cut_coords, draw_cross=False)
+    plotting.plot_stat_map(stat_map_img=f, bg_img=f_back, cmap=cm.plasma,
+                           draw_cross=False, title=label, dim=-1,
+                           display_mode='z', cut_coords=n_slice)
