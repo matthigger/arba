@@ -1,9 +1,13 @@
 import nibabel as nib
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from tqdm import tqdm
+
 from pnl_segment.point_cloud.ref_space import get_ref
 
 
-class Regressor:
+class PolyRegressor:
     """ learns and leverages linear relationships per voxel in nii imgs
 
     in other words we learn vector w which minimizes expected value of
@@ -43,11 +47,14 @@ class Regressor:
         # always in same order on python3 (necessary)
         return list(self.sbj_img_tree.keys())
 
-    def __init__(self, sbj_img_tree, y_label, x_label, sbj_mask_dict=dict()):
+    def __init__(self, sbj_img_tree, y_label, x_label, sbj_mask_dict=dict(),
+                 degree=2):
         self.x_label = x_label
         self.y_label = y_label
         self.sbj_img_tree = sbj_img_tree
         self.sbj_mask_dict = sbj_mask_dict
+        self.poly = PolynomialFeatures(degree=degree)
+        self.ijk_regress_dict = dict()
 
         # check ref space of each img
         sbj_rand = next(iter(sbj_img_tree.keys()))
@@ -68,12 +75,26 @@ class Regressor:
                 # no mask given
                 pass
 
-    def learn(self):
-        for ijk, x, y in self.ijk_x_y_iter():
+        # init r2 score
+        self.r2_score = np.ones(self.ref_space.shape) * np.nan
+
+    def fit(self, verbose=False):
+        tqdm_dict = {'disable': not verbose,
+                     'desc': 'fit per vox'}
+        for ijk, x, y in tqdm(self.ijk_x_y_iter(), **tqdm_dict):
             # learn
+            x_poly = self.poly.fit_transform(x)
+
+            if x_poly.shape[0] <= x_poly.shape[1]:
+                # more samples than # of parameters required
+                continue
+
+            r = LinearRegression(copy_X=False, n_jobs=-1)
+            r.fit(x_poly, y)
 
             # store
-            pass
+            self.ijk_regress_dict[ijk] = r
+            self.r2_score[ijk[0], ijk[1], ijk[2]] = r.score(x_poly, y)
 
     def ijk_x_y_iter(self):
         """ iterates over each voxel
@@ -124,6 +145,9 @@ class Regressor:
         y = np.ones(len(self.y_label)) * np.nan
         for y_idx, y_str in enumerate(self.y_label):
             y[y_idx] = getattr(sbj, y_str)
+
+        if not np.isfinite(y).all():
+            raise AttributeError('non finite y feature found')
         return y
 
     def _get_mask_array(self, sbj):
