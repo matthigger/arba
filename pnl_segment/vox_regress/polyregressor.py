@@ -79,12 +79,12 @@ class PolyRegressor:
         self.r2_score = np.ones(self.ref_space.shape) * np.nan
         self.obs_to_var = np.ones(self.ref_space.shape) * np.nan
 
-    def fit(self, verbose=False, obs_to_var_ratio=10):
+    def fit(self, verbose=False, obs_to_var_thresh=10):
         """ fits polynomial per voxel
 
         Args:
             verbose (bool): toggles command line output
-            obs_to_var_ratio (int): ratio of observation to variables required
+            obs_to_var_thresh (int): ratio of observation to variables required
                                     (minimum) for regression to be performed
 
         https://stats.stackexchange.com/questions/29612/minimum-number-of-observations-for-multiple-linear-regression
@@ -95,7 +95,8 @@ class PolyRegressor:
             # learn
             x_poly = self.poly.fit_transform(x)
 
-            if x_poly.shape[0] <= x_poly.shape[1] * obs_to_var_ratio:
+            obs_to_var = x_poly.shape[0] / x_poly.shape[1]
+            if obs_to_var < obs_to_var_thresh:
                 # more samples than # of parameters required
                 continue
 
@@ -105,9 +106,9 @@ class PolyRegressor:
             # store
             self.ijk_regress_dict[ijk] = r
             self.r2_score[tuple(ijk)] = r.score(x_poly, y)
-            self.obs_to_var[tuple(ijk)] = x_poly.shape[0] / x_poly.shape[1]
+            self.obs_to_var[tuple(ijk)] = obs_to_var
 
-    def ijk_x_y_iter(self):
+    def ijk_x_y_iter(self, rm_zero=True):
         """ iterates over each voxel
 
         Returns:
@@ -117,25 +118,46 @@ class PolyRegressor:
         """
         # get x for each sbj
         n_sbj = len(self.sbj_list)
-        x = np.ones((n_sbj, len(self.x_label))) * np.nan
+        x_all = np.ones((n_sbj, len(self.x_label))) * np.nan
         for sbj_idx, sbj in enumerate(self.sbj_list):
-            x[sbj_idx, :] = self.get_x_array(sbj)
+            x_all[sbj_idx, :] = self.get_x_array(sbj)
 
-        # get mask datacube (space0, space1, space2, n_sbj)
-        mask = np.stack((self._get_mask_array(sbj) for sbj in self.sbj_list),
-                        axis=3)
+        # get mask_all datacube (space0, space1, space2, n_sbj)
+        mask_all = np.stack(
+            (self._get_mask_array(sbj) for sbj in self.sbj_list),
+            axis=3)
 
         # get datacube x (space0, space1, space2, len(self.x_label), n_sbj)
         y_all = np.stack([self.get_y_array(sbj) for sbj in self.sbj_list],
                          axis=4)
 
-        for ijk, _ in np.ndenumerate(mask[:, :, :, 0]):
-            sbj_mask_vec = mask[ijk[0], ijk[1], ijk[2], :].astype(bool)
-            if not any(sbj_mask_vec):
-                continue
-            y = y_all[ijk[0], ijk[1], ijk[2], :, sbj_mask_vec]
-            yield ijk, x[sbj_mask_vec, :], y
-        raise StopIteration
+        # build mask_all which leaves only non zero vec
+        zero_vec = np.zeros(len(self.y_label))
+
+        for ijk, _ in np.ndenumerate(mask_all[:, :, :, 0]):
+            # init
+            x_list = list()
+            y_list = list()
+            mask = mask_all[ijk[0], ijk[1], ijk[2], :]
+
+            # loop through by sbj, append x, y as needed
+            for sbj_idx, (m, _x) in enumerate(zip(mask, x_all)):
+                if not m:
+                    # sbj mask is False
+                    continue
+
+                _y = y_all[ijk[0], ijk[1], ijk[2], :, sbj_idx]
+                if rm_zero and np.array_equal(_y, zero_vec):
+                    # dmri values are all zero
+                    continue
+
+                # add values
+                x_list.append(_x)
+                y_list.append(_y)
+
+            if x_list:
+                # only return if there are valid features @ ijk
+                yield ijk, np.vstack(x_list), np.vstack(y_list)
 
     def get_y_array(self, sbj):
         """ loads data from nii files, returns array

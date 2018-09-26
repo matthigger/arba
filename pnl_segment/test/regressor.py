@@ -1,15 +1,19 @@
+import pathlib
 from collections import defaultdict
 from random import choice
 
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
+
 import pnl_data
+from mh_pytools import file
 from pnl_data.set.intrust import get_sbj
 from pnl_segment.vox_regress.polyregressor import PolyRegressor
-import pathlib
-from mh_pytools import file
 
-n_sbj = 10
-x_label = ['FA', 'MD']
-y_label = ['age', 'sex', 'wrat']
+n_sbj = 1e9
+x_label = ['age', 'sex', 'wrat']
+y_label = ['FA', 'MD']
 
 # get output data folder
 folder_data = pathlib.Path(__file__).parent / 'data'
@@ -38,9 +42,23 @@ while len(sbj_img_tree) > n_sbj:
 
 # build regressor
 r = PolyRegressor(sbj_img_tree=sbj_img_tree, y_label=y_label, x_label=x_label,
-                  sbj_mask_dict=sbj_mask_dict)
-r.fit(verbose=True)
+                  sbj_mask_dict=sbj_mask_dict, degree=2)
+# r.fit(verbose=True, obs_to_var_thresh=5)
 
 # save
 f_out = folder_data / 'poly_regress.p.gz'
-file.save(r, f_out)
+# file.save(r, f_out)
+r = file.load(f_out)
+
+f_r2_image = folder_data / 'poly_regress_r2.nii.gz'
+r.r2_to_nii(f_r2_image)
+
+f_r2_hist = folder_data / 'poly_regress_r2_hist.pdf'
+with PdfPages(f_r2_hist) as pdf:
+    r2 = r.r2_score.flatten()
+    r2[np.logical_not(np.isfinite(r2))] = -1
+    plt.hist(r2, bins=100)
+    fig = plt.gcf()
+    fig.set_size_inches(8, 8)
+    pdf.savefig(fig)
+    plt.close()
