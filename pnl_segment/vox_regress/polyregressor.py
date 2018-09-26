@@ -1,9 +1,10 @@
+import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from tqdm import tqdm
-
+import seaborn as sns
 from pnl_segment.point_cloud.ref_space import get_ref
 
 
@@ -116,20 +117,14 @@ class PolyRegressor:
             x (np.array): x features
             y (np.array): y features
         """
-        # get x for each sbj
-        n_sbj = len(self.sbj_list)
-        x_all = np.ones((n_sbj, len(self.x_label))) * np.nan
-        for sbj_idx, sbj in enumerate(self.sbj_list):
-            x_all[sbj_idx, :] = self.get_x_array(sbj)
+        # get x for each sbj (num_sbj, len(self.x_label))
+        x_all = self.get_x()
 
-        # get mask_all datacube (space0, space1, space2, n_sbj)
-        mask_all = np.stack(
-            (self._get_mask_array(sbj) for sbj in self.sbj_list),
-            axis=3)
+        # get y (num_i, num_j, num_k, len(self.y_label), num_sbj)
+        y_all = self.get_y()
 
-        # get datacube x (space0, space1, space2, len(self.x_label), n_sbj)
-        y_all = np.stack([self.get_y_array(sbj) for sbj in self.sbj_list],
-                         axis=4)
+        # get mask_all datacube (num_i, num_j, num_k, num_sbj)
+        mask_all = self.get_mask()
 
         # build mask_all which leaves only non zero vec
         zero_vec = np.zeros(len(self.y_label))
@@ -159,45 +154,49 @@ class PolyRegressor:
                 # only return if there are valid features @ ijk
                 yield ijk, np.vstack(x_list), np.vstack(y_list)
 
-    def get_y_array(self, sbj):
-        """ loads data from nii files, returns array
+    def get_x(self, sbj_list=None):
+        """ gets features from all sbj
 
         Args:
-            sbj: key to self.sbj_img_tree
+            sbj_list: list of sbj
 
         Returns:
-            y (np.array): (n_i, n_j, n_k, len(self.x_label)) features from img
+            x (np.array): (num_sbj, len(self.x_label)) sbj features
         """
-        y_list = list()
-        for feat in self.y_label:
-            img = nib.load(str(self.sbj_img_tree[sbj][feat]))
-            y_list.append(img.get_data())
-        return np.stack(y_list, axis=3)
+        if sbj_list is None:
+            sbj_list = self.sbj_list
 
-    def get_x_array(self, sbj):
-        """ gets features from sbj
-
-        Args:
-            sbj: key to self.sbj_img_tree
-
-        Returns:
-            x (np.array): (n_i, n_j, n_k, len(self.x_label)) features from img
-        """
-        x = np.ones(len(self.x_label)) * np.nan
-        for x_idx, x_str in enumerate(self.x_label):
-            x[x_idx] = getattr(sbj, x_str)
+        x = np.ones((len(sbj_list), len(self.x_label))) * np.nan
+        for sbj_idx, sbj in enumerate(self.sbj_list):
+            for x_idx, x_str in enumerate(self.x_label):
+                x[sbj_idx, x_idx] = getattr(sbj, x_str)
 
         if not np.isfinite(x).all():
             raise AttributeError('non finite y feature found')
         return x
 
-    def _get_mask_array(self, sbj):
-        """ gets mask (builds array of ones if sbj not in self.sbj_mask_dict)
+    def get_y(self, sbj_list=None):
+        """ loads data from nii files, returns array
+
         Args:
-            sbj
+            sbj_list: list of sbj
+
         Returns:
-            mask (np.array): mask
+            y (np.array): (num_i, num_j, num_k, num_x, num_sbj) feat from img
         """
+        if sbj_list is None:
+            sbj_list = self.sbj_list
+
+        y_out = list()
+        for sbj in sbj_list:
+            sbj_y_list = list()
+            for feat in self.y_label:
+                img = nib.load(str(self.sbj_img_tree[sbj][feat]))
+                sbj_y_list.append(img.get_data())
+            y_out.append(np.stack(sbj_y_list, axis=3))
+        return np.stack(y_out, axis=4)
+
+    def _get_mask_per_sbj(self, sbj):
         try:
             # load and return mask
             f = self.sbj_mask_dict[sbj]
@@ -207,9 +206,68 @@ class PolyRegressor:
             # no mask given for sbj
             return np.ones(shape=self.ref_space.shape)
 
+    def get_mask(self, sbj_list=None):
+        """ gets mask (builds array of ones if sbj not in self.sbj_mask_dict)
+
+        Args:
+            sbj_list (list): list of sbj
+
+        Returns:
+            mask (np.array): mask (num_i, num_j, num_k, len(sbj_list))
+        """
+        if sbj_list is None:
+            sbj_list = self.sbj_list
+
+        mask_list = [self._get_mask_per_sbj(sbj) for sbj in sbj_list]
+        return np.stack(mask_list, axis=3)
+
     def r2_to_nii(self, f_out):
         img_r2 = nib.Nifti1Image(self.r2_score, self.ref_space.affine)
         img_r2.to_filename(str(f_out))
+
+    def plot(self, ijk, x_feat, y_feat, n_pts=100):
+        """ plots observations and trend line
+
+        Args:
+            ijk (tuple): which voxel to examine
+            x_feat: element of self.x_label to examine
+            y_feat: element of self.y_label to examine
+        """
+        r = self.ijk_regress_dict[tuple(ijk)]
+
+        # get data
+        x_obs = self.get_x()
+        y_obs = self.get_y()[ijk[0], ijk[1], ijk[2], :, :]
+
+        # get idx
+        x_feat_idx = self.x_label.index(x_feat)
+        y_feat_idx = self.y_label.index(y_feat)
+
+        def get_linspace_n_std_dev(z, n_std=3):
+            """ returns equally spaced vector in mu +/- std * n_std to mu
+            """
+            mu = np.mean(z)
+            delta = np.std(z) * n_std
+            return np.linspace(mu - delta, mu + delta, n_pts)
+
+        # compute prediction
+        x_domain = np.vstack([np.mean(x_obs, axis=0)] * n_pts)
+        x_domain[:, x_feat_idx] = get_linspace_n_std_dev(x_obs[:, x_feat_idx])
+        y_est = r.predict(self.poly.fit_transform(x_domain))
+
+        # todo: change indexing so sbj always @ end
+        sns.set()
+        plt.scatter(x_obs[:, x_feat_idx],
+                    y_obs[y_feat_idx, :], label='observed')
+
+        # todo: dimensions?
+        plt.plot(x_domain[:, x_feat_idx],
+                 y_est[:, y_feat_idx], label='estimated')
+
+        # label
+        plt.xlabel(x_feat)
+        plt.ylabel(y_feat)
+        plt.legend()
 
     def map_to(self):
         """ maps images to a set of y_feat """
