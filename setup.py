@@ -15,5 +15,6 @@ setup(name='pnl_segment',
           'nibabel',
           'networkx',
           'scipy',
+          'matplotlib',
           'sklearn'],
       zip_safe=False)
