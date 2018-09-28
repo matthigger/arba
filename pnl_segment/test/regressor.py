@@ -66,8 +66,7 @@ r.r2_to_nii(f_r2_image)
 
 f_r2_hist = folder_pdf / 'poly_regress_r2_hist.pdf'
 with PdfPages(f_r2_hist) as pdf:
-    r2 = r.r2_score.flatten()
-    r2[np.logical_not(np.isfinite(r2))] = -1
+    r2 = [r.r2_score[ijk] for ijk in r.ijk_regress_dict.keys()]
     plt.hist(r2, bins=100)
     fig = plt.gcf()
     fig.set_size_inches(8, 8)
