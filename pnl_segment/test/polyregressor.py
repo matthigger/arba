@@ -3,7 +3,6 @@ from collections import defaultdict
 from random import choice
 
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 import pnl_data
@@ -21,6 +20,8 @@ folder_data = pathlib.Path(__file__).parent / 'data'
 folder_pdf = pathlib.Path(__file__).parent / 'pdf'
 # get data paths
 folder = pnl_data.folder_data / 'intrust' / 'fa_md_in_015_NAA_001'
+folder_out = folder / 'regressed'
+folder_out.mkdir(exist_ok=True)
 fa_dict = {get_sbj(f.stem): f for f in folder.glob('*FA.nii.gz')}
 md_dict = {get_sbj(f.stem): f for f in folder.glob('*MD.nii.gz')}
 sbj_mask_dict = {get_sbj(f.stem): f for f in folder.glob('*mask.nii.gz')}
@@ -47,9 +48,12 @@ r = PolyRegressor(sbj_img_tree=sbj_img_tree, y_label=y_label, x_label=x_label,
 r.fit(verbose=True, obs_to_var_thresh=3)
 
 # save
-f_out = folder_data / 'poly_regress.p.gz'
+f_out = folder_out / 'poly_regress.p.gz'
 file.save(r, f_out)
 # r = file.load(f_out)
+
+sbj_mean = sum(r.sbj_list) / len(r.sbj_list)
+r.map_to_sbj(sbj_to=sbj_mean, folder_out=folder_out)
 
 f_ex_reg = folder_pdf / 'poly_regress_ex.pdf'
 with PdfPages(f_ex_reg) as pdf:

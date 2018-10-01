@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
+import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from tqdm import tqdm
-import seaborn as sns
+
 from pnl_segment.point_cloud.ref_space import get_ref
 
 
@@ -167,7 +168,7 @@ class PolyRegressor:
             sbj_list = self.sbj_list
 
         x = np.ones((len(sbj_list), len(self.x_label))) * np.nan
-        for sbj_idx, sbj in enumerate(self.sbj_list):
+        for sbj_idx, sbj in enumerate(sbj_list):
             for x_idx, x_str in enumerate(self.x_label):
                 x[sbj_idx, x_idx] = getattr(sbj, x_str)
 
@@ -269,6 +270,51 @@ class PolyRegressor:
         plt.ylabel(y_feat)
         plt.legend()
 
-    def map_to(self):
-        """ maps images to a set of y_feat """
-        raise NotImplementedError
+    def map_to_sbj(self, sbj_to, folder_out, sbj_from_list=None, verbose=True):
+        """ maps images to demographics given in sbj_to and saves nii
+        """
+        if not len(self.ijk_regress_dict):
+            raise AttributeError('call fit() before mapping')
+
+        if sbj_from_list is None:
+            sbj_from_list = self.sbj_list
+
+        # get input to fnc
+        def get_x_poly(sbj):
+            """ returns polynom input to obj in self.ijk_regress_dict.values()
+
+            we compute this once rather than call predict for comp efficiency
+            """
+            return self.poly.fit_transform(self.get_x([sbj]))
+
+        x_to = get_x_poly(sbj_to)
+
+        tqdm_dict = {'disable': not verbose, 'desc': f'to {sbj_to} per sbj'}
+        for sbj_from in tqdm(sbj_from_list, **tqdm_dict):
+            # get sbj from
+            x_from = get_x_poly(sbj_from)
+
+            # load original data
+            y = self.get_y([sbj_from])[:, :, :, :, 0]
+
+            # adjust for demographics
+            for ijk in self.ijk_regress_dict.keys():
+                r = self.ijk_regress_dict[ijk]
+                delta = r.predict(x_to) - r.predict(x_from)
+                y[ijk[0], ijk[1], ijk[2], :] += np.squeeze(delta)
+
+            # print to nii
+            for y_idx, y_feat in enumerate(self.y_label):
+                # build output filename
+                f_orig = self.sbj_img_tree[sbj_from][y_feat]
+                f_out = folder_out / f_orig.name
+                if f_out == f_orig:
+                    raise FileExistsError(f'identical orig file: {f_out}')
+
+                # write output
+                img = nib.Nifti1Image(y[:, :, :, y_idx], self.ref_space.affine)
+                img.to_filename(str(f_out))
+
+    def predict(self, ijk, sbj):
+        x = self.poly.fit_transform(self.get_x([sbj]))
+        return self.ijk_regress_dict[ijk].predict(x)
