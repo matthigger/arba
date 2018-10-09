@@ -135,7 +135,7 @@ class Mask:
             raise AttributeError('size mismatch, data len does not match mask')
 
         # insert given data
-        for _x, ijk in zip(x, ijk_iter):
+        for _x, ijk in zip(x.flatten(), ijk_iter):
             if add:
                 data_img[ijk] += _x
             else:
@@ -155,7 +155,7 @@ class Mask:
 
     def apply_from_nii(self, f_nii):
         img = nib.load(str(f_nii))
-        if self.ref_space.affine is not None and \
+        if self.ref_space is not None and \
                 not np.array_equal(img.affine, self.ref_space.affine):
             raise AttributeError('affine mismatch')
 
