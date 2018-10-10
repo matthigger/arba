@@ -48,7 +48,7 @@ class Effect:
 
         return Effect(mask, mean, cov, feat_label=feat_label)
 
-    def __init__(self, mask, mean, cov=None, feat_label=None):
+    def __init__(self, mask, feat_label, mean, cov=None):
         if not isinstance(mask, Mask):
             raise TypeError(f'mask: {mask} must be of type Mask')
         self.mask = mask
@@ -59,12 +59,21 @@ class Effect:
     def __len__(self):
         return len(self.mask)
 
-    def apply_to_nii(self, f_nii):
-        img = nib.load(f_nii)
-        if self.mask.affine is not None and \
-                not np.array_equal(img.affine, self.mask.affine):
-            raise AttributeError('space mismatch')
-        return self.apply(img.get_data())
+    def apply_to_nii(self, f_nii_dict=None):
+        def load(f_nii):
+            """ loads f_nii, ensures proper space
+            """
+            img = nib.load(str(f_nii))
+            if self.mask.affine is not None and \
+                    not np.array_equal(img.affine, self.mask.affine):
+                raise AttributeError('space mismatch')
+            return img.get_data()
+
+        # load and stack data
+        x_list = [load(f_nii_dict[label]) for label in self.feat_label]
+        x = np.stack(x_list, axis=len(x_list[0].shape))
+
+        return self.apply(x)
 
     def apply(self, x):
         """ applies effect to array x
@@ -78,6 +87,7 @@ class Effect:
                                                          cov=self.cov,
                                                          size=len(self))).T
 
+        raise NotImplementedError('check that unraveling in proper order')
         return self.mask.insert(x, effect, add=True)
 
     @staticmethod
