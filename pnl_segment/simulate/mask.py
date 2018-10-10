@@ -1,4 +1,5 @@
 import pathlib
+import tempfile
 
 import nibabel as nib
 import numpy as np
@@ -101,6 +102,23 @@ class Mask:
         ref = RefSpace(affine=img.affine, shape=img.shape)
         return Mask(img.get_data(), ref_space=ref)
 
+    def to_nii(self, f_out=None, f_ref=None):
+        # get f_out
+        if f_out is None:
+            _, f_out = tempfile.mkstemp(suffix='.nii.gz')
+
+        # get ref
+        if f_ref:
+            ref = RefSpace.from_nii(f_ref)
+        else:
+            ref = self.ref_space
+
+        # save
+        img = nib.Nifti1Image(self.x.astype(np.int8), affine=ref.affine)
+        img.to_filename(str(f_out))
+
+        return f_out
+
     def __iter__(self):
         for ijk in np.vstack(np.where(self.x > 0)).T:
             yield tuple(ijk)
@@ -131,7 +149,7 @@ class Mask:
             d = 1
             ijk_iter = iter(self)
 
-        if len(x) != len(self) * d:
+        if len(x.flatten()) != len(self) * d:
             raise AttributeError('size mismatch, data len does not match mask')
 
         # insert given data
