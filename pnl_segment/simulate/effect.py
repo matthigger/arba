@@ -43,29 +43,31 @@ class Effect:
         fs = sum(fs_list)
 
         #
-        mean = fs.mu * effect_snr
+        mean = np.diag(fs.cov) * effect_snr
         cov = fs.cov * cov_ratio
 
-        return Effect(mask, mean, cov, feat_label=feat_label)
+        return Effect(mask, mean=mean, cov=cov, feat_label=feat_label)
 
     def __init__(self, mask, feat_label, mean, cov=None):
         if not isinstance(mask, Mask):
             raise TypeError(f'mask: {mask} must be of type Mask')
         self.mask = mask
-        self.mean = np.atleast_1d(mean)
+        self.mean = np.squeeze(mean)
+        if len(self.mean.shape) > 1:
+            raise AttributeError('1d mean required')
         self.cov = np.atleast_2d(cov)
         self.feat_label = feat_label
 
     def __len__(self):
         return len(self.mask)
 
-    def apply_to_nii(self, f_nii_dict=None):
+    def apply_to_from_nii(self, f_nii_dict, f_nii_dict_out):
         def load(f_nii):
             """ loads f_nii, ensures proper space
             """
             img = nib.load(str(f_nii))
-            if self.mask.affine is not None and \
-                    not np.array_equal(img.affine, self.mask.affine):
+            if self.mask.ref_space is not None and \
+                    not np.array_equal(img.affine, self.mask.ref_space.affine):
                 raise AttributeError('space mismatch')
             return img.get_data()
 
@@ -73,7 +75,15 @@ class Effect:
         x_list = [load(f_nii_dict[label]) for label in self.feat_label]
         x = np.stack(x_list, axis=len(x_list[0].shape))
 
-        return self.apply(x)
+        # apply effect
+        x = self.apply(x)
+
+        # output img to nii
+        for feat_idx in range(x.shape[-1]):
+            feat = self.feat_label[feat_idx]
+            affine = nib.load(str(f_nii_dict[feat])).affine
+            img = nib.Nifti1Image(x[..., feat_idx], affine)
+            img.to_filename(str(f_nii_dict_out[feat]))
 
     def apply(self, x):
         """ applies effect to array x
@@ -83,12 +93,14 @@ class Effect:
         """
 
         # sample effect
-        effect = np.vstack(np.random.multivariate_normal(mean=self.mean,
-                                                         cov=self.cov,
-                                                         size=len(self))).T
+        effect = np.random.multivariate_normal(mean=self.mean,
+                                               cov=self.cov,
+                                               size=len(self))
 
-        raise NotImplementedError('check that unraveling in proper order')
-        return self.mask.insert(x, effect, add=True)
+        # add effect
+        x = self.mask.insert(x, effect, add=True)
+
+        return x
 
     @staticmethod
     def sample_mask(prior_array, radius, n=1, seg_array=None):
