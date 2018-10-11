@@ -1,3 +1,5 @@
+import shutil
+import tempfile
 from functools import reduce
 
 import nibabel as nib
@@ -61,7 +63,7 @@ class Effect:
     def __len__(self):
         return len(self.mask)
 
-    def apply_to_from_nii(self, f_nii_dict, f_nii_dict_out):
+    def apply_from_to_nii(self, f_nii_dict, f_nii_dict_out=None):
         def load(f_nii):
             """ loads f_nii, ensures proper space
             """
@@ -70,6 +72,12 @@ class Effect:
                     not np.array_equal(img.affine, self.mask.ref_space.affine):
                 raise AttributeError('space mismatch')
             return img.get_data()
+
+        # init to tempfile
+        if f_nii_dict_out is None:
+            f_nii_dict_out = dict()
+            for feat in f_nii_dict.keys():
+                _, f_nii_dict_out[feat] = tempfile.mkstemp(suffix='.nii.gz')
 
         # load and stack data
         x_list = [load(f_nii_dict[label]) for label in self.feat_label]
@@ -84,6 +92,8 @@ class Effect:
             affine = nib.load(str(f_nii_dict[feat])).affine
             img = nib.Nifti1Image(x[..., feat_idx], affine)
             img.to_filename(str(f_nii_dict_out[feat]))
+
+        return f_nii_dict_out
 
     def apply(self, x):
         """ applies effect to array x
@@ -190,3 +200,23 @@ class Effect:
                                    iterations=radius,
                                    mask=mask)
         return Mask(eff_mask.astype(int))
+
+
+class EffectDm:
+    """ dummy effect, doesn't do anything to img, stands in Effect """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __len__(self):
+        return 0
+
+    def apply(self, x):
+        return x
+
+    def apply_to_from_nii(self, f_nii_dict, f_nii_dict_out=None):
+        if f_nii_dict_out is not None:
+            for feat, f in f_nii_dict.items():
+                shutil.copy(f, f_nii_dict_out[feat])
+
+        return f_nii_dict_out
