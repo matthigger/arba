@@ -60,7 +60,7 @@ class RegionMinVar(Region):
         var_sum = 0
         for grp in self.grp_to_min_var:
             fs = self.feat_stat[grp]
-            var_sum = np.linalg.det(fs.var) * fs.n
+            var_sum = np.linalg.det(fs.cov) * fs.n
 
         # assume uniform prior of grps
         return var_sum / len(self.grp_to_min_var)
