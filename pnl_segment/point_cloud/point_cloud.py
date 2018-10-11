@@ -30,7 +30,9 @@ class PointCloud:
         if len(x.shape) == 1:
             raise AttributeError('must init with 2d array')
 
-        self.x = np.array(x)
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        self.x = x
         self.ref = ref_space.get_ref(ref)
 
     def swap_ref(self, ref):
@@ -64,7 +66,7 @@ class PointCloud:
         # note: resorting pts spoils equality
         return np.array_equal(self.x, other.x)
 
-    def __add__(self, other):
+    def __add__(self, other, check_ref=False):
         """ adds points to the point cloud
         """
         if type(self) != type(other):
@@ -75,7 +77,7 @@ class PointCloud:
             return self.__class__(self.x, ref=self.ref)
 
         # ensure affines are equivilent
-        if self.ref != other.ref:
+        if check_ref and self.ref != other.ref:
             raise AttributeError('cant merge different spaces')
 
         return self.__class__(x=np.vstack((self.x, other.x)), ref=self.ref)
