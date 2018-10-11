@@ -130,7 +130,7 @@ class PartGraph(nx.Graph):
             reg_new_dict[reg_idx] = self.combine(reg_list)
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=1, verbose=True,
-                  par_thresh=10000, update_period=10):
+                  par_thresh=10000, update_period=10, max_edge_per_step=.01):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
@@ -170,8 +170,6 @@ class PartGraph(nx.Graph):
         len_init = len(self)
         last_update = time.time()
         while len(self) > num_reg_stop:
-            t = time.time()
-
             # break early if no more valid edges available
             if not self._obj_edge_list or \
                     self._obj_edge_list[0][0] > self.obj_fnc_max:
@@ -179,7 +177,8 @@ class PartGraph(nx.Graph):
                 break
 
             # find n edges with min obj
-            n = min(edge_per_step, len(self) - num_reg_stop)
+            n_max = np.ceil(max_edge_per_step * (len(self) - num_reg_stop))
+            n = min(edge_per_step, n_max)
             edge_list, _obj_list = self._get_min_n_edges(n)
             obj_list += _obj_list
 
@@ -204,7 +203,7 @@ class PartGraph(nx.Graph):
             if verbose and time.time() - last_update > update_period:
                 obj = np.mean(obj_list[-edge_per_step:])
                 print(', '.join([f'n_edge: {len(self._obj_edge_list):1.2e}',
-                                 f'time: {time.time() - t:.2f} sec',
+                                 f'time: {time.time() - last_update:.2f} sec',
                                  f'n_neighbors: {np.mean(n_neigh_list):1.2e}',
                                  f'obj: {obj:1.2e}']))
                 last_update = time.time()
