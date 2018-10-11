@@ -72,7 +72,9 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     if verbose:
         print('\n' * 2 + 'construct part_graph: load')
 
-    if f_mask is not None:
+    if f_mask is None:
+        mask = None
+    else:
         img_mask = nib.load(str(f_mask))
         mask = img_mask.get_data() > 0
 
