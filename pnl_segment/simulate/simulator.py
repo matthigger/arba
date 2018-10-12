@@ -1,12 +1,13 @@
 import os
 import pathlib
+import random
 import tempfile
-import uuid
 from collections import defaultdict
 
 import numpy as np
 
 from .effect import EffectDm
+from .mask import Mask
 
 
 class Simulator:
@@ -23,7 +24,7 @@ class Simulator:
     """
 
     def __init__(self, f_img_health, split_ratio=.5, mask_dilate=5):
-        self.f_img_tree = f_img_health
+        self.f_img_health = f_img_health
         self.split_ratio = split_ratio
         self.mask_dilate = mask_dilate
 
@@ -47,6 +48,12 @@ class Simulator:
                                 'healthy': ... }
         """
 
+        # if no folder passed, put new effect img in a temp directory
+        if folder is None:
+            folder = tempfile.TemporaryDirectory().name
+            folder = pathlib.Path(folder)
+            folder.mkdir()
+
         def get_f_nii_out(sbj, eff_label):
             # find locations for output files
             f_nii_dict_out = dict()
@@ -61,11 +68,12 @@ class Simulator:
 
         # compute n_effect
         n_sbj = len(self.f_img_health.keys())
-        n_effect = np.ceil(self.split_ratio * n_sbj)
+        n_effect = np.ceil(self.split_ratio * n_sbj).astype(int)
 
         # split sbj into health and effect groups
-        sbj_effect = np.random.choice(self.sbj_list, n_effect, replace=False)
-        sbj_health = set(self.f_img_health.keys()) - set(sbj_effect)
+        sbj_all = set(self.f_img_health.keys())
+        sbj_effect = random.sample(sbj_all, k=n_effect)
+        sbj_health = sbj_all - set(sbj_effect)
 
         # init f_img_dict with healthies
         f_img_dict = defaultdict(list)
@@ -79,46 +87,61 @@ class Simulator:
                 img_list = img_list_sym
             f_img_dict['healthy'].append(img_list)
 
-        # if no folder passed, put new effect img in temp
-        if folder is None:
-            data_label = uuid.uuid4().hex[:6]
-            folder = tempfile.TemporaryDirectory(prefix=data_label).name
-            folder = pathlib.Path(folder)
-            folder.mkdir()
-
         # add sbj_effect to f_img_dict
         for sbj in sbj_effect:
             f_nii_dict_out, img_list = get_f_nii_out(sbj, eff_label='effect')
 
             # apply effect
-            self.effect.apply_from_to_nii(f_nii_dict=self.f_img_tree[sbj],
-                                          f_nii_dict_out=f_nii_dict_out)
+            effect.apply_from_to_nii(f_nii_dict=self.f_img_health[sbj],
+                                     f_nii_dict_out=f_nii_dict_out)
 
             f_img_dict[effect].append(img_list)
 
-        return f_img_dict, data_label
+        return f_img_dict, folder
 
-    def _run(self, f_img_dict):
+    def _run(self, f_img_dict, part_graph_factory, **kwargs):
         """ runs experiment
         """
+
+        # build mask as intersection of all img, save to file
+        f_img_list = []
+        for _f_img_dict in self.f_img_health.values():
+            f_img_list += list(_f_img_dict.values())
+        mask = Mask.build_intersection_from_nii(f_img_list, thresh=.95)
+        _, f_mask = tempfile.mkstemp(suffix='.nii.gz')
+        mask.to_nii(f_mask)
+
         # build part graph
+        part_graph = part_graph_factory(f_img_dict=f_img_dict, history=True,
+                                        f_mask=f_mask, **kwargs)
 
         # reduce
+        part_graph.reduce(1)
 
         # build segmentation
+        def spanning_fnc(reg):
+            return reg.obj
 
-        # write segmentation to nii
+        part_graph_span = part_graph.get_min_spanning_region(spanning_fnc)
 
-        return f_segment_nii
+        return part_graph_span, part_graph
 
-    def run_healthy(self):
-        effect_dm = EffectDm()
-        f_img_dict = self.sample_eff(effect_dm)
-        return self._run(f_img_dict)
+    def run_healthy(self, **kwargs):
+        # build feat_label
+        sbj = next(iter(self.f_img_health.keys()))
+        feat_label = sorted(self.f_img_health[sbj].keys())
 
-    def run_effect(self, effect):
-        f_img_dict = self.sample_eff(effect)
-        return self._run(f_img_dict)
+        # build dummy effect
+        effect_dm = EffectDm(feat_label=feat_label)
+
+        # apply 'effect' to some subset of images
+        f_img_dict, folder = self.sample_eff(effect_dm)
+        return self._run(f_img_dict, **kwargs), folder
+
+    def run_effect(self, effect, *args, **kwargs):
+        f_img_dict, folder = self.sample_eff(effect)
+        return self._run(f_img_dict, *args, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
         """ computes auc """
+        pass
