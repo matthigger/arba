@@ -87,11 +87,11 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
 
     # get ijk_dict_tree, (ijk_dict_tree[grp][ijk_tuple] = feat_stat)
     ijk_dict_tree = dict()
-    for grp, f_img_list_iter in f_img_dict.items():
+    for grp, f_list_list in f_img_dict.items():
         if verbose:
             print(f'----{grp}----')
-        min_sbj = np.floor(sbj_thresh * len(f_img_list_iter)).astype(int)
-        ijk_dict_tree[grp] = get_ijk_dict(f_img_list_iter, verbose=verbose,
+        min_sbj = np.floor(sbj_thresh * len(f_list_list)).astype(int)
+        ijk_dict_tree[grp] = get_ijk_dict(f_list_list, verbose=verbose,
                                           min_sbj=min_sbj, mask=mask,
                                           feat_label=pg.feat_label)
 
