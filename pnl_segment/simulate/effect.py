@@ -205,8 +205,8 @@ class Effect:
 class EffectDm:
     """ dummy effect, doesn't do anything to img, stands in Effect """
 
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, feat_label, *args, **kwargs):
+        self.feat_label = feat_label
 
     def __len__(self):
         return 0
@@ -214,7 +214,7 @@ class EffectDm:
     def apply(self, x):
         return x
 
-    def apply_to_from_nii(self, f_nii_dict, f_nii_dict_out=None):
+    def apply_from_to_nii(self, f_nii_dict, f_nii_dict_out=None):
         if f_nii_dict_out is not None:
             for feat, f in f_nii_dict.items():
                 shutil.copy(f, f_nii_dict_out[feat])
