@@ -97,10 +97,16 @@ class Mask:
         pass
 
     @staticmethod
-    def from_nii(f_nii):
+    def from_nii(f_nii, fnc_include=None):
+        # defaults to include all positive values in mask
+        if fnc_include is None:
+            def is_positive(x):
+                return x > 0
+            fnc_include = is_positive
+
         img = nib.load(str(f_nii))
         ref = RefSpace(affine=img.affine, shape=img.shape)
-        return Mask(img.get_data(), ref_space=ref)
+        return Mask(fnc_include(img.get_data()), ref_space=ref)
 
     def to_nii(self, f_out=None, f_ref=None):
         # get f_out
@@ -178,3 +184,32 @@ class Mask:
             raise AttributeError('affine mismatch')
 
         return self.apply(img.get_data())
+
+    @staticmethod
+    def build_intersection(mask_list, thresh=1):
+        """ builds intersection of a set of masks
+
+        Args:
+            mask_list (list): list of masks
+            thresh (float): in (0, 1], how many of masks true @ ijk to include
+
+        Returns:
+            mask (Mask): intersection of masks
+        """
+        # get 'intersection'
+        c = len(mask_list) * thresh
+        x_all = sum(m.x.astype(bool) for m in mask_list) >= c
+
+        # if all ref_space are same, keep it, otherwise discard
+        ref_space = mask_list[0].ref_space
+        for m in mask_list[1:]:
+            if m.ref_space != ref_space:
+                ref_space = None
+                break
+
+        return Mask(x_all, ref_space=ref_space)
+
+    @staticmethod
+    def build_intersection_from_nii(f_nii_list, **kwargs):
+        mask_list = [Mask.from_nii(f) for f in f_nii_list]
+        return Mask.build_intersection(mask_list, **kwargs)
