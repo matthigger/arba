@@ -2,13 +2,13 @@ import multiprocessing
 import time
 from collections import defaultdict
 
-import mh_pytools.paralell
 import networkx as nx
 import nibabel as nib
 import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
+import mh_pytools.paralell
 from ..point_cloud import ref_space
 
 
