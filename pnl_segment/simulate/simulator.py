@@ -3,11 +3,34 @@ import pathlib
 import random
 import tempfile
 from collections import defaultdict
+from datetime import datetime
 
 import numpy as np
+from tqdm import tqdm
 
+from pnl_segment.point_cloud.ref_space import RefSpace
 from .effect import EffectDm
 from .mask import Mask
+
+
+def run_multi(fnc):
+    """ decorator, allows fnc to be called multiple times in parallel
+    """
+
+    def fnc_multi(self, n=1, verbose=False, **kwargs):
+        res_list = list()
+        tqdm_dict = {'desc': fnc.__name__,
+                     'disable': not verbose,
+                     'total': n}
+        for _ in tqdm(range(n), **tqdm_dict):
+            res_list.append(fnc(self, verbose=verbose, **kwargs))
+
+        if n > 1:
+            return res_list
+        else:
+            return res_list[0]
+
+    return fnc_multi
 
 
 class Simulator:
@@ -28,8 +51,29 @@ class Simulator:
         self.split_ratio = split_ratio
         self.mask_dilate = mask_dilate
 
+        # check ref spaces, store a copy
+        ref_list = [RefSpace.from_nii(f) for f in self.iter_img()]
+        for r in ref_list[1:]:
+            if ref_list[0] != r:
+                raise AttributeError('inconsistent reference space')
+        self.ref_space = ref_list[0]
+
+    def iter_img(self, feat_iter=None, sbj_iter=None):
+        """ iterates over all healthy img"""
+        if feat_iter is None:
+            sbj = next(iter(self.f_img_health.keys()))
+            feat_iter = sorted(self.f_img_health[sbj])
+
+        if sbj_iter is None:
+            sbj_iter = self.f_img_health.keys()
+
+        for feat in feat_iter:
+            for sbj in sbj_iter:
+                yield self.f_img_health[sbj][feat]
+
     def sample_eff(self, effect, folder=None, sym_link_health=True,
-                   label='{sbj}_{feat}_{eff_label}.nii.gz'):
+                   label='{sbj}_{feat}_{eff_label}.nii.gz', reseed=True,
+                   mask_to_nii=True):
         """ adds effect to split_ratio (without replacement) of healthy img
 
         Args:
@@ -38,6 +82,8 @@ class Simulator:
             sym_link_health (bool): if True, healthy img are sym linked (makes
                                     for clean folder structure)
             label (str): name of effect files to produce
+            reseed (bool): reseed random generator via timestamp before split
+            mask_to_nii (bool): toggles saving effect mask to folder
 
         Returns:
             f_img_dict (dict): keys are grp labels, values are iter, each
@@ -71,6 +117,9 @@ class Simulator:
         n_effect = np.ceil(self.split_ratio * n_sbj).astype(int)
 
         # split sbj into health and effect groups
+        if reseed:
+            # ensure
+            random.seed(datetime.now())
         sbj_all = set(self.f_img_health.keys())
         sbj_effect = random.sample(sbj_all, k=n_effect)
         sbj_health = sbj_all - set(sbj_effect)
@@ -97,26 +146,30 @@ class Simulator:
 
             f_img_dict[effect].append(img_list)
 
+        if mask_to_nii:
+            effect.mask.to_nii(f_out=folder / 'mask.nii.gz',
+                               f_ref=next(self.iter_img()))
+
         return f_img_dict, folder
 
-    def _run(self, f_img_dict, part_graph_factory, **kwargs):
+    def _run(self, f_img_dict, part_graph_factory, f_mask=None, verbose=False,
+             **kwargs):
         """ runs experiment
         """
 
         # build mask as intersection of all img, save to file
-        f_img_list = []
-        for _f_img_dict in self.f_img_health.values():
-            f_img_list += list(_f_img_dict.values())
-        mask = Mask.build_intersection_from_nii(f_img_list, thresh=.95)
-        _, f_mask = tempfile.mkstemp(suffix='.nii.gz')
-        mask.to_nii(f_mask)
+        if f_mask is None:
+            mask = Mask.build_intersection_from_nii(self.iter_img(),
+                                                    thresh=.95)
+            f_mask = mask.to_nii()
 
         # build part graph
         part_graph = part_graph_factory(f_img_dict=f_img_dict, history=True,
-                                        f_mask=f_mask, **kwargs)
+                                        f_mask=f_mask, verbose=verbose,
+                                        **kwargs)
 
         # reduce
-        part_graph.reduce(1)
+        part_graph.reduce_to(1, verbose=verbose)
 
         # build segmentation
         def spanning_fnc(reg):
@@ -126,6 +179,7 @@ class Simulator:
 
         return part_graph_span, part_graph
 
+    @run_multi
     def run_healthy(self, **kwargs):
         # build feat_label
         sbj = next(iter(self.f_img_health.keys()))
@@ -138,9 +192,10 @@ class Simulator:
         f_img_dict, folder = self.sample_eff(effect_dm)
         return self._run(f_img_dict, **kwargs), folder
 
-    def run_effect(self, effect, *args, **kwargs):
+    @run_multi
+    def run_effect(self, *, effect, **kwargs):
         f_img_dict, folder = self.sample_eff(effect)
-        return self._run(f_img_dict, *args, **kwargs), folder
+        return self._run(f_img_dict, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
         """ computes auc """
