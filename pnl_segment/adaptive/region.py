@@ -10,17 +10,21 @@ class Region:
         pc_ijk (PointCloudIJK)
         feat_stat (dict): contains feat stats for img sets of different grps
     """
+    # toggles whether obj should be maximized or minimized
+    max_flag = False
 
     @property
     def obj(self):
+        # memoize
         if self._obj is None:
             self._obj = self.get_obj()
         return self._obj
 
-    def __init__(self, pc_ijk, feat_stat):
+    def __init__(self, pc_ijk, feat_stat, active_grp=None):
         self.pc_ijk = pc_ijk
         self.feat_stat = feat_stat
         self._obj = None
+        self.active_grp = active_grp
 
     def __str__(self):
         return f'{self.__class__} with {self.feat_stat}'
@@ -47,40 +51,47 @@ class Region:
     def get_obj(self):
         raise NotImplementedError('invalid in base class Region, see subclass')
 
+    @staticmethod
+    def get_obj_pair(reg1, reg2, reg_union=None):
+        """ this obj is to be minimized """
+        # reg_union may be passed to reduce redundant computation
+        if reg_union is None:
+            reg_union = reg1 + reg2
+
+        delta = reg_union.obj - (reg1.obj + reg2.obj)
+
+        # flip if max value desired
+        delta *= ((-1) ** reg1.max_flag)
+        return delta
+
 
 class RegionMinVar(Region):
-    def __init__(self, *args, grp_to_min_var=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    max_flag = False
 
-        self.grp_to_min_var = grp_to_min_var
-        if self.grp_to_min_var is None:
-            self.grp_to_min_var = set(self.feat_stat.keys())
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.active_grp = set(self.feat_stat.keys())
 
     def get_obj(self):
         var_sum = 0
-        for grp in self.grp_to_min_var:
+        for grp in self.active_grp:
             fs = self.feat_stat[grp]
             var_sum = np.linalg.det(fs.cov) * fs.n
 
         # assume uniform prior of grps
-        return var_sum / len(self.grp_to_min_var)
-
-    @staticmethod
-    def get_obj_pair(reg1, reg2):
-        """ this obj is to be minimized """
-        delta_mean_var = (reg1 + reg2).obj - (reg1.obj + reg2.obj)
-        return delta_mean_var
+        return var_sum / len(self.active_grp)
 
 
 class RegionMaxKL(Region):
-    def __init__(self, *args, grp_to_max_kl=None, **kwargs):
+    max_flag = True
+
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.grp_to_max_kl = grp_to_max_kl
-        if self.grp_to_max_kl is None:
-            self.grp_to_max_kl = list(self.feat_stat.keys())
-            if len(self.grp_to_max_kl) != 2:
-                raise AttributeError('grp_to_max_kl needed if > 2 grps')
+        if self.active_grp is None:
+            self.active_grp = list(self.feat_stat.keys())
+            if len(self.active_grp) != 2:
+                raise AttributeError('active_grp needed if > 2 grps')
 
     def get_obj(self):
         """ returns symmetric kullback liebler divergance * len(self.pc_ijk)
@@ -96,7 +107,7 @@ class RegionMaxKL(Region):
         NOTE: the first term cancels for symmetric kl:
         log |sig_1| / |sig_0| + log |sig_0| / |sig_1| = 0
         """
-        grp_0, grp_1 = self.grp_to_max_kl
+        grp_0, grp_1 = self.active_grp
 
         # init to d
         kl = len(self.feat_stat[grp_0].mu)
@@ -111,10 +122,39 @@ class RegionMaxKL(Region):
 
         return float(kl * len(self))
 
-    @staticmethod
-    def get_obj_pair(reg1, reg2):
-        """ this obj is to be minimized """
-        delta_kl = (reg1 + reg2).obj - (reg1.obj + reg2.obj)
 
-        # swap sign (we want to maximize kl)
-        return -delta_kl
+class RegionMaxMaha(Region):
+    max_flag = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.active_grp is None:
+            self.active_grp = list(self.feat_stat.keys())
+            if len(self.active_grp) != 2:
+                raise AttributeError('active_grp needed if > 2 grps')
+
+    def get_obj(self):
+        """ returns Mahalanobis between active_grp * len(self.pc_ijk)
+
+        (assumes each distribution is normal and covar are equal).  Note that
+        if covar between active_grp are equal then this is equivalent (and
+        faster) than RegionMaxKL
+
+        maha(p_1, p_0) = (u_1 - u_0)^T sig ^ -1 (u_1 - u_0)
+
+        where sig is the common covariance
+        """
+
+        # compute common covariance
+        fs_active = sum(self.feat_stat[grp] for grp in self.active_grp)
+        sig_inv = np.linalg.inv(fs_active.cov)
+
+        # compute difference in mean
+        grp_0, grp_1 = self.active_grp
+        mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
+
+        # compute mahalanobis
+        maha = mu_diff.T @ sig_inv @ mu_diff
+
+        return float(maha * len(self))
