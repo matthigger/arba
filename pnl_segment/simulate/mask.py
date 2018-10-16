@@ -1,10 +1,8 @@
-import pathlib
 import tempfile
 
 import nibabel as nib
 import numpy as np
 
-import pnl_segment
 from pnl_segment.point_cloud.ref_space import RefSpace
 
 
@@ -28,6 +26,12 @@ class Mask:
     """ array
 
     >>> m1 = Mask(np.eye(3))
+    >>> [1, 1] in m1
+    True
+    >>> (2, 0) in m1
+    False
+    >>> list(m1)
+    [(0, 0), (1, 1), (2, 2)]
     >>> data = np.arange(18).reshape((3, 3, 2))
     >>> data[:, :, 0]
     array([[ 0,  2,  4],
@@ -47,15 +51,18 @@ class Mask:
     array([[10.9,  0. ,  0. ],
            [ 0. , 10.9,  0. ],
            [ 0. ,  0. , 10.9]])
-    >>> folder = pathlib.Path(pnl_segment.__file__).parent
-    >>> f_nii = folder / 'test' / 'data' / 'af.right.mask.nii.gz'
-    >>> mask = Mask.from_nii(f_nii)
-    >>> mask.ref_space.affine
-    array([[ -2.        ,   0.        ,   0.        , 120.5       ],
-           [  0.        ,  -2.        ,   0.        , 146.5       ],
-           [  0.        ,   0.        ,   2.        , -88.90000153],
-           [  0.        ,   0.        ,   0.        ,   1.        ]])
     """
+    def __iter__(self):
+        for ijk in np.vstack(np.where(self.x > 0)).T:
+            yield tuple(ijk)
+
+    def iter_multidim(self, n):
+        for ijk in self:
+            for _n in range(n):
+                yield (*ijk, _n)
+
+    def __contains__(self, ijk):
+        return bool(self.x[tuple(ijk)])
 
     @property
     def shape(self):
@@ -102,6 +109,7 @@ class Mask:
         if fnc_include is None:
             def is_positive(x):
                 return x > 0
+
             fnc_include = is_positive
 
         img = nib.load(str(f_nii))
@@ -124,15 +132,6 @@ class Mask:
         img.to_filename(str(f_out))
 
         return f_out
-
-    def __iter__(self):
-        for ijk in np.vstack(np.where(self.x > 0)).T:
-            yield tuple(ijk)
-
-    def iter_multidim(self, n):
-        for ijk in self:
-            for _n in range(n):
-                yield (*ijk, _n)
 
     def insert(self, data_img, x, add=False):
         """ inserts x into data_img where mask is
