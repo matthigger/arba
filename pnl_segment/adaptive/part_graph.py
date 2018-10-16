@@ -8,7 +8,7 @@ import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
-import mh_pytools.paralell
+import mh_pytools.parallel
 from ..point_cloud import ref_space
 
 
@@ -264,7 +264,7 @@ class PartGraph(nx.Graph):
             # compute (paralell) objective per edge
             pool = multiprocessing.Pool()
             res = pool.starmap_async(self.obj_fnc, edge_list)
-            obj_list = mh_pytools.paralell.join(pool, res,
+            obj_list = mh_pytools.parallel.join(pool, res,
                                                 desc='compute obj per edge (par)',
                                                 verbose=verbose)
 
