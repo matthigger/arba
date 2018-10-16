@@ -6,14 +6,18 @@ from scipy.ndimage import binary_dilation
 from pnl_data.set.cidar_post import folder, get_name
 from pnl_segment import simulate
 from pnl_segment.adaptive.part_graph_factory import max_kl
+from mh_pytools import parallel, file
+from datetime import datetime
 
 n_sim = 2
+n_healthy = 10
 effect_snr = 10
 split_ratio = .5
 mask_rad = 1
 
 # build f_img_tree
 folder_data = folder / 'dti_in_01193'
+folder_out = folder / 'dti_in_01193_out'
 f_img_tree = defaultdict(dict)
 for label in ('fa', 'md'):
     for f in folder_data.glob(f'*{label}.nii.gz'):
@@ -43,13 +47,18 @@ mask_active = simulate.Mask(mask_active,
                             ref_space=effect.mask.ref_space)
 f_mask_active = mask_active.to_nii(f_ref=f_fa_list[0])
 
-# simulate effect
-res_list = sim.run_effect(effect=effect,
-                          n=n_sim,
-                          f_mask=f_mask_active,
-                          part_graph_factory=max_kl,
-                          verbose=True)
+# # simulate effect
+# res_list = sim.run_effect(effect=effect,
+#                           n=n_sim,
+#                           f_mask=f_mask_active,
+#                           part_graph_factory=max_kl,
+#                           verbose=True)
 
-# # simulate algorithm on healthy population
-# f_seg_nii = sim.run_healthy(part_graph_factory=max_kl, verbose=True)
-#
+# simulate algorithm on healthy population
+timestamp = datetime.now().strftime("%Y_%b_%d_%I_%M%p%S")
+folder_healthy = folder_out / f'no_eff_full_brain_{timestamp}'
+arg_list = [{'part_graph_factory': max_kl, 'save': True,
+             'folder': folder_healthy / f'max_kl_{idx}'} for idx in range(n_healthy)]
+# f_seg_nii = sim.run_healthy(part_graph_factory=max_kl)
+
+parallel.run_par_fnc(fnc='run_healthy', obj=sim, arg_list=arg_list)

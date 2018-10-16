@@ -8,22 +8,31 @@ from datetime import datetime
 import numpy as np
 from tqdm import tqdm
 
+from mh_pytools import file
 from pnl_segment.point_cloud.ref_space import RefSpace
 from .effect import EffectDm
 from .mask import Mask
+
+
+def get_folder(folder=None):
+    if folder is None:
+        folder = tempfile.TemporaryDirectory().name
+    folder = pathlib.Path(folder)
+    folder.mkdir(exist_ok=True, parents=True)
+    return folder
 
 
 def run_multi(fnc):
     """ decorator, allows fnc to be called multiple times in parallel
     """
 
-    def fnc_multi(self, n=1, verbose=False, **kwargs):
+    def fnc_multi(sim, n=1, verbose=False, **kwargs):
         res_list = list()
         tqdm_dict = {'desc': fnc.__name__,
                      'disable': not verbose,
                      'total': n}
         for _ in tqdm(range(n), **tqdm_dict):
-            res_list.append(fnc(self, verbose=verbose, **kwargs))
+            res_list.append(fnc(sim, verbose=verbose, **kwargs))
 
         if n > 1:
             return res_list
@@ -93,12 +102,8 @@ class Simulator:
                                         ['sbj2_FA.nii.gz', 'sbj2_MD.nii.gz']],
                                 'healthy': ... }
         """
-
-        # if no folder passed, put new effect img in a temp directory
-        if folder is None:
-            folder = tempfile.TemporaryDirectory().name
-            folder = pathlib.Path(folder)
-            folder.mkdir()
+        # get folder
+        folder = get_folder(folder)
 
         def get_f_nii_out(sbj, eff_label):
             # find locations for output files
@@ -146,41 +151,56 @@ class Simulator:
 
             f_img_dict[effect].append(img_list)
 
-        if mask_to_nii:
+        if mask_to_nii and hasattr(effect, 'mask'):
             effect.mask.to_nii(f_out=folder / 'mask.nii.gz',
                                f_ref=next(self.iter_img()))
-
         return f_img_dict, folder
 
-    def _run(self, f_img_dict, part_graph_factory, f_mask=None, verbose=False,
-             **kwargs):
+    def _run(self, f_img_dict, part_graph_factory, folder, f_mask=None,
+             verbose=False, mask_to_nii=True, save=False, **kwargs):
         """ runs experiment
         """
+        # get location of mask output file (if needed)
+        if mask_to_nii:
+            f_mask_out = folder / 'mask_active.nii.gz'
+        else:
+            # dummy value, mask.to_nii() will get temp location
+            f_mask_out = None
 
-        # build mask as intersection of all img, save to file
+        # build (or symlink) mask file
         if f_mask is None:
+            # build mask as intersection of all img, save to file
             mask = Mask.build_intersection_from_nii(self.iter_img(),
                                                     thresh=.95)
-            f_mask = mask.to_nii()
+            f_mask = mask.to_nii(f_out=f_mask_out)
+        elif mask_to_nii:
+            # mask file already exists, build symlink
+            os.symlink(f_mask, f_mask_out)
 
         # build part graph
-        part_graph = part_graph_factory(f_img_dict=f_img_dict, history=True,
-                                        f_mask=f_mask, verbose=verbose,
-                                        **kwargs)
+        pg_hist = part_graph_factory(f_img_dict=f_img_dict, history=True,
+                                     f_mask=f_mask, verbose=verbose,
+                                     **kwargs)
 
         # reduce
-        part_graph.reduce_to(1, verbose=verbose)
+        pg_hist.reduce_to(1, verbose=verbose)
 
         # build segmentation
         def spanning_fnc(reg):
             return reg.obj
 
-        part_graph_span = part_graph.get_min_spanning_region(spanning_fnc)
+        pg_span = pg_hist.get_min_spanning_region(spanning_fnc)
 
-        return part_graph_span, part_graph
+        if save:
+            file.save(pg_span, file=folder / 'pg_span.p.gz')
+            file.save(pg_hist, file=folder / 'pg_hist.p.gz')
+
+        return pg_span, pg_hist
 
     @run_multi
-    def run_healthy(self, **kwargs):
+    def run_healthy(self, folder=None, **kwargs):
+        folder = get_folder(folder)
+
         # build feat_label
         sbj = next(iter(self.f_img_health.keys()))
         feat_label = sorted(self.f_img_health[sbj].keys())
@@ -189,13 +209,15 @@ class Simulator:
         effect_dm = EffectDm(feat_label=feat_label)
 
         # apply 'effect' to some subset of images
-        f_img_dict, folder = self.sample_eff(effect_dm)
-        return self._run(f_img_dict, **kwargs), folder
+        f_img_dict, _ = self.sample_eff(effect_dm, folder=folder)
+        return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     @run_multi
-    def run_effect(self, *, effect, **kwargs):
-        f_img_dict, folder = self.sample_eff(effect)
-        return self._run(f_img_dict, **kwargs), folder
+    def run_effect(self, *, effect, folder=None, **kwargs):
+        folder = get_folder(folder)
+
+        f_img_dict, _ = self.sample_eff(effect, folder=folder)
+        return self._run(f_img_dict, folder=folder ** kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
         """ computes auc """
