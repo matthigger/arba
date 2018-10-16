@@ -30,7 +30,7 @@ class PartGraph(nx.Graph):
             raise AttributeError('ref must have shape')
 
         # build array
-        x = self.to_array(ref.shape, **kwargs)
+        x = self.to_array(**kwargs)
 
         # save
         img_out = nib.Nifti1Image(x, ref.affine)
@@ -38,7 +38,7 @@ class PartGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, shape, fnc=None, fnc_include=None):
+    def to_array(self, fnc=None, fnc_include=None):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
