@@ -51,6 +51,9 @@ _, folder = sim.run_effect(obj=obj,
                            verbose=True,
                            save=True)
 
+f_stat = folder / 'segment_stat.nii.gz'
+auc = effect.get_auc_from_nii(f_stat)
+
 # simulate algorithm on healthy population
 
 # single healthy (serial) run

@@ -5,6 +5,7 @@ from functools import reduce
 import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_dilation
+from scipy.stats import mannwhitneyu
 
 from pnl_segment.adaptive.feat_stat import FeatStat
 from pnl_segment.simulate.mask import Mask
@@ -94,6 +95,32 @@ class Effect:
             img.to_filename(str(f_nii_dict_out[feat]))
 
         return f_nii_dict_out
+
+    def get_auc_from_nii(self, f_nii):
+        """ computes auc of statistic given in f_nii
+
+        a strong auc value requires that there exists some threshold which
+        seperates affected voxels from unaffected voxels.  here, self serves
+        as 'ground truth' of which voxels are, or are not, affected
+
+        Args:
+            f_nii (str or Path): path to statistic image
+
+        Returns:
+            auc (float): value in [0, 1]
+        """
+        stat_mask = Mask.from_nii(f_nii)
+        stat_vec = stat_mask.apply_from_nii(f_nii)
+        truth_vec = stat_mask.apply(self.mask.x)
+
+        x = stat_vec[truth_vec == 0]
+        y = stat_vec[truth_vec == 1]
+        u = mannwhitneyu(x, y, alternative='greater')
+        auc = u.statistic / (len(x) * len(y))
+        auc = max(auc, 1 - auc)
+        # pval = min(u.pvalue, 1 - u.pvalue)
+
+        return auc
 
     def apply(self, x):
         """ applies effect to array x
