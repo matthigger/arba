@@ -196,6 +196,13 @@ class Simulator:
             file.save(pg_span, file=folder / 'pg_span.p.gz')
             file.save(pg_hist, file=folder / 'pg_hist.p.gz')
 
+            def get_obj(reg):
+                return reg.obj
+
+            pg_span.to_nii(f_out=folder / 'segment_stat.nii.gz',
+                           ref=f_mask,
+                           fnc=get_obj)
+
         return pg_span, pg_hist
 
     @run_multi
@@ -218,7 +225,7 @@ class Simulator:
         folder = get_folder(folder)
 
         f_img_dict, _ = self.sample_eff(effect, folder=folder)
-        return self._run(f_img_dict, folder=folder ** kwargs), folder
+        return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
         """ computes auc """
