@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import file
+from pnl_segment.adaptive.part_graph_factory import part_graph_factory
 from pnl_segment.point_cloud.ref_space import RefSpace
 from .effect import EffectDm
 from .mask import Mask
@@ -156,7 +157,7 @@ class Simulator:
                                f_ref=next(self.iter_img()))
         return f_img_dict, folder
 
-    def _run(self, f_img_dict, part_graph_factory, folder, f_mask=None,
+    def _run(self, f_img_dict, folder, obj, f_mask=None,
              verbose=False, mask_to_nii=True, save=False, **kwargs):
         """ runs experiment
         """
@@ -178,9 +179,9 @@ class Simulator:
             os.symlink(f_mask, f_mask_out)
 
         # build part graph
-        pg_hist = part_graph_factory(f_img_dict=f_img_dict, history=True,
-                                     f_mask=f_mask, verbose=verbose,
-                                     **kwargs)
+        pg_hist = part_graph_factory(obj=obj, f_img_dict=f_img_dict,
+                                     history=True, f_mask=f_mask,
+                                     verbose=verbose, **kwargs)
 
         # reduce
         pg_hist.reduce_to(1, verbose=verbose)

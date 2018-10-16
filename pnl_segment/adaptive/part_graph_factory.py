@@ -15,46 +15,13 @@ from . import region, part_graph, feat_stat
 from ..point_cloud import point_cloud_ijk, ref_space
 
 
-def min_var(grp_to_min_var=None, **kwargs):
-    """ equivilently, max likelihood under independent / normal assumptions
-    """
-
-    def region_init(*args, **kwargs):
-        return region.RegionMinVar(*args,
-                                   grp_to_min_var=grp_to_min_var,
-                                   **kwargs)
-
-    pg = _build_part_graph(**kwargs,
-                           region_init=region_init)
-
-    pg.obj_fnc = region.RegionMinVar.get_obj_pair
-
-    return pg
-
-
-def max_kl(grp_to_max_kl=None, **kwargs):
-    """ maximize kl distance between grp_to_max_kl
-    """
-
-    def region_init(*args, **kwargs):
-        return region.RegionMaxKL(*args,
-                                  grp_to_max_kl=grp_to_max_kl,
-                                  **kwargs)
-
-    pg = _build_part_graph(**kwargs,
-                           region_init=region_init)
-
-    pg.obj_fnc = region.RegionMaxKL.get_obj_pair
-
-    return pg
-
-
-def _build_part_graph(f_img_dict, region_init, verbose=False,
-                      f_mask=None, f_edge_constraint=None, history=False,
-                      sbj_thresh=.95, img_label=None):
+def part_graph_factory(obj, f_img_dict, verbose=False, f_mask=None,
+                       f_edge_constraint=None, history=False, sbj_thresh=.95,
+                       img_label=None):
     """ init PartGraph via img
 
     Args:
+        obj (str): either 'min_var', 'max_kl' or 'max_maha'
         f_img_dict (dict): keys are grp labels, values are iter, each
                            element of the iter is a list of img from a sbj
                            this is confusing, here's an example:
@@ -69,9 +36,20 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
     Returns:
         part_graph (PartGraph)
     """
-    if verbose:
-        print('\n' * 2 + 'construct part_graph: load')
+    # get appropriate region constructor
+    if obj.lower() == 'min_var':
+        region_init = region.RegionMinVar
+    elif obj.lower() == 'max_kl':
+        region_init = region.RegionMaxKL
+    elif obj.lower() == 'max_maha':
+        region_init = region.RegionMaxMaha
+    else:
+        raise AttributeError(f'objective not recognized: {obj}')
 
+    if verbose:
+        print('construct part_graph: load')
+
+    # load mask
     if f_mask is None:
         mask = None
     else:
@@ -143,6 +121,9 @@ def _build_part_graph(f_img_dict, region_init, verbose=False,
 
     # store original image files
     pg.f_img_dict = f_img_dict
+
+    # init obj_fnc
+    pg.obj_fnc = region.Region.get_obj_pair
 
     return pg
 
