@@ -240,7 +240,10 @@ class Simulator:
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     @run_multi
-    def run_effect(self, *, effect, folder=None, **kwargs):
+    def run_effect(self, effect=None, folder=None, **kwargs):
+        if effect is None:
+            raise AttributeError('effect required')
+
         folder = get_folder(folder)
 
         sbj_effect, sbj_health = self.split_sbj(**kwargs)

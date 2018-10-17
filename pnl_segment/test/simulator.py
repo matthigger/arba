@@ -2,6 +2,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime
 
+import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_dilation
 from tqdm import tqdm
@@ -10,8 +11,8 @@ from mh_pytools import parallel, file
 from pnl_data.set.cidar_post import folder, get_name
 from pnl_segment import simulate
 
-n_effect = 1000
-effect_snr_iter = np.geomspace(.001, 5, n_effect)
+n_effect = 100
+effect_snr_iter = np.logspace(-3, 2, n_effect)
 eff_ratio = .5
 effect_rad = 3
 mask_rad = 5
@@ -47,6 +48,12 @@ else:
 f_fa_list = [sim.f_img_health[sbj]['fa'] for sbj in sim.f_img_health.keys()]
 mask_all = simulate.Mask.build_intersection_from_nii(f_fa_list)
 
+# load all data (to compute effects via snr we need raw data)
+f_img_tree_data = defaultdict(dict)
+for sbj, d in tqdm(sim.f_img_health.items(), desc='load per sbj'):
+    for feat, f in d.items():
+        f_img_tree_data[sbj][feat] = nib.load(str(f)).get_data()
+
 
 # build effect
 def get_effect(snr):
@@ -54,7 +61,7 @@ def get_effect(snr):
     """
     effect_mask = simulate.Effect.sample_mask(prior_array=mask_all.x,
                                               radius=effect_rad)
-    effect = simulate.Effect.from_data(f_img_tree=sim.f_img_health,
+    effect = simulate.Effect.from_data(f_img_tree=f_img_tree_data,
                                        mask=effect_mask,
                                        effect_snr=snr)
 
@@ -77,8 +84,10 @@ for snr in tqdm(effect_snr_iter, desc='sample effects'):
          'sbj_effect': sbj_effect,
          'sbj_health': sbj_health,
          'f_mask': f_mask_active,
-         'folder': folder_out / f'{snr:.3E}_{uuid.uuid4().hex[:4]}'}
+         'folder': folder_out / f'{snr:.2E}_{uuid.uuid4().hex[:4]}'}
     arg_list.append(d)
+
+# sim.run_effect(**arg_list[0])
 
 # run
 parallel.run_par_fnc(fnc='run_effect', obj=sim, arg_list=arg_list)
