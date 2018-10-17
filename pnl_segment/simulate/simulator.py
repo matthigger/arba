@@ -56,10 +56,8 @@ class Simulator:
                            sbj's feat (all assumed in registered space)
     """
 
-    def __init__(self, f_img_health, split_ratio=.5, mask_dilate=5):
+    def __init__(self, f_img_health):
         self.f_img_health = f_img_health
-        self.split_ratio = split_ratio
-        self.mask_dilate = mask_dilate
 
         # check ref spaces, store a copy
         ref_list = [RefSpace.from_nii(f) for f in self.iter_img()]
@@ -81,19 +79,50 @@ class Simulator:
             for sbj in sbj_iter:
                 yield self.f_img_health[sbj][feat]
 
-    def sample_eff(self, effect, folder=None, sym_link_health=True,
-                   label='{sbj}_{feat}_{eff_label}.nii.gz', reseed=True,
-                   mask_to_nii=True):
-        """ adds effect to split_ratio (without replacement) of healthy img
+    def split_sbj(self, eff_ratio=.5, seed=datetime.now(), **kwargs):
+        """ splits sbj into effect and healthy groups
+
+        Args:
+            eff_ratio (float): in (0, 1), determines how many sbj have effect
+            seed: seed given to randomize
+
+        Returns:
+            sbj_effect: sbj chosen to have effect
+            sbj_health: remaining sbj
+        """
+        if 'sbj_effect' in kwargs.keys() or 'sbj_health' in kwargs.keys():
+            # if split is already passed, pass it back (see run_effect())
+            sbj_effect = kwargs['sbj_effect']
+            sbj_health = kwargs['sbj_health']
+            return sbj_effect, sbj_health
+
+        # compute n_effect
+        n_sbj = len(self.f_img_health.keys())
+        n_effect = np.ceil(eff_ratio * n_sbj).astype(int)
+
+        random.seed(seed)
+
+        # split sbj into health and effect groups
+        sbj_all = set(self.f_img_health.keys())
+        sbj_effect = random.sample(sbj_all, k=n_effect)
+        sbj_health = sbj_all - set(sbj_effect)
+
+        return sbj_effect, sbj_health
+
+    def sample_eff(self, effect, sbj_effect, sbj_health, folder=None,
+                   sym_link_health=True, mask_to_nii=True,
+                   label='{sbj}_{feat}_{eff_label}.nii.gz'):
+        """ adds effect to eff_ratio (without replacement) of healthy img
 
         Args:
             effect (Effect): applies effect to img set
+            sbj_effect: sbj chosen to have effect
+            sbj_health: remaining sbj
             folder (str or Path): path to stored effect files
             sym_link_health (bool): if True, healthy img are sym linked (makes
                                     for clean folder structure)
-            label (str): name of effect files to produce
-            reseed (bool): reseed random generator via timestamp before split
             mask_to_nii (bool): toggles saving effect mask to folder
+            label (str): name of effect files to produce
 
         Returns:
             f_img_dict (dict): keys are grp labels, values are iter, each
@@ -117,18 +146,6 @@ class Simulator:
             img_list = [f_nii_dict_out[feat] for feat in effect.feat_label]
 
             return f_nii_dict_out, img_list
-
-        # compute n_effect
-        n_sbj = len(self.f_img_health.keys())
-        n_effect = np.ceil(self.split_ratio * n_sbj).astype(int)
-
-        # split sbj into health and effect groups
-        if reseed:
-            # ensure
-            random.seed(datetime.now())
-        sbj_all = set(self.f_img_health.keys())
-        sbj_effect = random.sample(sbj_all, k=n_effect)
-        sbj_health = sbj_all - set(sbj_effect)
 
         # init f_img_dict with healthies
         f_img_dict = defaultdict(list)
@@ -217,14 +234,18 @@ class Simulator:
         effect_dm = EffectDm(feat_label=feat_label)
 
         # apply 'effect' to some subset of images
-        f_img_dict, _ = self.sample_eff(effect_dm, folder=folder)
+        sbj_effect, sbj_health = self.split_sbj(**kwargs)
+        f_img_dict, _ = self.sample_eff(effect_dm, sbj_effect, sbj_health,
+                                        folder=folder)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     @run_multi
     def run_effect(self, *, effect, folder=None, **kwargs):
         folder = get_folder(folder)
 
-        f_img_dict, _ = self.sample_eff(effect, folder=folder)
+        sbj_effect, sbj_health = self.split_sbj(**kwargs)
+        f_img_dict, _ = self.sample_eff(effect, sbj_effect, sbj_health,
+                                        folder=folder)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
