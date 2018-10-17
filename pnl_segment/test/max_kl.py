@@ -101,6 +101,6 @@ for _ in range(n_effect):
 pg = part_graph_factory.max_kl(f_img_dict=f_img_dict, verbose=True,
                                f_mask=f_mask, history=True, img_label=img_label)
 
-pg.reduce_to(1, edge_per_step=1)
+pg.reduce_to(1, edge_per_step=1e-6)
 f_part_graph = folder_data / 'part_graph.p.gz'
 file.save(pg, f_part_graph)

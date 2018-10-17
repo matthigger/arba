@@ -14,7 +14,8 @@ from pnl_segment.adaptive.part_graph_factory import part_graph_factory
 from mh_pytools import file
 import numpy as np
 
-gran_array = np.geomspace(50, 5000, 20).astype(int)
+edge_per_step = 1e-2
+gran_array = np.geomspace(5000, 50, 20).astype(int)
 feat_tuple = 'fa', 'md'
 folder_data = folder / 'dti_in_01193'
 folder_out = folder_data / 'rba_regions'
@@ -35,7 +36,7 @@ f_fa = next(iter(f_img_dict.values()))[0][0]
 pg = part_graph_factory(obj='min_var', grp_to_min_var='h',
                         f_img_dict=f_img_dict, f_mask=f_fa, verbose=True)
 for gran in gran_array:
-    pg.reduce_to(gran, verbose=True)
+    pg.reduce_to(gran, edge_per_step=edge_per_step, verbose=True)
 
     f_out = folder_data / f'rba_{num_reg_segment}.p.gz'
     file.save(gran, file=f_out)
