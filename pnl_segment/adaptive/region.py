@@ -76,7 +76,7 @@ class RegionMinVar(Region):
         var_sum = 0
         for grp in self.active_grp:
             fs = self.feat_stat[grp]
-            var_sum = np.linalg.det(fs.cov) * fs.n
+            var_sum = fs.cov_det * fs.n
 
         # assume uniform prior of grps
         return var_sum / len(self.active_grp)
@@ -115,10 +115,9 @@ class RegionMaxKL(Region):
         # add other terms
         for fs_0, fs_1 in permutations((self.feat_stat[grp_0],
                                         self.feat_stat[grp_1])):
-            fs_1_cov_inv = np.linalg.inv(fs_1.cov)
-            kl += np.trace(fs_1_cov_inv @ fs_0.cov)
+            kl += np.trace(fs_1.cov_inv @ fs_0.cov)
             mu_diff = fs_1.mu - fs_0.mu
-            kl += mu_diff.T @ fs_1_cov_inv @ mu_diff
+            kl += mu_diff.T @ fs_1.cov_inv @ mu_diff
 
         return float(kl * len(self))
 
@@ -148,13 +147,12 @@ class RegionMaxMaha(Region):
 
         # compute common covariance
         fs_active = sum(self.feat_stat[grp] for grp in self.active_grp)
-        sig_inv = np.linalg.inv(fs_active.cov)
 
         # compute difference in mean
         grp_0, grp_1 = self.active_grp
         mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
 
         # compute mahalanobis
-        maha = mu_diff.T @ sig_inv @ mu_diff
+        maha = mu_diff.T @ fs_active.cov_inv @ mu_diff
 
         return float(maha * len(self))

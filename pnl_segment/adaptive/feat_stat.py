@@ -27,12 +27,27 @@ class FeatStat:
     True
     """
 
+    @property
+    def cov_det(self):
+        if self.__cov_det is None:
+            self.__cov_det = np.linalg.det(self.cov)
+        return self.__cov_det
+
+    @property
+    def cov_inv(self):
+        if self.__cov_inv is None:
+            self.__cov_inv = np.linalg.inv(self.cov)
+        return self.__cov_inv
+
     def __init__(self, n=0, mu=np.nan, cov=np.nan, label=None):
         # defaults to 'empty' set of features
         self.n = int(n)
         self.mu = np.atleast_2d(mu)
         self.cov = np.atleast_2d(cov)
         self.label = label
+
+        self.__cov_det = None
+        self.__cov_inv = None
 
         if self.mu.shape[0] != self.cov.shape[0]:
             if self.mu.shape[1] == self.cov.shape[0]:
@@ -95,7 +110,7 @@ class FeatStat:
             return FeatStat(self.n, self.mu, self.cov)
         elif self.n == 0:
             # self is empty, return a copy of othr
-            return FeatStat(othr.n, othr.mu, othr.var)
+            return FeatStat(othr.n, othr.mu, othr.cov)
 
         # compute n
         n = self.n + othr.n
