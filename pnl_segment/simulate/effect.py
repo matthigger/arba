@@ -27,7 +27,7 @@ class Effect:
         """ scales effect with observations
 
         Args:
-            f_img_tree (dict of dict):
+            f_img_tree (dict of dict): leafs can be files or arrays
             mask (Mask): effect location
             effect_snr (float): ratio of effect to population variance
             cov_ratio (float): ratio of effect cov to population cov
@@ -36,11 +36,15 @@ class Effect:
         sbj = next(iter(f_img_tree.keys()))
         feat_label = sorted(f_img_tree[sbj].keys())
 
+        if isinstance(next(iter(f_img_tree[sbj].values())), np.ndarray):
+            get_data = mask.apply
+        else:
+            get_data = mask.apply_from_nii
+
         # get mean and cov of all img corresponding to mask
         fs_list = list()
         for sbj, f_img_dict in f_img_tree.items():
-            x = np.hstack(mask.apply_from_nii(f_img_dict[label])
-                          for label in feat_label)
+            x = np.hstack(get_data(f_img_dict[label]) for label in feat_label)
             fs = FeatStat.from_array(x)
             fs_list.append(fs)
         fs = sum(fs_list)
