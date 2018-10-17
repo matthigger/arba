@@ -17,7 +17,8 @@ from pnl_segment.simulate.mask import Mask
 
 
 def part_graph_factory(obj, f_img_dict, verbose=False, f_mask=None,
-                       f_edge_constraint=None, history=False, thresh_mask=.95):
+                       f_edge_constraint=None, history=False, thresh_mask=.95,
+                       **kwargs):
     """ init PartGraph via img
 
     Args:
