@@ -51,7 +51,12 @@ class Mask:
     array([[10.9,  0. ,  0. ],
            [ 0. , 10.9,  0. ],
            [ 0. ,  0. , 10.9]])
+    >>> m2.negate().x
+    array([[False,  True,  True],
+           [ True, False,  True],
+           [ True,  True, False]])
     """
+
     def __iter__(self):
         for ijk in np.vstack(np.where(self.x > 0)).T:
             yield tuple(ijk)
@@ -74,6 +79,9 @@ class Mask:
     def __init__(self, x, ref_space=None):
         self.x = x
         self.ref_space = ref_space
+
+    def negate(self):
+        return Mask(np.logical_not(self.x), ref_space=self.ref_space)
 
     @check_ref
     def __add__(self, other):
@@ -104,7 +112,7 @@ class Mask:
         pass
 
     @staticmethod
-    def from_nii(f_nii, fnc_include=None):
+    def from_img(img, fnc_include=None):
         # defaults to include all positive values in mask
         if fnc_include is None:
             def is_positive(x):
@@ -112,9 +120,12 @@ class Mask:
 
             fnc_include = is_positive
 
-        img = nib.load(str(f_nii))
         ref = RefSpace(affine=img.affine, shape=img.shape)
         return Mask(fnc_include(img.get_data()), ref_space=ref)
+
+    @staticmethod
+    def from_nii(f_nii, **kwargs):
+        return Mask.from_img(nib.load(str(f_nii)), **kwargs)
 
     def to_nii(self, f_out=None, f_ref=None):
         # get f_out
@@ -137,8 +148,8 @@ class Mask:
         """ inserts x into data_img where mask is
 
         Args:
-            data_img (np.array):
-            x (np.array):
+            data_img (np.array): base image
+            x (np.array): points to be added
             add (bool): toggles whether data is replaced or added
 
         Returns:
