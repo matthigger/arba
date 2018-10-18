@@ -19,6 +19,7 @@ gran_array = np.geomspace(5000, 50, 20).astype(int)
 feat_tuple = 'fa', 'md'
 folder_data = folder / 'dti_in_01193'
 folder_out = folder_data / 'rba_regions'
+folder_out.mkdir(exist_ok=True, parents=True)
 
 # build f_img_tree
 f_img_tree = defaultdict(dict)
