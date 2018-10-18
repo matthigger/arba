@@ -150,7 +150,7 @@ class PartGraph(nx.Graph):
         if len(self) < num_reg_stop:
             print(f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
 
-        if not (0 < edge_per_step < 1):
+        if edge_per_step is not None and not (0 < edge_per_step < 1):
             raise AttributeError('edge_per_step not in (0, 1): {edge_per_step}')
 
         # init edges if need be
@@ -169,6 +169,7 @@ class PartGraph(nx.Graph):
         # combine edges until only n regions left
         len_init = len(self)
         last_update = time.time()
+        n = 1
         while len(self) > num_reg_stop:
             # break early if no more valid edges available
             if not self._obj_edge_list or \
@@ -177,7 +178,8 @@ class PartGraph(nx.Graph):
                 break
 
             # find n edges with min obj
-            n = np.ceil(len(self) * edge_per_step).astype(int)
+            if edge_per_step is not None:
+                n = np.ceil(len(self) * edge_per_step).astype(int)
             edge_list, _obj_list = self._get_min_n_edges(n)
             obj_list += _obj_list
 

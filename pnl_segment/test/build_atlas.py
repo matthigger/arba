@@ -38,8 +38,8 @@ pg = part_graph_factory(obj='min_var', grp_to_min_var='h',
 for gran in gran_array:
     pg.reduce_to(gran, edge_per_step=edge_per_step, verbose=True)
 
-    f_out = folder_data / f'rba_{num_reg_segment}.p.gz'
-    file.save(gran, file=f_out)
+    f_out = folder_out / f'rba_{gran}.p.gz'
+    file.save(pg, file=f_out)
 
-    f_out = folder_data / f'rba_{num_reg_segment}.nii.gz'
-    pg.to_nii(f_out)
+    f_out = folder_out / f'rba_{gran}.nii.gz'
+    pg.to_nii(f_out, ref=f_fa)

@@ -6,11 +6,11 @@ import numpy as np
 from scipy.ndimage import binary_dilation
 from tqdm import tqdm
 
-from mh_pytools import file
+from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder, get_name
 from pnl_segment.simulate import simulator, mask, effect
 
-n_effect = 1
+n_effect = 100
 effect_snr_iter = np.logspace(-3, 2, n_effect)
 eff_ratio = .5
 effect_rad = 3
@@ -88,8 +88,10 @@ for idx, snr in tqdm(enumerate(effect_snr_iter), desc='sample effects'):
          'folder': folder_out / f'{str(idx).zfill(z)}_snr_{snr:.2E}'}
     arg_list.append(d)
 
-# serial test
-sim.run_effect(**arg_list[0], verbose=True)
+# # serial test
+# with np.seterr(all='raise'):
+#     for d in arg_list:
+#         sim.run_effect(**d, verbose=True)
 
 # run parallel
-# parallel.run_par_fnc(fnc='run_effect', obj=sim, arg_list=arg_list)
+parallel.run_par_fnc(fnc='run_effect', obj=sim, arg_list=arg_list)
