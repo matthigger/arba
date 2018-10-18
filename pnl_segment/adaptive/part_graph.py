@@ -50,8 +50,16 @@ class PartGraph(nx.Graph):
             def fnc(reg):
                 return reg_to_idx[reg]
 
-        reg_list = filter(fnc_include, self.nodes)
-        return sum(fnc(reg) * reg.pc_ijk.to_array() for reg in reg_list)
+        reg_list = list(filter(fnc_include, self.nodes))
+
+        # build output array
+        x = np.zeros(reg_list[0].pc_ijk.ref.shape)
+        for reg in reg_list:
+            val = fnc(reg)
+            for _x in reg.pc_ijk.x:
+                x[tuple(_x)] += val
+
+        return x
 
     def combine(self, reg_iter):
         """ combines multiple regions into one
