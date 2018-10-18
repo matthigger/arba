@@ -110,8 +110,8 @@ class Simulator:
         return sbj_effect, sbj_health
 
     def sample_eff(self, effect, sbj_effect, sbj_health, folder=None,
-                   sym_link_health=True, mask_to_nii=True,
-                   label='{sbj}_{feat}_{eff_label}.nii.gz'):
+                   sym_link_health=True, save=True,
+                   label='{sbj}_{feat}_{eff_label}.nii.gz', **kwargs):
         """ adds effect to eff_ratio (without replacement) of healthy img
 
         Args:
@@ -121,7 +121,7 @@ class Simulator:
             folder (str or Path): path to stored effect files
             sym_link_health (bool): if True, healthy img are sym linked (makes
                                     for clean folder structure)
-            mask_to_nii (bool): toggles saving effect mask to folder
+            save (bool): toggles saving mask / effect to folder
             label (str): name of effect files to produce
 
         Returns:
@@ -169,9 +169,11 @@ class Simulator:
 
             f_img_dict[effect].append(img_list)
 
-        if mask_to_nii and hasattr(effect, 'mask'):
-            effect.mask.to_nii(f_out=folder / 'mask.nii.gz',
+        if save and hasattr(effect, 'mask'):
+            effect.mask.to_nii(f_out=folder / 'effect_mask.nii.gz',
                                f_ref=next(self.iter_img()))
+            file.save(effect, file=folder / 'effect.p.gz')
+
         return f_img_dict, folder
 
     def _run(self, f_img_dict, folder, obj, f_mask=None,
@@ -200,6 +202,14 @@ class Simulator:
                                      history=True, f_mask=f_mask,
                                      verbose=verbose, **kwargs)
 
+        if save:
+            def get_obj(reg):
+                return reg.obj
+
+            pg_hist.to_nii(f_out=folder / f'_{obj}_vba.nii.gz',
+                           ref=f_mask,
+                           fnc=get_obj)
+
         # reduce
         pg_hist.reduce_to(1, verbose=verbose)
 
@@ -211,12 +221,10 @@ class Simulator:
 
         if save:
             file.save(pg_span, file=folder / 'pg_span.p.gz')
-            file.save(pg_hist, file=folder / 'pg_hist.p.gz')
 
-            def get_obj(reg):
-                return reg.obj
+            # file.save(pg_hist, file=folder / 'pg_hist.p.gz')
 
-            pg_span.to_nii(f_out=folder / 'segment_stat.nii.gz',
+            pg_span.to_nii(f_out=folder / f'_{obj}_arba.nii.gz',
                            ref=f_mask,
                            fnc=get_obj)
 
@@ -236,7 +244,7 @@ class Simulator:
         # apply 'effect' to some subset of images
         sbj_effect, sbj_health = self.split_sbj(**kwargs)
         f_img_dict, _ = self.sample_eff(effect_dm, sbj_effect, sbj_health,
-                                        folder=folder)
+                                        folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     @run_multi
@@ -248,7 +256,7 @@ class Simulator:
 
         sbj_effect, sbj_health = self.split_sbj(**kwargs)
         f_img_dict, _ = self.sample_eff(effect, sbj_effect, sbj_health,
-                                        folder=folder)
+                                        folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):

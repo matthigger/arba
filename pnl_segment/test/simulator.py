@@ -33,7 +33,7 @@ if prev_folder_out is None:
     # init simulator, split into groups
     sim = simulator.Simulator(f_img_health=f_img_health)
     sbj_effect, sbj_health = sim.split_sbj(eff_ratio=.5)
-    file.save((sim, sbj_effect, sbj_health),
+    file.save((sim, sbj_effect, sbj_health, obj),
               file=folder_out / 'sim_split.p.gz')
 
     # single healthy (serial) run
@@ -42,7 +42,7 @@ if prev_folder_out is None:
 else:
     # allows us to add to previous experiments
     folder_out = prev_folder_out
-    sim, sbj_effect, sbj_health = file.load(folder_out / 'sim_split.p.gz')
+    sim, sbj_effect, sbj_health, obj = file.load(folder_out / 'sim_split.p.gz')
 
 # build intersection of all fa as mask of 'prior' location of effect
 f_fa_list = [sim.f_img_health[sbj]['fa'] for sbj in sim.f_img_health.keys()]
@@ -63,7 +63,7 @@ def get_effect(snr):
                                             radius=effect_rad)
     eff = effect.Effect.from_data(f_img_tree=f_img_tree_data,
                                   mask=effect_mask,
-                                  effect_snr=snr)
+                                  snr=snr)
 
     # build mask around affected area and neighboring voxels (faster compute)
     mask_active = binary_dilation(eff.mask.x, iterations=mask_rad)
