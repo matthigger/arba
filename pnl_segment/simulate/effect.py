@@ -1,4 +1,4 @@
-import shutil
+import os
 import tempfile
 from functools import reduce
 
@@ -23,13 +23,13 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(f_img_tree, mask, effect_snr, cov_ratio=0):
+    def from_data(f_img_tree, mask, snr, cov_ratio=0):
         """ scales effect with observations
 
         Args:
             f_img_tree (dict of dict): leafs can be files or arrays
             mask (Mask): effect location
-            effect_snr (float): ratio of effect to population variance
+            snr (float): ratio of effect to population variance
             cov_ratio (float): ratio of effect cov to population cov
         """
 
@@ -50,12 +50,12 @@ class Effect:
         fs = sum(fs_list)
 
         #
-        mean = np.diag(fs.cov) * effect_snr
+        mean = np.diag(fs.cov) * snr
         cov = fs.cov * cov_ratio
 
-        return Effect(mask, mean=mean, cov=cov, feat_label=feat_label)
+        return Effect(mask, mean=mean, cov=cov, feat_label=feat_label, snr=snr)
 
-    def __init__(self, mask, feat_label, mean, cov=None):
+    def __init__(self, mask, feat_label, mean, cov=None, snr=None):
         if not isinstance(mask, Mask):
             raise TypeError(f'mask: {mask} must be of type Mask')
         self.mask = mask
@@ -64,6 +64,7 @@ class Effect:
             raise AttributeError('1d mean required')
         self.cov = np.atleast_2d(cov)
         self.feat_label = feat_label
+        self.snr = snr
 
     def __len__(self):
         return len(self.mask)
@@ -100,12 +101,27 @@ class Effect:
 
         return f_nii_dict_out
 
-    def get_auc_from_nii(self, f_nii):
-        """ computes auc of statistic given in f_nii
+    def get_auc(self, x, stat_mask):
+        """ computes auc of statistic given by array x
 
         a strong auc value requires that there exists some threshold which
         seperates affected voxels from unaffected voxels.  here, self serves
         as 'ground truth' of which voxels are, or are not, affected
+
+        Args:
+            x (np.array)
+            stat_mask (mask): values in x which are to be counted
+
+        Returns:
+            auc (float): value in [0, 1]
+        """
+        stat_vec = stat_mask.apply(x)
+        truth_vec = stat_mask.apply(self.mask.x)
+
+        return Mask.__get_auc(stat_vec, truth_vec)
+
+    def get_auc_from_nii(self, f_nii):
+        """ computes auc of statistic given in f_nii
 
         Args:
             f_nii (str or Path): path to statistic image
@@ -116,6 +132,11 @@ class Effect:
         stat_mask = Mask.from_nii(f_nii)
         stat_vec = stat_mask.apply_from_nii(f_nii)
         truth_vec = stat_mask.apply(self.mask.x)
+
+        return Mask.__get_auc(stat_vec, truth_vec)
+
+    @staticmethod
+    def __get_auc(stat_vec, truth_vec):
 
         x = stat_vec[truth_vec == 0]
         y = stat_vec[truth_vec == 1]
@@ -248,6 +269,6 @@ class EffectDm:
     def apply_from_to_nii(self, f_nii_dict, f_nii_dict_out=None):
         if f_nii_dict_out is not None:
             for feat, f in f_nii_dict.items():
-                shutil.copy(f, f_nii_dict_out[feat])
+                os.symlink(f, f_nii_dict_out[feat])
 
         return f_nii_dict_out
