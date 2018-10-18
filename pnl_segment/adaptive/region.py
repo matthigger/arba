@@ -10,9 +10,6 @@ class Region:
         pc_ijk (PointCloudIJK)
         feat_stat (dict): contains feat stats for img sets of different grps
     """
-    # toggles whether obj should be maximized or minimized
-    max_flag = False
-
     @property
     def obj(self):
         # memoize
@@ -53,21 +50,17 @@ class Region:
 
     @staticmethod
     def get_obj_pair(reg1, reg2, reg_union=None):
-        """ this obj is to be minimized """
+        """ this obj is always to be minimized """
         # reg_union may be passed to reduce redundant computation
         if reg_union is None:
             reg_union = reg1 + reg2
 
         delta = reg_union.obj - (reg1.obj + reg2.obj)
 
-        # flip if max value desired
-        delta *= ((-1) ** reg1.max_flag)
         return delta
 
 
 class RegionMinVar(Region):
-    max_flag = False
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.active_grp = set(self.feat_stat.keys())
@@ -79,12 +72,12 @@ class RegionMinVar(Region):
             var_sum = fs.cov_det * fs.n
 
         # assume uniform prior of grps
-        return var_sum / len(self.active_grp)
+        var_sum *= 1 / len(self.active_grp)
+
+        return var_sum * len(self)
 
 
 class RegionMaxKL(Region):
-    max_flag = True
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -94,7 +87,7 @@ class RegionMaxKL(Region):
                 raise AttributeError('active_grp needed if > 2 grps')
 
     def get_obj(self):
-        """ returns symmetric kullback liebler divergance * len(self.pc_ijk)
+        """ negative symmetric kullback liebler divergance * len(self.pc_ijk)
 
         (assumes each distribution is normal)
 
@@ -119,12 +112,10 @@ class RegionMaxKL(Region):
             mu_diff = fs_1.mu - fs_0.mu
             kl += mu_diff.T @ fs_1.cov_inv @ mu_diff
 
-        return float(kl * len(self))
+        return - float(kl * len(self))
 
 
 class RegionMaxMaha(Region):
-    max_flag = True
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -134,7 +125,7 @@ class RegionMaxMaha(Region):
                 raise AttributeError('active_grp needed if > 2 grps')
 
     def get_obj(self):
-        """ returns Mahalanobis between active_grp * len(self.pc_ijk)
+        """ negative Mahalanobis squared between active_grp
 
         (assumes each distribution is normal and covar are equal).  Note that
         if covar between active_grp are equal then this is equivalent (and
@@ -142,7 +133,7 @@ class RegionMaxMaha(Region):
 
         maha(p_1, p_0) = (u_1 - u_0)^T sig ^ -1 (u_1 - u_0)
 
-        where sig is the common covariance
+        where sig is the common covariance / region size (in voxels)
         """
 
         # compute common covariance
@@ -153,6 +144,6 @@ class RegionMaxMaha(Region):
         mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
 
         # compute mahalanobis
-        maha = mu_diff.T @ fs_active.cov_inv @ mu_diff
+        maha = mu_diff.T @ (fs_active.cov_inv * len(self)) @ mu_diff
 
-        return float(maha * len(self))
+        return - maha
