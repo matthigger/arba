@@ -121,7 +121,8 @@ def part_graph_factory(obj, f_img_dict, verbose=False, f_mask=None,
     pg.f_img_dict = f_img_dict
 
     # init obj_fnc
-    pg.obj_fnc = region.Region.get_obj_pair
+    reg = next(iter(reg_by_ijk.values()))
+    pg.obj_fnc = getattr(reg, 'get_obj_pair')
 
     return pg
 

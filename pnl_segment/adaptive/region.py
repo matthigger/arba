@@ -3,6 +3,32 @@ from itertools import permutations
 import numpy as np
 
 
+def weighted_diff(reg1, reg2, reg_union=None):
+    """ obj difference after union - before union, weighted by region size
+
+    note: this obj is always to be minimized
+    """
+    # reg_union may be passed to reduce redundant computation
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    delta = reg_union.obj - (reg1.obj + reg2.obj)
+
+    return delta
+
+
+def union_obj(reg1, reg2, reg_union=None):
+    """ objective computed from the union
+
+    note: this obj is always to be minimized'
+    """
+    # reg_union may be passed to reduce redundant computation
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    return reg_union.obj
+
+
 class Region:
     """ a set of voxels and their associated features
 
@@ -10,6 +36,7 @@ class Region:
         pc_ijk (PointCloudIJK)
         feat_stat (dict): contains feat stats for img sets of different grps
     """
+
     @property
     def obj(self):
         # memoize
@@ -48,17 +75,6 @@ class Region:
     def get_obj(self):
         raise NotImplementedError('invalid in base class Region, see subclass')
 
-    @staticmethod
-    def get_obj_pair(reg1, reg2, reg_union=None):
-        """ this obj is always to be minimized """
-        # reg_union may be passed to reduce redundant computation
-        if reg_union is None:
-            reg_union = reg1 + reg2
-
-        delta = reg_union.obj - (reg1.obj + reg2.obj)
-
-        return delta
-
 
 class RegionMinVar(Region):
     def __init__(self, *args, **kwargs):
@@ -75,6 +91,8 @@ class RegionMinVar(Region):
         var_sum *= 1 / len(self.active_grp)
 
         return var_sum * len(self)
+
+    get_obj_pair = weighted_diff
 
 
 class RegionMaxKL(Region):
@@ -114,6 +132,8 @@ class RegionMaxKL(Region):
 
         return - float(kl * len(self))
 
+    get_obj_pair = union_obj
+
 
 class RegionMaxMaha(Region):
     def __init__(self, *args, **kwargs):
@@ -147,3 +167,5 @@ class RegionMaxMaha(Region):
         maha = mu_diff.T @ (fs_active.cov_inv * len(self)) @ mu_diff
 
         return - maha
+
+    get_obj_pair = union_obj
