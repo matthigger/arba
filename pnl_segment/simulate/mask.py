@@ -58,8 +58,7 @@ class Mask:
     """
 
     def __iter__(self):
-        for ijk in np.vstack(np.where(self.x > 0)).T:
-            yield tuple(ijk)
+        return iter(tuple(ijk) for ijk in np.vstack(np.where(self.x > 0)).T)
 
     def iter_multidim(self, n):
         for ijk in self:
@@ -185,7 +184,7 @@ class Mask:
         if len(data.shape) > len(self.shape) + 1:
             raise AttributeError('data shape more than 1 dim larger than mask')
 
-        return np.vstack(data[np.s_[ijk]] for ijk in self)
+        return data[self.x.astype(bool)]
 
     def apply_from_nii(self, f_nii):
         img = nib.load(str(f_nii))
