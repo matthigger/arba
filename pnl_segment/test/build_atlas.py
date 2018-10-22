@@ -36,11 +36,13 @@ f_fa = next(iter(f_img_dict.values()))[0][0]
 # segment
 pg = part_graph_factory(obj='min_var', grp_to_min_var='h',
                         f_img_dict=f_img_dict, f_mask=f_fa, verbose=True)
+z = np.ceil(np.log10(max(gran_array)))
 for gran in gran_array:
     pg.reduce_to(gran, edge_per_step=edge_per_step, verbose=True)
 
-    f_out = folder_out / f'rba_{gran}.p.gz'
+    gran_str = str(gran).zfill(z)
+    f_out = folder_out / f'rba_{gran_str}.p.gz'
     file.save(pg, file=f_out)
 
-    f_out = folder_out / f'rba_{gran}.nii.gz'
+    f_out = folder_out / f'rba_{gran_str}.nii.gz'
     pg.to_nii(f_out, ref=f_fa)
