@@ -44,7 +44,7 @@ class Effect:
         # get mean and cov of all img corresponding to mask
         fs_list = list()
         for sbj, f_img_dict in f_img_tree.items():
-            x = np.hstack(get_data(f_img_dict[label]) for label in feat_label)
+            x = np.vstack(get_data(f_img_dict[label]) for label in feat_label).T
             fs = FeatStat.from_array(x)
             fs_list.append(fs)
         fs = sum(fs_list)
@@ -59,9 +59,9 @@ class Effect:
         if not isinstance(mask, Mask):
             raise TypeError(f'mask: {mask} must be of type Mask')
         self.mask = mask
-        self.mean = np.squeeze(mean)
-        if len(self.mean.shape) > 1:
-            raise AttributeError('1d mean required')
+        self.mean = np.reshape(mean, len(mean))
+        if len(self.mean) ** 2 != len(cov.flatten()):
+            raise AttributeError('mean / cov mismatch')
         self.cov = np.atleast_2d(cov)
         self.feat_label = feat_label
         self.snr = snr
@@ -118,7 +118,7 @@ class Effect:
         stat_vec = stat_mask.apply(x)
         truth_vec = stat_mask.apply(self.mask.x)
 
-        return Mask.__get_auc(stat_vec, truth_vec)
+        return Effect._get_auc(stat_vec, truth_vec)
 
     def get_auc_from_nii(self, f_nii):
         """ computes auc of statistic given in f_nii
@@ -133,10 +133,10 @@ class Effect:
         stat_vec = stat_mask.apply_from_nii(f_nii)
         truth_vec = stat_mask.apply(self.mask.x)
 
-        return Mask.__get_auc(stat_vec, truth_vec)
+        return Effect.__get_auc(stat_vec, truth_vec)
 
     @staticmethod
-    def __get_auc(stat_vec, truth_vec):
+    def _get_auc(stat_vec, truth_vec):
 
         x = stat_vec[truth_vec == 0]
         y = stat_vec[truth_vec == 1]
