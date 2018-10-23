@@ -3,7 +3,6 @@ import networkx as nx
 import nibabel as nib
 import numpy as np
 from matplotlib import pyplot as plt
-from pnl_segment.adaptive import pval
 
 
 def size_v_mahalanobis(pg, cmap=mpl.cm.coolwarm, f_mask_track=None,
@@ -24,9 +23,8 @@ def size_v_mahalanobis(pg, cmap=mpl.cm.coolwarm, f_mask_track=None,
 
     for reg in reg_list:
         size = len(reg)
-        p, r2 = pval.get_pval(reg, grp_cmp='healthy', grp_test='effect')
 
-        node_pos[reg] = size, r2
+        node_pos[reg] = size, -reg.obj
 
     def plot_node(reg_list, **kwargs):
 

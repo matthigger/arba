@@ -204,8 +204,9 @@ class Simulator:
 
         if save:
             def get_obj(reg):
-                return reg.obj
+                return -reg.obj
 
+            file.save(pg_hist, folder / 'pg_init.p.gz')
             pg_hist.to_nii(f_out=folder / f'_{obj}_vba.nii.gz',
                            ref=f_mask,
                            fnc=get_obj)
@@ -222,7 +223,7 @@ class Simulator:
         if save:
             file.save(pg_span, file=folder / 'pg_span.p.gz')
 
-            # file.save(pg_hist, file=folder / 'pg_hist.p.gz')
+            file.save(pg_hist, file=folder / 'pg_hist.p.gz')
 
             pg_span.to_nii(f_out=folder / f'_{obj}_arba.nii.gz',
                            ref=f_mask,
@@ -242,9 +243,8 @@ class Simulator:
         effect_dm = EffectDm(feat_label=feat_label)
 
         # apply 'effect' to some subset of images
-        sbj_effect, sbj_health = self.split_sbj(**kwargs)
-        f_img_dict, _ = self.sample_eff(effect_dm, sbj_effect, sbj_health,
-                                        folder=folder, **kwargs)
+        kwargs['sbj_effect'], kwargs['sbj_health'] = self.split_sbj(**kwargs)
+        f_img_dict, _ = self.sample_eff(effect_dm, folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     @run_multi
@@ -254,9 +254,8 @@ class Simulator:
 
         folder = get_folder(folder)
 
-        sbj_effect, sbj_health = self.split_sbj(**kwargs)
-        f_img_dict, _ = self.sample_eff(effect, sbj_effect, sbj_health,
-                                        folder=folder, **kwargs)
+        kwargs['sbj_effect'], kwargs['sbj_health'] = self.split_sbj(**kwargs)
+        f_img_dict, _ = self.sample_eff(effect, folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
     def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):

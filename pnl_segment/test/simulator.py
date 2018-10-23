@@ -9,15 +9,20 @@ from tqdm import tqdm
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder, get_name
 from pnl_segment.simulate import simulator, mask, effect
+import random
 
-n_effect = 100
+n_effect = 20
 effect_snr_iter = np.logspace(-3, 2, n_effect)
 eff_ratio = .5
 effect_rad = 3
 mask_rad = 5
 obj = 'max_maha'
-# prev_folder_out = folder / '2018_Oct_17_09_15AM24'
+feat_list = ['fa', 'md']
+# prev_folder_out = folder / '2018_Oct_19_01_57PM42'
 prev_folder_out = None
+
+np.random.seed(1)
+random.seed(1)
 
 folder_data = folder / 'dti_in_01193'
 if prev_folder_out is None:
@@ -26,9 +31,9 @@ if prev_folder_out is None:
 
     # build f_img_health
     f_img_health = defaultdict(dict)
-    for label in ('fa', 'md'):
-        for f in folder_data.glob(f'*{label}.nii.gz'):
-            f_img_health[get_name(f.stem)][label] = f
+    for feat in feat_list:
+        for f in folder_data.glob(f'*{feat}.nii.gz'):
+            f_img_health[get_name(f.stem)][feat] = f
 
     # init simulator, split into groups
     sim = simulator.Simulator(f_img_health=f_img_health)
@@ -45,8 +50,8 @@ else:
     sim, sbj_effect, sbj_health, obj = file.load(folder_out / 'sim_split.p.gz')
 
 # build intersection of all fa as mask of 'prior' location of effect
-f_fa_list = [sim.f_img_health[sbj]['fa'] for sbj in sim.f_img_health.keys()]
-mask_all = mask.Mask.build_intersection_from_nii(f_fa_list)
+f_list_all = [sim.f_img_health[sbj][feat] for feat in feat_list for sbj in sim.f_img_health.keys()]
+mask_all = mask.Mask.build_intersection_from_nii(f_list_all)
 
 # load all data (to compute effects via snr we need raw data)
 f_img_tree_data = defaultdict(dict)
@@ -69,7 +74,7 @@ def get_effect(snr):
     mask_active = binary_dilation(eff.mask.x, iterations=mask_rad)
     mask_active = mask.Mask(mask_active,
                             ref_space=eff.mask.ref_space)
-    f_mask_active = mask_active.to_nii(f_ref=f_fa_list[0])
+    f_mask_active = mask_active.to_nii(f_ref=f_list_all[0])
 
     return eff, f_mask_active
 
@@ -88,10 +93,9 @@ for idx, snr in tqdm(enumerate(effect_snr_iter), desc='sample effects'):
          'folder': folder_out / f'{str(idx).zfill(z)}_snr_{snr:.2E}'}
     arg_list.append(d)
 
-# # serial test
-# with np.seterr(all='raise'):
-#     for d in arg_list:
-#         sim.run_effect(**d, verbose=True)
+# serial test
+# for d in arg_list:
+#     sim.run_effect(**d, verbose=True)
 
 # run parallel
 parallel.run_par_fnc(fnc='run_effect', obj=sim, arg_list=arg_list)
