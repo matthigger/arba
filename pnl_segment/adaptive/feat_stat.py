@@ -35,8 +35,13 @@ class FeatStat:
 
     @property
     def cov_inv(self):
+        """ inverse of covariance, defaults to pseudoinverse if singular
+        """
         if self.__cov_inv is None:
-            self.__cov_inv = np.linalg.inv(self.cov)
+            try:
+                self.__cov_inv = np.linalg.inv(self.cov)
+            except np.linalg.linalg.LinAlgError:
+                self.__cov_inv = np.linalg.pinv(self.cov)
         return self.__cov_inv
 
     def __init__(self, n=0, mu=np.nan, cov=np.nan, label=None):
