@@ -76,7 +76,7 @@ class Mask:
         return np.sum((self.x > 0).flatten())
 
     def __init__(self, x, ref_space=None):
-        self.x = x
+        self.x = x.astype(bool)
         self.ref_space = ref_space
 
     def negate(self):
