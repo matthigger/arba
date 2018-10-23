@@ -94,7 +94,7 @@ class PartGraph(nx.Graph):
             if any(fs.var[0][0] == 0 for fs in reg.feat_stat):
                 self.remove_node(reg)
 
-    def combine_by_reg(self, f_region):
+    def combine_by_reg(self, f_region, verbose=False):
         """ combines regions which share an idx in f_region (some parcellation)
 
         note: regions must all be single voxel at outset
@@ -134,7 +134,8 @@ class PartGraph(nx.Graph):
         # combine
         reg_new_dict = dict()
         for reg_idx, reg_list in tqdm(reg_idx_reg_dict.items(),
-                                      desc='combining'):
+                                      desc='combining',
+                                      disable=not verbose):
             reg_new_dict[reg_idx] = self.combine(reg_list)
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
