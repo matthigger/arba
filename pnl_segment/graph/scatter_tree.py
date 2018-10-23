@@ -54,7 +54,9 @@ def size_v_mahalanobis(pg, cmap=mpl.cm.coolwarm, f_mask_track=None,
 
     # draw edges
     if edge:
-        nx.draw_networkx_edges(pg, pos=node_pos)
+        reg_set = set(reg_list)
+        edgelist = [e for e in pg.edges if set(e).issubset(reg_set)]
+        nx.draw_networkx_edges(pg, pos=node_pos, edgelist=edgelist)
 
     # label / cleanup
     plt.gca().set_yscale('log')
