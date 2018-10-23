@@ -6,7 +6,6 @@ from collections import defaultdict
 from datetime import datetime
 
 import numpy as np
-from tqdm import tqdm
 
 from mh_pytools import file
 from pnl_segment.adaptive.part_graph_factory import part_graph_factory
@@ -21,26 +20,6 @@ def get_folder(folder=None):
     folder = pathlib.Path(folder)
     folder.mkdir(exist_ok=True, parents=True)
     return folder
-
-
-def run_multi(fnc):
-    """ decorator, allows fnc to be called multiple times in parallel
-    """
-
-    def fnc_multi(sim, n=1, verbose=False, **kwargs):
-        res_list = list()
-        tqdm_dict = {'desc': fnc.__name__,
-                     'disable': not verbose,
-                     'total': n}
-        for _ in tqdm(range(n), **tqdm_dict):
-            res_list.append(fnc(sim, verbose=verbose, **kwargs))
-
-        if n > 1:
-            return res_list
-        else:
-            return res_list[0]
-
-    return fnc_multi
 
 
 class Simulator:
@@ -231,7 +210,6 @@ class Simulator:
 
         return pg_span, pg_hist
 
-    @run_multi
     def run_healthy(self, folder=None, **kwargs):
         folder = get_folder(folder)
 
@@ -247,7 +225,6 @@ class Simulator:
         f_img_dict, _ = self.sample_eff(effect_dm, folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
-    @run_multi
     def run_effect(self, effect=None, folder=None, **kwargs):
         if effect is None:
             raise AttributeError('effect required')
