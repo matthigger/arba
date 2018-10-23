@@ -3,32 +3,6 @@ from itertools import permutations
 import numpy as np
 
 
-def weighted_diff(reg1, reg2, reg_union=None):
-    """ obj difference after union - before union, weighted by region size
-
-    note: this obj is always to be minimized
-    """
-    # reg_union may be passed to reduce redundant computation
-    if reg_union is None:
-        reg_union = reg1 + reg2
-
-    delta = reg_union.obj - (reg1.obj + reg2.obj)
-
-    return delta
-
-
-def union_obj(reg1, reg2, reg_union=None):
-    """ objective computed from the union
-
-    note: this obj is always to be minimized'
-    """
-    # reg_union may be passed to reduce redundant computation
-    if reg_union is None:
-        reg_union = reg1 + reg2
-
-    return reg_union.obj
-
-
 class Region:
     """ a set of voxels and their associated features
 
@@ -72,8 +46,19 @@ class Region:
     def __lt__(self, other):
         return len(self) < len(other)
 
-    def get_obj(self):
-        raise NotImplementedError('invalid in base class Region, see subclass')
+    @staticmethod
+    def get_obj_pair(reg1, reg2, reg_union=None):
+        """ obj difference after union - before union, weighted by region size
+
+        note: this obj is always to be minimized
+        """
+        # reg_union may be passed to reduce redundant computation
+        if reg_union is None:
+            reg_union = reg1 + reg2
+
+        delta = reg_union.obj - (reg1.obj + reg2.obj)
+
+        return delta
 
 
 class RegionMinVar(Region):
@@ -91,8 +76,6 @@ class RegionMinVar(Region):
         var_sum *= 1 / len(self.active_grp)
 
         return var_sum * len(self)
-
-    get_obj_pair = weighted_diff
 
 
 class RegionMaxKL(Region):
@@ -130,9 +113,7 @@ class RegionMaxKL(Region):
             mu_diff = fs_1.mu - fs_0.mu
             kl += mu_diff.T @ fs_1.cov_inv @ mu_diff
 
-        return - float(kl * len(self))
-
-    get_obj_pair = union_obj
+        return - kl * len(self)
 
 
 class RegionMaxMaha(Region):
@@ -163,9 +144,8 @@ class RegionMaxMaha(Region):
         grp_0, grp_1 = self.active_grp
         mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
 
-        # compute mahalanobis
-        maha = mu_diff.T @ (fs_active.cov_inv * len(self)) @ mu_diff
+        # compute symmetric mahalanobis
+        maha = mu_diff.T @ fs_active.cov_inv @ mu_diff
 
-        return - maha
+        return - maha * len(self)
 
-    get_obj_pair = union_obj
