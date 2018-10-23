@@ -138,7 +138,7 @@ class PartGraph(nx.Graph):
             reg_new_dict[reg_idx] = self.combine(reg_list)
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
-                  par_thresh=10000, update_period=10):
+                  par_thresh=False, update_period=10):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
