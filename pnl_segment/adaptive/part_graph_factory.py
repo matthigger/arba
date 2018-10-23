@@ -207,6 +207,9 @@ def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, f_mask=None,
         # remove col which are not both non-zero
         x = x[:, x.all(axis=0)]
 
+        if x.size == 0:
+            continue
+
         # add it to dict_out
         if raw_feat:
             dict_out[ijk] = x
