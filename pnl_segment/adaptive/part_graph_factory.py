@@ -156,7 +156,7 @@ def add_edges(pg, reg_by_ijk, verbose=False, f_edge_constraint=None):
             pg.add_edge(reg1, reg2)
 
 
-def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, f_mask=None,
+def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, mask=None,
                  raw_feat=False):
     """ reads in images, builds feat_stat per ijk location
 
@@ -166,7 +166,7 @@ def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, f_mask=None,
                              [['FA_sbj1.nii.gz', 'MD_sbj1.nii.gz'], \
                               ['FA_sbj2.nii.gz', 'MD_sbj2.nii.gz']],
         verbose (bool): toggles cmd line output
-        f_mask (str): path to nii of mask
+        mask (str, mask or None): ijk to include
         thresh_mask (int): % of images with positive value required to include
                            voxel ijk (only used if f_mask = None)
         raw_feat (bool): toggles getting raw features
@@ -189,11 +189,11 @@ def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, f_mask=None,
     feat = np.stack(feat_list, axis=4)
 
     # build mask
-    if f_mask is not None:
-        mask = Mask.from_nii(f_mask)
-    else:
+    if mask is None:
         f_nii_list = [f for l in f_img_list_iter for f in l]
         mask = Mask.build_intersection_from_nii(f_nii_list, thresh=thresh_mask)
+    elif not isinstance(mask, Mask):
+        mask = Mask.from_nii(mask)
 
     # compute feat stats
     dict_out = dict()

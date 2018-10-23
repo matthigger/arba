@@ -7,8 +7,8 @@ import numpy as np
 from scipy.ndimage import binary_dilation
 from scipy.stats import mannwhitneyu
 
-from pnl_segment.adaptive.feat_stat import FeatStat
 from pnl_segment.simulate.mask import Mask
+from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
 
 
 class Effect:
@@ -23,7 +23,7 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(f_img_tree, mask, snr, cov_ratio=0):
+    def from_data(f_img_tree, mask, snr, cov_ratio=0, feat_list=None):
         """ scales effect with observations
 
         Args:
@@ -33,27 +33,14 @@ class Effect:
             cov_ratio (float): ratio of effect cov to population cov
         """
 
-        sbj = next(iter(f_img_tree.keys()))
-        feat_label = sorted(f_img_tree[sbj].keys())
-
-        if isinstance(next(iter(f_img_tree[sbj].values())), np.ndarray):
-            get_data = mask.apply
-        else:
-            get_data = mask.apply_from_nii
-
-        # get mean and cov of all img corresponding to mask
-        fs_list = list()
-        for sbj, f_img_dict in f_img_tree.items():
-            x = np.vstack(get_data(f_img_dict[label]) for label in feat_label).T
-            fs = FeatStat.from_array(x)
-            fs_list.append(fs)
-        fs = sum(fs_list)
+        ijk_dict = get_ijk_dict(f_img_tree, mask=mask)
+        fs = sum(ijk_dict.values())
 
         #
         mean = np.diag(fs.cov) * snr
         cov = fs.cov * cov_ratio
 
-        return Effect(mask, mean=mean, cov=cov, feat_label=feat_label, snr=snr)
+        return Effect(mask, mean=mean, cov=cov, feat_label=feat_list, snr=snr)
 
     def __init__(self, mask, feat_label, mean, cov=None, snr=None):
         if not isinstance(mask, Mask):
