@@ -38,7 +38,7 @@ class PartGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, fnc=None, fnc_include=None):
+    def to_array(self, fnc=None, fnc_include=None, overlap=False):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
@@ -57,6 +57,8 @@ class PartGraph(nx.Graph):
         for reg in reg_list:
             val = fnc(reg)
             for _x in reg.pc_ijk.x:
+                if not overlap and x[tuple(_x)] != 0:
+                    raise AttributeError('regions are not disjoint')
                 x[tuple(_x)] += val
 
         return x
