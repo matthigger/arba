@@ -176,8 +176,8 @@ class Simulator:
 
         return f_img_dict, folder
 
-    def _run(self, f_img_dict, folder, obj, f_mask=None,
-             verbose=False, mask_to_nii=True, save=False, **kwargs):
+    def _run(self, f_img_dict, folder, obj, f_mask=None, verbose=False,
+             mask_to_nii=True, save=False, **kwargs):
         """ runs experiment
         """
         # get location of mask output file (if needed)
