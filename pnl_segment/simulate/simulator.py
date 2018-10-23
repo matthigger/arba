@@ -258,6 +258,43 @@ class Simulator:
         f_img_dict, _ = self.sample_eff(effect, folder=folder, **kwargs)
         return self._run(f_img_dict, folder=folder, **kwargs), folder
 
-    def compute_auc(self, f_img_dict, f_segment_nii, mask_sep):
-        """ computes auc """
-        pass
+
+def get_f_img_dict(folder, feat_list=None):
+    """ gets f_img_dict from all files in folder
+
+    assumes files are named in format:
+    
+    {sbj}_{feat}_{eff_label}.nii.gz
+
+    and that same feat are available per sbj
+    """
+
+    f_img = '{sbj}_{feat}_{label}.nii.gz'
+
+    sbj_dict = defaultdict(set)
+    feat_set = set()
+    for f in folder.glob('*.nii.gz'):
+        try:
+            sbj, feat, label = str(f.stem).split('.')[0].split('_')
+            sbj_dict[label].add(sbj)
+            feat_set.add(feat)
+        except ValueError:
+            continue
+
+    if feat_list is None:
+        feat_list = sorted(feat_set)
+    elif set(feat_list) != feat_set:
+        raise AttributeError('feat_list must have same elements as feat_set')
+
+    f_img_dict = defaultdict(list)
+    for label, sbj_set in sbj_dict.items():
+        for sbj in sbj_set:
+            f_img_list = list()
+            for feat in feat_list:
+                f = folder / f_img.format(sbj=sbj, feat=feat, label=label)
+                if not f.exists():
+                    raise FileExistsError
+                f_img_list.append(f)
+            f_img_dict[label].append(f_img_list)
+
+    return f_img_dict, feat_list
