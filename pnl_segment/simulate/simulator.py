@@ -11,9 +11,10 @@ from pnl_segment.simulate.mask import Mask
 def increment_to_unique(folder, num_width=3):
     idx = 0
     while True:
-        folder = pathlib.Path(str(folder) + f'{idx}'.zfill(num_width))
-        if not folder.exists():
-            return folder
+        _folder = pathlib.Path(
+            str(folder) + '_run' + str(idx).zfill(num_width))
+        if not _folder.exists():
+            return _folder
         idx += 1
 
 
@@ -82,12 +83,13 @@ class Simulator:
         folder.mkdir(exist_ok=True, parents=True)
         for feat in self.file_tree.feat_list:
             for grp, ft in ft_dict.items():
-                f_out = folder / f'_{grp}_{feat}.nii.gz'
+                f_out = folder / f'{grp}_{feat}.nii.gz'
                 ft.to_nii(f_out, feat=feat)
 
         # save effect
-        effect.mask.to_nii(folder / 'effect_mask.nii.gz')
-        file.save(effect, file=folder / 'effect.p.gz')
+        if not isinstance(effect, EffectDm):
+            effect.mask.to_nii(folder / 'effect_mask.nii.gz')
+            file.save(effect, file=folder / 'effect.p.gz')
 
         # build part graph
         pg_hist = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
@@ -102,8 +104,7 @@ class Simulator:
                        fnc=get_obj)
 
         # reduce
-        # pg_hist.reduce_to(1, verbose=verbose)
-        pg_hist.reduce_to(len(pg_hist) - 1000, verbose=verbose)
+        pg_hist.reduce_to(1, verbose=verbose)
 
         # build arba segmentation
         def spanning_fnc(reg):
@@ -131,12 +132,12 @@ class Simulator:
 
         return pg_span, pg_hist
 
-    def run_healthy(self, obj, p_effect=.5):
+    def run_healthy(self, obj, **kwargs):
+        eff = EffectDm()
         folder = increment_to_unique(self.folder / 'healthy')
-        self.run(effect=EffectDm(), obj=obj, p_effect=p_effect, folder=folder)
+        self.run(effect=eff, obj=obj, folder=folder, **kwargs)
 
-    def run_effect(self, snr, obj, active_rad=None, **kwargs):
+    def run_effect(self, snr, obj, **kwargs):
         eff = self.sample_effect(snr, **kwargs)
         folder = increment_to_unique(self.folder / f'snr_{snr:.3E}')
-        self.run(effect=eff, obj=obj, folder=folder, active_rad=active_rad,
-                 **kwargs)
+        self.run(effect=eff, obj=obj, folder=folder, **kwargs)

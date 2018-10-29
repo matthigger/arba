@@ -4,7 +4,7 @@ from datetime import datetime
 
 import numpy as np
 
-from mh_pytools import file
+from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder as folder_data
 from pnl_data.set.cidar_post import get_name
 from pnl_segment.adaptive.data import FileTree
@@ -15,7 +15,7 @@ snr_vec = np.logspace(-2, 1, 20)
 p_effect = .5
 effect_rad = 3
 active_rad = 3
-obj = 'max_kl'
+obj = 'max_maha'
 feat_list = ['fa', 'md']
 f_rba = folder_data / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
 folder = folder_data / '2018_Oct_29_10_32AM20'
@@ -49,17 +49,15 @@ if folder is None:
 else:
     sim = file.load(folder / 'sim.p.gz')
 
-sim.run_effect(snr=1, obj=obj, active_rad=active_rad, radius=effect_rad,
-               f_rba=f_rba, verbose=True)
+# sim.run_healthy(obj=obj, verbose=True)
 
-# # sim.run_healthy(obj=obj)
-#
-# arg_list = list()
-# for snr in snr_vec:
-#     for _ in range(rep_per_snr):
-#         arg_list.append({'snr': snr,
-#                          'obj': obj,
-#                          'active_rad': active_rad,
-#                          'radius': effect_rad})
-#
-# parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=sim)
+arg_list = list()
+for snr in snr_vec:
+    for _ in range(rep_per_snr):
+        arg_list.append({'snr': snr,
+                         'obj': obj,
+                         'active_rad': active_rad,
+                         'radius': effect_rad,
+                         'f_rba': f_rba})
+
+parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=sim)

@@ -256,9 +256,6 @@ class Effect:
 class EffectDm:
     """ dummy effect, doesn't do anything to img, stands in Effect """
 
-    def __init__(self, feat_label, *args, **kwargs):
-        self.feat_label = feat_label
-
     def __len__(self):
         return 0
 
@@ -271,3 +268,6 @@ class EffectDm:
                 os.symlink(f, f_nii_dict_out[feat])
 
         return f_nii_dict_out
+
+    def apply_to_file_tree(self, file_tree):
+        return file_tree
