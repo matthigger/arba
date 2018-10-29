@@ -131,7 +131,8 @@ class PartGraph(nx.Graph):
                 except KeyError:
                     ijk_missing.append(tuple(ijk))
 
-        print(f'missing {len(ijk_missing)} regions (voxels)?')
+        if verbose:
+            print(f'missing {len(ijk_missing)} regions (voxels)?')
 
         # combine
         reg_new_dict = dict()
