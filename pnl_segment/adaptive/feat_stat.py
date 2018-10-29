@@ -13,10 +13,10 @@ class FeatStat:
     >>> a = FeatStat.from_iter(a_set)
     >>> b = FeatStat.from_iter(b_set)
     >>> a + b
-    PointSet(n=25, mu=[[6.]], cov=[[16.]])
+    FeatStat(n=25, mu=[6.], cov=[[16.]])
     >>> # validation, explicitly compute via original set
     >>> FeatStat.from_iter(list(a_set) + list(b_set))
-    PointSet(n=25, mu=[[6.]], cov=[[16.]])
+    FeatStat(n=25, mu=[6.], cov=[[16.]])
     >>> # test multi dim
     >>> np.random.seed(1)
     >>> a_array = np.random.rand(2, 10)
@@ -26,6 +26,10 @@ class FeatStat:
     >>> a + b == FeatStat.from_array(np.hstack((a_array, b_array)))
     True
     """
+
+    @property
+    def d(self):
+        return len(self.mu)
 
     @property
     def cov_det(self):
@@ -44,21 +48,22 @@ class FeatStat:
                 self.__cov_inv = np.linalg.pinv(self.cov)
         return self.__cov_inv
 
-    def __init__(self, n=0, mu=np.nan, cov=np.nan, label=None):
+    def __init__(self, n, mu, cov):
         # defaults to 'empty' set of features
         self.n = int(n)
-        self.mu = np.atleast_2d(mu)
+        if not self.n:
+            raise AttributeError('n must be positive')
+
+        self.mu = np.array(mu)
+        if len(self.mu.shape) > 1:
+            raise AttributeError('mu must be 1d')
         self.cov = np.atleast_2d(cov)
-        self.label = label
 
         self.__cov_det = None
         self.__cov_inv = None
 
-        if self.mu.shape[0] != self.cov.shape[0]:
-            if self.mu.shape[1] == self.cov.shape[0]:
-                self.mu = self.mu.T
-            else:
-                raise AttributeError('dimension mismatch: mu and cov')
+        if self.d != self.cov.shape[0] or self.d != self.cov.shape[1]:
+            raise AttributeError('dimension mismatch: mu and cov')
 
     def __eq__(self, other):
         if not isinstance(other, FeatStat):
@@ -103,11 +108,17 @@ class FeatStat:
         if obs_greater_dim and x.shape[0] > x.shape[1] or \
                 not obs_greater_dim and x.shape[1] > x.shape[0]:
             x = x.T
+
+        n = x.shape[1]
+        if n == 1:
+            return FeatStatSingle(mu=np.mean(x, axis=1))
+
         cov = np.cov(x, ddof=0)
-        return FeatStat(n=x.shape[1], mu=np.mean(x, axis=1), cov=cov)
+        return FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
 
     def __repr__(self):
-        return f'FeatStat(n={self.n}, mu={self.mu}, cov={self.cov})'
+        cls_name = type(self).__name__
+        return f'{cls_name}(n={self.n}, mu={self.mu}, cov={self.cov})'
 
     def __add__(self, othr):
         if othr == 0 or othr.n == 0:
@@ -126,11 +137,60 @@ class FeatStat:
              othr.mu * (1 - lam)
 
         # compute cov
-        var = self.n / n * (self.cov + self.mu @ self.mu.T) + \
-              othr.n / n * (othr.cov + othr.mu @ othr.mu.T) - \
-              mu @ mu.T
+        var = self.n / n * (self.cov + np.outer(self.mu, self.mu)) + \
+              othr.n / n * (othr.cov + np.outer(othr.mu, othr.mu)) - \
+              np.outer(mu, mu)
 
-        # note: no checking for label, we take it from self
-        return FeatStat(n, mu, var, label=self.label)
+        return FeatStat(n, mu, var)
 
     __radd__ = __add__
+
+
+class FeatStatSingle(FeatStat):
+    """ minimizes storage if a FeatStat of a single observation is needed
+
+    this object interacts with FeatStat as needed while
+
+    >>> a_set = range(10)
+    >>> FeatStat.from_iter(a_set)
+    FeatStat(n=10, mu=[[4.5]], cov=[[8.25]])
+    >>> fs_single_list = [FeatStatSingle(x) for x in a_set]
+    >>> fs_single_list[3]
+    FeatStatSingle(n=1, mu=[[3]], cov=[[0.]])
+    >>> sum(fs_single_list)
+    FeatStat(n=10, mu=[[4.5]], cov=[[8.25]])
+    """
+    n = 1
+    __cov_det = np.nan
+    __cov_inv = np.nan
+
+    @property
+    def cov(self):
+        d = len(self.mu)
+        return np.zeros((d, d))
+
+    def __init__(self, mu, n=1, cov=None):
+        if n != 1 or cov is not None:
+            raise AttributeError
+        self.mu = np.array(mu)
+
+
+class FeatStatEmpty(FeatStat):
+    @property
+    def n(self):
+        return 0
+
+    @property
+    def d(self):
+        return np.nan
+
+    @property
+    def mu(self):
+        return np.nan
+
+    @property
+    def cov(self):
+        return np.nan
+
+    def __init__(self, *args, **kwargs):
+        pass
