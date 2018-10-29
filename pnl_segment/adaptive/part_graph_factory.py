@@ -5,56 +5,35 @@ two sets of images (identifyign regions of max kl diff).  this difference in
 behavior is encapsulated in the region objects (pnl_segment.adaptive.region)
 """
 
-from itertools import chain
-
 import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from pnl_segment.adaptive import region, part_graph, feat_stat
-from pnl_segment.point_cloud import point_cloud_ijk, ref_space
-from pnl_segment.simulate.mask import Mask
+from pnl_segment.adaptive import region, part_graph
+from pnl_segment.point_cloud import point_cloud_ijk
 
 
-def part_graph_factory(obj, f_img_dict, verbose=False, f_mask=None,
-                       f_edge_constraint=None, history=False, thresh_mask=.95,
-                       **kwargs):
+def part_graph_factory(obj, file_tree_dict, history=False):
     """ init PartGraph via img
 
     Args:
         obj (str): either 'min_var', 'max_kl' or 'max_maha'
-        f_img_dict (dict): keys are grp labels, values are iter, each
-                           element of the iter is a list of img from a sbj
-                           this is confusing, here's an example:
-                           {'tbi': [['FA_sbj1.nii.gz', 'MD_sbj1.nii.gz'], \
-                                    ['FA_sbj2.nii.gz', 'MD_sbj2.nii.gz']],
-                            'healthy': ... }
-                            all should be in same space
-        verbose (bool): toggles command line output
-        f_mask (str or None): masks part_graph, only operates within mask, if
-                              str reads in mask from nii.  if None, built as
-                              intersection of nonzero values in f_img_dict
-        f_edge_constraint (str): path to segmentation nii, no voxels from
-                                 separate regions may be combined
+        file_tree_dict (dict): keys are grp, values are FileTree
         history (bool): toggles whether part_graph keeps history (see
                         PartGraphHistory)
-        thresh_mask (float): percentage of values needed to include ijk voxel
 
     Returns:
         part_graph (PartGraph)
     """
     # get appropriate region constructor
     if obj.lower() == 'min_var':
-        region_init = region.RegionMinVar
+        reg_type = region.RegionMinVar
     elif obj.lower() == 'max_kl':
-        region_init = region.RegionMaxKL
+        reg_type = region.RegionMaxKL
     elif obj.lower() == 'max_maha':
-        region_init = region.RegionMaxMaha
+        reg_type = region.RegionMaxMaha
     else:
         raise AttributeError(f'objective not recognized: {obj}')
-
-    if verbose:
-        print('construct part_graph: load')
 
     # init empty graph
     if history:
@@ -62,160 +41,63 @@ def part_graph_factory(obj, f_img_dict, verbose=False, f_mask=None,
     else:
         pg = part_graph.PartGraph()
 
-    # get ijk_dict_tree, (ijk_dict_tree[grp][ijk_tuple] = feat_stat)
-    ijk_dict_tree = dict()
-    for grp, f_list_list in f_img_dict.items():
-        if verbose:
-            print(f'----{grp}----')
-        ijk_dict_tree[grp] = get_ijk_dict(f_list_list, verbose=verbose,
-                                          thresh_mask=thresh_mask,
-                                          f_mask=f_mask)
+    # store
+    pg.file_tree_dict = file_tree_dict
 
-    # get set of all ijk
-    ijk_set = set()
-    for d in ijk_dict_tree.values():
-        ijk_set |= set(d.keys())
+    # init obj_fnc
+    # todo: wordy, remove this and put into part_graph (maybe even hard code
+    # name of fnc: 'get_obj_pair')
+    pg.obj_fnc = getattr(reg_type, 'get_obj_pair')
 
-    # make sure all affines / shapes are identical
-    f_list = [next(chain.from_iterable(f_img_list_iter))
-              for f_img_list_iter in f_img_dict.values()]
-    ref = ref_space.get_ref(f_list[0])
-    for f in f_list[1:]:
-        if ref != ref_space.get_ref(f):
-            raise AttributeError(f'shape / affine mismatch: {f}, {f_list[0]}')
+    # check that all file trees have same ref
+    ref_list = [ft.ref for ft in file_tree_dict.values()]
+    if any(ref_list[0] != ref for ref in ref_list[1:]):
+        raise AttributeError('ref space mismatch')
 
-    if verbose:
-        print('construct part_graph: build graph')
-
-    # build graph_nodes
-    tqdm_dict = {'desc': 'build nodes (per ijk)',
-                 'disable': not verbose,
-                 'total': len(ijk_set)}
-    reg_by_ijk = dict()
-    for ijk in tqdm(ijk_set, **tqdm_dict):
+    mask_list = [set(ft.get_mask()) for ft in file_tree_dict.values()]
+    ijk_set = set.intersection(*mask_list)
+    for ijk in ijk_set:
         # construct pc_ijk
-        pc_ijk = point_cloud_ijk.PointCloudIJK(np.atleast_2d(ijk), ref=ref)
+        pc_ijk = point_cloud_ijk.PointCloudIJK(np.atleast_2d(ijk),
+                                               ref=ref_list[0])
 
         # construct region obj
-        try:
-            feat_stat = {grp: d[ijk] for grp, d in ijk_dict_tree.items()}
-        except KeyError:
-            # at least one group doesn't have enough observations @ ijk
-            continue
-        reg = region_init(pc_ijk, feat_stat=feat_stat)
+        feat_stat = dict()
+        for grp, ft in file_tree_dict.items():
+            feat_stat[grp] = ft.ijk_fs_dict[ijk]
+        reg = reg_type(pc_ijk, feat_stat=feat_stat)
 
         # store in graph
         pg.add_node(reg)
 
-        # store by ijk (to add edges later)
-        reg_by_ijk[ijk] = reg
-
     # add edges
-    add_edges(pg, reg_by_ijk, f_edge_constraint=f_edge_constraint,
-              verbose=verbose)
-
-    if verbose:
-        print('finished constructing part_graph')
-
-    # store original image files
-    pg.f_img_dict = f_img_dict
-
-    # init obj_fnc
-    reg = next(iter(reg_by_ijk.values()))
-    pg.obj_fnc = getattr(reg, 'get_obj_pair')
+    reg_by_ijk = {tuple(r.pc_ijk.x[0, :]): r for r in pg.nodes}
+    add_edges(pg, reg_by_ijk)
 
     return pg
 
 
-def add_edges(pg, reg_by_ijk, verbose=False, f_edge_constraint=None):
+def add_edges(pg, reg_by_ijk, verbose=False, f_constraint=None):
     """ adds edge between each neighboring ijk """
-    if f_edge_constraint is not None:
-        img_constraint = nib.load(str(f_edge_constraint))
-        constraint = img_constraint.get_data()
 
-    # note: we only do "positive" offsets, "negative" ones handled via symmetry
+    # build valid_edge, determines if edge between ijk0, ijk1 is valid
+    if f_constraint is None:
+        def valid_edge(*args, **kwargs):
+            # all edges are valid
+            return True
+    else:
+        segment_array = nib.load(str(f_constraint)).get_data()
+
+        def valid_edge(ijk0, ijk1):
+            # must belong to same region in segment_array
+            return segment_array[tuple(ijk0)] == segment_array[tuple(ijk1)]
+
+    # iterate through offsets of each ijk to find neighbors
     offsets = np.eye(3)
-    tqdm_dict = {'desc': 'adding edge between nodes',
+    tqdm_dict = {'desc': 'adding edge',
                  'disable': not verbose}
-    for ijk1, reg1 in tqdm(reg_by_ijk.items(), **tqdm_dict):
+    for ijk0, reg0 in tqdm(reg_by_ijk.items(), **tqdm_dict):
         for offset in offsets:
-            ijk2 = tuple((ijk1 + offset).astype(int))
-
-            if ijk2 not in reg_by_ijk.keys():
-                # ijk2 never observed, don't add edge
-                continue
-
-            reg2 = reg_by_ijk[ijk2]
-
-            if f_edge_constraint is not None:
-                if constraint[tuple(ijk1)] != constraint[ijk2]:
-                    # ijk1 and ijk2 belong to different "regions", no edge
-                    continue
-
-            # add edge between regions
-            pg.add_edge(reg1, reg2)
-
-
-def get_ijk_dict(f_img_list_iter, verbose=False, thresh_mask=.95, mask=None,
-                 raw_feat=False):
-    """ reads in images, builds feat_stat per ijk location
-
-    Args:
-        f_img_list_iter (iter): iter of feature images (str or Path), may be multi
-                            dim, for example:
-                             [['FA_sbj1.nii.gz', 'MD_sbj1.nii.gz'], \
-                              ['FA_sbj2.nii.gz', 'MD_sbj2.nii.gz']],
-        verbose (bool): toggles cmd line output
-        mask (str, mask or None): ijk to include
-        thresh_mask (int): % of images with positive value required to include
-                           voxel ijk (only used if f_mask = None)
-        raw_feat (bool): toggles getting raw features
-    Returns:
-        feat_dict (dict): keys are ijk (tuple), values are FeatStat
-    """
-
-    # build feat_dict, keys are ijk positions, values are lists of features in
-    # original array format
-    feat_list = list()
-    tqdm_dict = {'total': len(list(f_img_list_iter)),
-                 'disable': not verbose,
-                 'desc': 'loading feat per sbj'}
-    for f_img_list in tqdm(f_img_list_iter, **tqdm_dict):
-        # load features
-        _feat_list = [nib.load(str(f_img)).get_data() for f_img in f_img_list]
-        feat_list.append(np.stack(_feat_list, axis=3))
-
-    # feat is 5d array with shape (space, space, space, num_feat, num_sbj)
-    feat = np.stack(feat_list, axis=4)
-
-    # build mask
-    if mask is None:
-        f_nii_list = [f for l in f_img_list_iter for f in l]
-        mask = Mask.build_intersection_from_nii(f_nii_list, thresh=thresh_mask)
-    elif not isinstance(mask, Mask):
-        mask = Mask.from_nii(mask)
-
-    # compute feat stats
-    dict_out = dict()
-    tqdm_dict = {'total': np.prod(feat.shape[:3]),
-                 'disable': not verbose,
-                 'desc': 'compute feat_stat per voxel'}
-    for ijk in tqdm(mask, **tqdm_dict):
-        # get x, with dim num_feat x num_sbj
-        x = feat[ijk[0], ijk[1], ijk[2], :, :]
-
-        # remove col which are not both non-zero
-        x = x[:, x.all(axis=0)]
-
-        if x.size == 0:
-            continue
-
-        # add it to dict_out
-        if raw_feat:
-            dict_out[ijk] = x
-        else:
-            obs_greater_dim = x.shape[1] > x.shape[0]
-            fs = feat_stat.FeatStat.from_array(x, obs_greater_dim)
-            dict_out[ijk] = fs
-
-    return dict_out
+            ijk1 = tuple((ijk0 + offset).astype(int))
+            if ijk1 in reg_by_ijk.keys() and valid_edge(ijk0, ijk1):
+                pg.add_edge(reg0, reg_by_ijk[ijk1])

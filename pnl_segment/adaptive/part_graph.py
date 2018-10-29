@@ -21,7 +21,7 @@ class PartGraph(nx.Graph):
         self.obj_fnc_max = np.inf
         self._obj_edge_list = None
         self.feat_label = feat_label
-        self.f_img_dict = None
+        self.file_tree_dict = None
 
     def to_nii(self, f_out, ref, **kwargs):
         # load reference image
