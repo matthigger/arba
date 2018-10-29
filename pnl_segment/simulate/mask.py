@@ -4,6 +4,7 @@ import nibabel as nib
 import numpy as np
 
 from pnl_segment.point_cloud.ref_space import RefSpace
+from scipy.ndimage import binary_dilation
 
 
 def check_ref(fnc):
@@ -193,6 +194,10 @@ class Mask:
             raise AttributeError('affine mismatch')
 
         return self.apply(img.get_data())
+
+    def dilate(self, r):
+        x = binary_dilation(self.x, iterations=r)
+        return Mask(x, ref_space=self.ref_space)
 
     @staticmethod
     def build_intersection(mask_list, thresh=1):
