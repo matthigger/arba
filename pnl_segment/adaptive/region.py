@@ -104,7 +104,7 @@ class RegionMaxKL(Region):
         grp_0, grp_1 = self.active_grp
 
         # init to d
-        kl = len(self.feat_stat[grp_0].mu)
+        kl = self.feat_stat[grp_0].d
 
         # add other terms
         for fs_0, fs_1 in permutations((self.feat_stat[grp_0],
