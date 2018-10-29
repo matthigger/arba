@@ -7,8 +7,8 @@ import numpy as np
 from scipy.ndimage import binary_dilation
 from scipy.stats import mannwhitneyu
 
+from pnl_segment.adaptive.feat_stat import FeatStat
 from pnl_segment.simulate.mask import Mask
-from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
 
 
 class Effect:
@@ -23,26 +23,27 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(f_img_tree, mask, snr, cov_ratio=0, feat_list=None):
+    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0):
         """ scales effect with observations
 
         Args:
-            f_img_tree (dict of dict): leafs can be files or arrays
+            ijk_fs_dict (dict): keys are ijk, values are feat_stat (needed to
+                                compute background variance)
             mask (Mask): effect location
             snr (float): ratio of effect to population variance
             cov_ratio (float): ratio of effect cov to population cov
         """
 
-        ijk_dict = get_ijk_dict(f_img_tree, mask=mask)
-        fs = sum(ijk_dict.values())
+        # get feat stat across mask
+        fs = sum(ijk_fs_dict[ijk] for ijk in mask)
 
-        #
+        # compute mean and cov of effect
         mean = np.diag(fs.cov) * snr
         cov = fs.cov * cov_ratio
 
-        return Effect(mask, mean=mean, cov=cov, feat_label=feat_list, snr=snr)
+        return Effect(mask, mean=mean, cov=cov, snr=snr)
 
-    def __init__(self, mask, feat_label, mean, cov=None, snr=None):
+    def __init__(self, mask, mean, cov=None, snr=None):
         if not isinstance(mask, Mask):
             raise TypeError(f'mask: {mask} must be of type Mask')
         self.mask = mask
@@ -50,7 +51,6 @@ class Effect:
         if len(self.mean) ** 2 != len(cov.flatten()):
             raise AttributeError('mean / cov mismatch')
         self.cov = np.atleast_2d(cov)
-        self.feat_label = feat_label
         self.snr = snr
 
     def __len__(self):
@@ -150,6 +150,18 @@ class Effect:
         x = self.mask.insert(x, effect, add=True)
 
         return x
+
+    def apply_to_file_tree(self, file_tree):
+        if any(self.cov.flatten()):
+            raise AttributeError('effect cov must be 0')
+
+        for ijk in self.mask:
+            fs = file_tree.ijk_fs_dict[ijk]
+            file_tree.ijk_fs_dict[ijk] = FeatStat(n=fs.n,
+                                                  mu=fs.mu + self.mean,
+                                                  cov=fs.cov)
+
+        return file_tree
 
     @staticmethod
     def sample_mask(prior_array, radius, n=1, seg_array=None):
