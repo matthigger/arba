@@ -111,7 +111,7 @@ class RegionMaxKL(Region):
                                         self.feat_stat[grp_1])):
             kl += np.trace(fs_1.cov_inv @ fs_0.cov)
             mu_diff = fs_1.mu - fs_0.mu
-            kl += mu_diff.T @ fs_1.cov_inv @ mu_diff
+            kl += mu_diff @ fs_1.cov_inv @ mu_diff
 
         return - kl * len(self)
 
@@ -145,7 +145,6 @@ class RegionMaxMaha(Region):
         mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
 
         # compute symmetric mahalanobis
-        maha = mu_diff.T @ fs_active.cov_inv @ mu_diff
+        maha = mu_diff @ fs_active.cov_inv @ mu_diff
 
         return - maha * len(self)
-
