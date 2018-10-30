@@ -33,6 +33,41 @@ class FileTree:
     def sbj_iter(self):
         return iter(self.sbj_feat_file_tree.keys())
 
+    def resample_iid(self, mask):
+        """ resamples values in self.ijk_fs_dict to be iid
+
+        samples are drawn from normal(mu, cov) where mu, cov are the mean and
+        sample variance of all voxels in mask from self.ijk_fs_dict
+
+        Args:
+            mask (Mask): defines values to resample
+
+        Returns:
+            file_tree (FileTree): copy of file tree with ONLY these voxels,
+                                  which have been resampled
+        """
+        # build normal distribution with same 1st, 2nd moments as vox in mask
+        ijk_set = set(mask).intersection(self.ijk_fs_dict.keys())
+        fs = sum(self.ijk_fs_dict[ijk] for ijk in ijk_set)
+        fs_normal = fs.to_normal()
+
+        # resample
+        for ijk in set(mask).intersection(self.ijk_fs_dict.keys()):
+            # sample same number of values
+            n = self.ijk_fs_dict[ijk].n
+            x = np.atleast_2d(fs_normal.rvs(n)).T
+
+            # build new feat_stat and store
+            fs = FeatStat.from_array(x)
+            self.ijk_fs_dict[ijk] = fs
+
+    def get_empty_ijk(self):
+        empty_ijk = list()
+        for ijk, fs in self.ijk_fs_dict.items():
+            if fs.n == 0:
+                empty_ijk.append(ijk)
+        return empty_ijk
+
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
