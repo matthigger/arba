@@ -61,13 +61,6 @@ class FileTree:
             fs = FeatStat.from_array(x)
             self.ijk_fs_dict[ijk] = fs
 
-    def get_empty_ijk(self):
-        empty_ijk = list()
-        for ijk, fs in self.ijk_fs_dict.items():
-            if fs.n == 0:
-                empty_ijk.append(ijk)
-        return empty_ijk
-
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
