@@ -88,7 +88,7 @@ class Effect:
 
         return f_nii_dict_out
 
-    def get_auc(self, x, stat_mask):
+    def get_auc(self, x, mask):
         """ computes auc of statistic given by array x
 
         a strong auc value requires that there exists some threshold which
@@ -97,13 +97,13 @@ class Effect:
 
         Args:
             x (np.array)
-            stat_mask (mask): values in x which are to be counted
+            mask (mask): values in x which are to be counted
 
         Returns:
             auc (float): value in [0, 1]
         """
-        stat_vec = stat_mask.apply(x)
-        truth_vec = stat_mask.apply(self.mask.x)
+        stat_vec = mask.apply(x)
+        truth_vec = mask.apply(self.mask.x)
 
         return Effect._get_auc(stat_vec, truth_vec)
 
@@ -155,8 +155,10 @@ class Effect:
         if any(self.cov.flatten()):
             raise AttributeError('effect cov must be 0')
 
-        for ijk in self.mask:
+        ijk_set = set(self.mask).intersection(file_tree.ijk_fs_dict.keys())
+        for ijk in ijk_set:
             fs = file_tree.ijk_fs_dict[ijk]
+
             file_tree.ijk_fs_dict[ijk] = FeatStat(n=fs.n,
                                                   mu=fs.mu + self.mean,
                                                   cov=fs.cov)
