@@ -92,7 +92,7 @@ class FeatStat:
         return FeatStat.from_array(np.atleast_2d(x))
 
     @staticmethod
-    def from_array(x, obs_greater_dim=True):
+    def from_array(x, obs_greater_dim=None):
         """
 
         Args:
@@ -105,16 +105,20 @@ class FeatStat:
                                     observation of a 2d feature)
         """
         x = np.atleast_2d(x)
-        if obs_greater_dim and x.shape[0] > x.shape[1] or \
-                not obs_greater_dim and x.shape[1] > x.shape[0]:
-            x = x.T
+        if obs_greater_dim is not None:
+            if obs_greater_dim and x.shape[0] > x.shape[1] or \
+                    not obs_greater_dim and x.shape[1] > x.shape[0]:
+                x = x.T
 
         n = x.shape[1]
-        if n == 1:
+        if n == 0:
+            return FeatStatEmpty()
+        elif n == 1:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
-        return FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
+        fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
+        return fs
 
     def __repr__(self):
         cls_name = type(self).__name__
