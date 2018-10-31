@@ -23,7 +23,7 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0):
+    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0, u=None):
         """ scales effect with observations
 
         Args:
@@ -32,13 +32,22 @@ class Effect:
             mask (Mask): effect location
             snr (float): ratio of effect to population variance
             cov_ratio (float): ratio of effect cov to population cov
+            u (array): direction of offset
         """
 
         # get feat stat across mask
         fs = sum(ijk_fs_dict[ijk] for ijk in mask)
 
-        # compute mean and cov of effect
-        mean = np.diag(fs.cov) * snr
+        # get direction u
+        if u is None:
+            u = np.array([1 for _ in range(fs.d)])
+        elif len(u) != fs.d:
+            raise AttributeError('direction offset must have same len as fs.d')
+
+        # compute mean offset which yields snr
+        c = u @ fs.cov_inv @ u
+        mean = u * np.sqrt(snr / c)
+
         cov = fs.cov * cov_ratio
 
         return Effect(mask, mean=mean, cov=cov, snr=snr)
@@ -127,7 +136,11 @@ class Effect:
 
         x = stat_vec[truth_vec == 0]
         y = stat_vec[truth_vec == 1]
-        u = mannwhitneyu(x, y, alternative='greater')
+        try:
+            u = mannwhitneyu(x, y, alternative='greater')
+        except ValueError:
+            # all values are same
+            return .5
         auc = u.statistic / (len(x) * len(y))
         auc = max(auc, 1 - auc)
         # pval = min(u.pvalue, 1 - u.pvalue)
