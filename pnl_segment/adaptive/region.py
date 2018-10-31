@@ -1,6 +1,36 @@
 from itertools import permutations
 
 import numpy as np
+from scipy.stats import chi2
+
+
+def get_obj_pair_delta(reg1, reg2, reg_union=None):
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    delta = reg_union.obj - (reg1.obj + reg2.obj)
+
+    return delta
+
+
+def get_obj_pair_min(reg1, reg2, reg_union=None):
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    return reg_union.obj
+
+
+def get_obj_pair_max(reg1, reg2, reg_union=None):
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    return - reg_union.obj
+
+def get_obj_pair_mean_max(reg1, reg2, reg_union=None):
+    if reg_union is None:
+        reg_union = reg1 + reg2
+
+    return - reg_union.obj / len(reg_union)
 
 
 class Region:
@@ -46,27 +76,7 @@ class Region:
     def __lt__(self, other):
         return len(self) < len(other)
 
-    @staticmethod
-    def get_obj_pair(reg1, reg2, reg_union=None):
-        """ obj difference after union - before union, weighted by region size
-
-        note: this obj is always to be minimized
-        """
-        # reg_union may be passed to reduce redundant computation
-        if reg_union is None:
-            reg_union = reg1 + reg2
-
-        delta = reg_union.obj - (reg1.obj + reg2.obj)
-
-        return delta
-
-
-class RegionMinVar(Region):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.active_grp = set(self.feat_stat.keys())
-
-    def get_obj(self):
+    def get_var(self):
         var_sum = 0
         for grp in self.active_grp:
             fs = self.feat_stat[grp]
@@ -77,17 +87,7 @@ class RegionMinVar(Region):
 
         return var_sum * len(self)
 
-
-class RegionMaxKL(Region):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        if self.active_grp is None:
-            self.active_grp = list(self.feat_stat.keys())
-            if len(self.active_grp) != 2:
-                raise AttributeError('active_grp needed if > 2 grps')
-
-    def get_obj(self):
+    def get_kl(self):
         """ negative symmetric kullback liebler divergance * len(self.pc_ijk)
 
         (assumes each distribution is normal)
@@ -115,17 +115,7 @@ class RegionMaxKL(Region):
 
         return - kl * len(self)
 
-
-class RegionMaxMaha(Region):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        if self.active_grp is None:
-            self.active_grp = list(self.feat_stat.keys())
-            if len(self.active_grp) != 2:
-                raise AttributeError('active_grp needed if > 2 grps')
-
-    def get_obj(self):
+    def get_maha(self):
         """ negative Mahalanobis squared between active_grp
 
         (assumes each distribution is normal and covar are equal).  Note that
@@ -147,4 +137,42 @@ class RegionMaxMaha(Region):
         # compute symmetric mahalanobis
         maha = mu_diff @ fs_active.cov_inv @ mu_diff
 
-        return - maha * len(self)
+        return maha * len(self)
+
+
+class RegionMinVar(Region):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.active_grp = set(self.feat_stat.keys())
+
+    get_obj = Region.get_var
+
+    get_obj_pair = get_obj_pair_delta
+
+
+class RegionMaxKL(Region):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.active_grp is None:
+            self.active_grp = list(self.feat_stat.keys())
+            if len(self.active_grp) != 2:
+                raise AttributeError('active_grp needed if > 2 grps')
+
+    get_obj = Region.get_kl
+
+    get_obj_pair = get_obj_pair_max
+
+
+class RegionMaxMaha(Region):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.active_grp is None:
+            self.active_grp = list(self.feat_stat.keys())
+            if len(self.active_grp) != 2:
+                raise AttributeError('active_grp needed if > 2 grps')
+
+    get_obj = Region.get_var
+
+    get_obj_pair = get_obj_pair_mean_max
