@@ -36,6 +36,9 @@ class Effect:
             u (array): direction of offset
         """
 
+        if snr < 0:
+            raise AttributeError('snr must be positive')
+
         # get feat stat across mask
         fs = sum(ijk_fs_dict[ijk] for ijk in mask)
 
