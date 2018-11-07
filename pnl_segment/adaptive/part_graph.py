@@ -314,6 +314,39 @@ class PartGraphHistory(PartGraph):
 
         return reg_sum
 
+    def get_max_fnc_array(self, fnc, ref):
+        """ gets array which maximizes fnc
+
+        every voxel belongs to many regions in tree_history, this assigns to
+        each voxel the max value of fnc under all regions which contain it.
+
+        Args:
+            fnc (fnc): accepts regions, outputs scalar
+            ref: reference space, has affine and shape
+
+        Returns:
+            x (array): array of volume
+        """
+        x = np.ones(ref.shape) * -np.inf
+
+        for reg in self.tree_history.nodes:
+            val = fnc(reg)
+            for ijk in reg.pc_ijk:
+                if x[ijk] < val:
+                    x[ijk] = val
+
+        return x
+
+    def max_fnc_to_nii(self, fnc, f_out):
+        """ builds array according get_max_fnc_array(), writes to nii
+        """
+
+        ref = next(iter(self.file_tree_dict.values())).ref
+        x = self.get_max_fnc_array(fnc, ref)
+
+        img = nib.Nifti1Image(x, ref.affine)
+        img.to_filename(str(f_out))
+
     def get_spanning_region(self, fnc, max=True, subtract_mean=True):
         """ get subset of self.tree_history that covers with min fnc (greedy)
 
