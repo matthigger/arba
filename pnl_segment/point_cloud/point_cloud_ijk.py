@@ -8,6 +8,10 @@ class PointCloudIJK(point_cloud.PointCloud):
     """ stores an array of voxels
     """
 
+    def __iter__(self):
+        for ijk in self.x:
+            yield tuple(ijk)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
