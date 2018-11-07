@@ -149,6 +149,12 @@ class FeatStat:
 
     __radd__ = __add__
 
+    def __mul__(self, other):
+        return FeatStat(self.n * other, self.mu, self.var)
+
+    def __truediv__(self, other):
+        return FeatStat(self.n / other, self.mu, self.var)
+
 
 class FeatStatSingle(FeatStat):
     """ minimizes storage if a FeatStat of a single observation is needed
