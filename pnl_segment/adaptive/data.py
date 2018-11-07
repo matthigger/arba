@@ -239,7 +239,7 @@ class FileTree:
                 x[ijk] = True
         return Mask(x, ref_space=self.ref)
 
-    def split(self, p=.5, unload_self=False, unload_kids=True):
+    def split(self, p=.5, unload_self=False, unload_kids=True, verbose=False):
         """ splits data into two groups
 
         Args:
@@ -247,6 +247,7 @@ class FileTree:
                        in the first grp
             unload_self (bool): toggles if sbj level stats discarded in self
             unload_kids (bool): toggles if sbj level stats discarded in output
+            verbose (bool): toggles command line output
 
         Returns:
             file_tree_list (list): FileTree for each grp
@@ -265,6 +266,9 @@ class FileTree:
 
         # build file_tree of each group
         file_tree_list = list()
+        pbar = tqdm(total=len(sbj_set),
+                    desc='aggregate stats per sbj',
+                    disable=not verbose)
         for sbj_grp in (sbj_grp0, sbj_grp1):
             # init new file tree obj, copy relevant fields from self
             ft = FileTree()
@@ -287,6 +291,7 @@ class FileTree:
                     ft.ijk_fs_dict[ijk] += fs
                     if not unload_kids:
                         ft.sbj_ijk_fs_dict[sbj][ijk] = fs
+                pbar.update(1)
             file_tree_list.append(ft)
 
         if unload_self:
