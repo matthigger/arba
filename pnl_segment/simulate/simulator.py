@@ -4,6 +4,7 @@ import numpy as np
 
 from mh_pytools import file
 from pnl_segment.adaptive.part_graph_factory import part_graph_factory
+from pnl_segment.adaptive.region import get_maha
 from pnl_segment.simulate.effect import Effect, EffectDm
 from pnl_segment.simulate.mask import Mask
 
@@ -14,6 +15,7 @@ def increment_to_unique(folder, num_width=3):
         _folder = pathlib.Path(
             str(folder) + '_run' + str(idx).zfill(num_width))
         if not _folder.exists():
+            _folder.mkdir(exist_ok=True, parents=True)
             return _folder
         idx += 1
 
@@ -24,6 +26,8 @@ class Simulator:
     Attributes:
         file_tree (FileTree):
     """
+    grp_effect = 'effect'
+    grp_null = 'null'
 
     def __init__(self, file_tree, folder, eff_prior_arr=None):
         self.file_tree = file_tree
@@ -36,23 +40,28 @@ class Simulator:
             for ijk in file_tree.ijk_fs_dict.keys():
                 self.eff_prior_arr[ijk] = 1
 
-    def split(self, p_effect=.5, lossy=True):
+    def split(self, p_effect=.5, lossy=True, **kwargs):
         if self.file_tree is None:
             raise AttributeError('simulator has previously been split')
 
         # split into two file_tree
-        grp_list = ('effect', 'null')
         ft_tuple = self.file_tree.split(p=p_effect,
                                         unload_self=lossy,
-                                        unload_kids=True)
-        self.ft_dict = dict(zip(grp_list, ft_tuple))
+                                        unload_kids=True, **kwargs)
+        self.ft_dict = dict(zip((self.grp_effect, self.grp_null), ft_tuple))
 
-    def sample_effect(self, snr, radius=3, **kwargs):
-        """ generates effect at random location with given snr to healthy
-        """
+    def sample_effect_mask(self, radius, **kwargs):
         effect_mask = Effect.sample_mask(prior_array=self.eff_prior_arr,
                                          radius=radius)
         effect_mask.ref_space = self.file_tree.ref
+
+        return effect_mask
+
+    def sample_effect(self, snr, effect_mask=None, **kwargs):
+        """ generates effect at random location with given snr to healthy
+        """
+        if effect_mask is None:
+            effect_mask = self.sample_effect_mask(**kwargs)
 
         effect = Effect.from_data(ijk_fs_dict=self.file_tree.ijk_fs_dict,
                                   mask=effect_mask,
@@ -61,7 +70,7 @@ class Simulator:
         return effect
 
     def run(self, effect, obj, folder, active_rad=None, verbose=False,
-            f_rba=None, **kwargs):
+            f_rba=None, resample=False, **kwargs):
         """ runs experiment
         """
         # get mask of active area
@@ -71,16 +80,21 @@ class Simulator:
             mask_eff_dilated = effect.mask.dilate(active_rad)
             mask = Mask.build_intersection([mask_eff_dilated, mask])
 
-        # apply mask
+        # apply mask (and copies file_tree, ft_dict has no memory intersection
+        # with self.ft_dict)
         ft_dict = {label: ft.apply_mask(mask)
                    for label, ft in self.ft_dict.items()}
 
+        # resample if need be:
+        if resample:
+            for grp, ft in ft_dict.items():
+                ft.resample_iid(effect.mask)
+
         # apply effect to effect group
-        for label, ft in ft_dict.items():
-            ft_dict[label] = effect.apply_to_file_tree(ft)
+        ft_effect = ft_dict[self.grp_effect]
+        ft_dict[self.grp_effect] = effect.apply_to_file_tree(ft_effect)
 
         # output mean images of each feature per grp
-        folder.mkdir(exist_ok=True, parents=True)
         for feat in self.file_tree.feat_list:
             for grp, ft in ft_dict.items():
                 f_out = folder / f'{grp}_{feat}.nii.gz'
@@ -88,29 +102,25 @@ class Simulator:
 
         # save effect
         if not isinstance(effect, EffectDm):
-            effect.mask.to_nii(folder / 'effect_mask.nii.gz')
+            f_mask_effect = folder / 'effect_mask.nii.gz'
+            effect.mask.to_nii(f_mask_effect)
             file.save(effect, file=folder / 'effect.p.gz')
 
         # build part graph
         pg_hist = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
                                      history=True)
 
-        def get_obj(reg):
-            return -reg.obj
-
+        # save mask
+        mask.to_nii(folder / 'active_mask.nii.gz')
         file.save(pg_hist, file=folder / 'pg_init.p.gz')
         pg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=get_obj)
+                       fnc=get_maha)
 
         # reduce
         pg_hist.reduce_to(1, verbose=verbose)
 
-        # build arba segmentation
-        def spanning_fnc(reg):
-            return reg.obj
-
-        pg_span = pg_hist.get_min_spanning_region(spanning_fnc)
+        pg_span = pg_hist.get_spanning_region(get_maha, max=True)
 
         # save
         file.save(pg_span, file=folder / 'pg_span.p.gz')
@@ -119,16 +129,27 @@ class Simulator:
 
         pg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=get_obj)
+                       fnc=get_maha)
 
         if f_rba is not None:
+            # build naive segmentation, aggregate via a priori atlas
             pg_rba = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
                                         history=False)
             pg_rba.combine_by_reg(f_rba)
             file.save(pg_rba, file=folder / 'pg_rba.p.gz')
             pg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
                           ref=self.file_tree.ref,
-                          fnc=get_obj)
+                          fnc=get_maha)
+
+            if not isinstance(effect, EffectDm):
+                # build 'perfect' segmentation, aggregate only effect mask
+                pg_rba = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
+                                            history=False)
+                pg_rba.combine_by_reg(f_mask_effect)
+                file.save(pg_rba, file=folder / 'pg_truth.p.gz')
+                pg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
+                              ref=self.file_tree.ref,
+                              fnc=get_maha)
 
         return pg_span, pg_hist
 
