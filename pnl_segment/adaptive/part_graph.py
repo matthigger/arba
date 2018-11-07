@@ -9,6 +9,7 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 import mh_pytools.parallel
+from .size_reg import SizeReg
 from ..point_cloud import ref_space
 
 
@@ -163,7 +164,8 @@ class PartGraph(nx.Graph):
             print(f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
 
         if edge_per_step is not None and not (0 < edge_per_step < 1):
-            raise AttributeError('edge_per_step not in (0, 1): {edge_per_step}')
+            raise AttributeError(
+                'edge_per_step not in (0, 1): {edge_per_step}')
 
         # init edges if need be
         if self._obj_edge_list is None:
@@ -302,6 +304,7 @@ class PartGraphHistory(PartGraph):
     def __init__(self):
         super().__init__()
         self.tree_history = nx.DiGraph()
+        self.size_reg = SizeReg()
 
     def combine(self, reg_iter):
         reg_sum = super().combine(reg_iter)
@@ -311,7 +314,7 @@ class PartGraphHistory(PartGraph):
 
         return reg_sum
 
-    def get_min_spanning_region(self, fnc):
+    def get_spanning_region(self, fnc, max=True, subtract_mean=True):
         """ get subset of self.tree_history that covers with min fnc (greedy)
 
         by cover, we mean that each leaf in self.tree_history has exactly one
@@ -320,10 +323,20 @@ class PartGraphHistory(PartGraph):
         Args:
             fnc (fnc): function to be minimized (accepts regions, gives obj
                        which can be ordered
+            max (bool): toggles whether max fnc is chosen (otherwise min)
         """
+        reg_list = self.tree_history.nodes
+        f = [np.log10(fnc(r)) for r in reg_list]
+
+        if subtract_mean:
+            size = [len(r) for r in reg_list]
+            self.size_reg.fit(size, f)
+
+            f = np.atleast_2d(f).reshape((-1, 1)) - self.size_reg.predict(size)
+            f = list(f.flatten())
 
         # sort a list of regions by fnc
-        reg_list = sorted([(fnc(reg), reg) for reg in self.tree_history.nodes])
+        reg_list = sorted(zip(f, reg_list), reverse=max)
 
         # a list of all regions which contain some ijk value which has been
         # included in min_reg_list
@@ -333,7 +346,7 @@ class PartGraphHistory(PartGraph):
         min_reg_list = list()
         while unspanned_reg:
             # get reg with min val
-            f, reg = reg_list.pop(0)
+            _z, reg = reg_list.pop(0)
 
             if reg in unspanned_reg:
                 # region has no intersection with any reg in min_reg_list
