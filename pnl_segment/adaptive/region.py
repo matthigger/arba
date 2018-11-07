@@ -1,7 +1,6 @@
 from itertools import permutations
 
 import numpy as np
-from scipy.stats import chi2
 
 
 def get_obj_pair_delta(reg1, reg2, reg_union=None):
@@ -25,6 +24,7 @@ def get_obj_pair_max(reg1, reg2, reg_union=None):
         reg_union = reg1 + reg2
 
     return - reg_union.obj
+
 
 def get_obj_pair_mean_max(reg1, reg2, reg_union=None):
     if reg_union is None:
@@ -113,7 +113,7 @@ class Region:
             mu_diff = fs_1.mu - fs_0.mu
             kl += mu_diff @ fs_1.cov_inv @ mu_diff
 
-        return - kl * len(self)
+        return kl
 
     def get_maha(self):
         """ negative Mahalanobis squared between active_grp
@@ -127,17 +127,16 @@ class Region:
         where sig is the common covariance / region size (in voxels)
         """
 
-        # compute common covariance
-        fs_active = sum(self.feat_stat[grp] for grp in self.active_grp)
+        fs0, fs1 = (self.feat_stat[grp] for grp in self.active_grp)
 
-        # compute difference in mean
-        grp_0, grp_1 = self.active_grp
-        mu_diff = self.feat_stat[grp_0].mu - self.feat_stat[grp_1].mu
+        return get_maha(fs0, fs1)
 
-        # compute symmetric mahalanobis
-        maha = mu_diff @ fs_active.cov_inv @ mu_diff
 
-        return maha * len(self)
+def get_maha(fs0, fs1):
+    """ computes mahalanobis from two feat_stat"""
+    mu_diff = fs0.mu - fs1.mu
+    fs_sum = fs0 + fs1
+    return mu_diff @ fs_sum.cov_inv @ mu_diff
 
 
 class RegionMinVar(Region):
@@ -173,6 +172,16 @@ class RegionMaxMaha(Region):
             if len(self.active_grp) != 2:
                 raise AttributeError('active_grp needed if > 2 grps')
 
-    get_obj = Region.get_var
+    get_obj = Region.get_maha
 
-    get_obj_pair = get_obj_pair_mean_max
+    @staticmethod
+    def get_obj_pair(reg_1, reg_2, reg_union=None):
+        if reg_union is None:
+            reg_union = reg_1 + reg_2
+
+        d = 0
+        r2_union = reg_union.get_maha()
+        for reg in (reg_1, reg_2):
+            d += (r2_union - reg.get_maha()) ** 2
+
+        return d
