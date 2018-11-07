@@ -8,6 +8,7 @@ from scipy.ndimage import binary_dilation
 from scipy.stats import mannwhitneyu
 
 from pnl_segment.adaptive.feat_stat import FeatStat
+from copy import deepcopy
 from pnl_segment.simulate.mask import Mask
 
 
@@ -40,7 +41,7 @@ class Effect:
 
         # get direction u
         if u is None:
-            u = np.array([1 for _ in range(fs.d)])
+            u = np.diag(fs.cov)
         elif len(u) != fs.d:
             raise AttributeError('direction offset must have same len as fs.d')
 
@@ -164,9 +165,12 @@ class Effect:
 
         return x
 
-    def apply_to_file_tree(self, file_tree):
+    def apply_to_file_tree(self, file_tree, copy=True):
         if any(self.cov.flatten()):
             raise AttributeError('effect cov must be 0')
+
+        if copy:
+            file_tree = deepcopy(file_tree)
 
         ijk_set = set(self.mask).intersection(file_tree.ijk_fs_dict.keys())
         for ijk in ijk_set:
