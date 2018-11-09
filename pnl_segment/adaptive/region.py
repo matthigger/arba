@@ -1,6 +1,7 @@
 from itertools import permutations
 
 import numpy as np
+from pnl_segment.adaptive.feat_stat import FeatStatSingle
 
 
 def get_obj_pair_delta(reg1, reg2, reg_union=None):
@@ -48,11 +49,14 @@ class Region:
             self._obj = self.get_obj()
         return self._obj
 
-    def __init__(self, pc_ijk, feat_stat, active_grp=None):
+    @property
+    def active_grp(self):
+        return sorted(self.feat_stat.keys())
+
+    def __init__(self, pc_ijk, feat_stat):
         self.pc_ijk = pc_ijk
         self.feat_stat = feat_stat
         self._obj = None
-        self.active_grp = active_grp
 
     def __str__(self):
         return f'{self.__class__} with {self.feat_stat}'
@@ -115,7 +119,7 @@ class Region:
 
         return kl
 
-    def get_maha(self):
+    def get_maha(self, active_grp=None):
         """ negative Mahalanobis squared between active_grp
 
         (assumes each distribution is normal and covar are equal).  Note that
@@ -127,12 +131,15 @@ class Region:
         where sig is the common covariance / region size (in voxels)
         """
 
-        fs0, fs1 = (self.feat_stat[grp] for grp in self.active_grp)
+        if active_grp is None:
+            active_grp = self.active_grp
 
-        return get_maha(fs0, fs1)
+        fs0, fs1 = (self.feat_stat[grp] for grp in active_grp)
+
+        return get_maha_from_fs(fs0, fs1)
 
 
-def get_maha(fs0, fs1):
+def get_maha_from_fs(fs0, fs1):
     """ computes mahalanobis from two feat_stat"""
     mu_diff = fs0.mu - fs1.mu
     fs_sum = fs0 + fs1
@@ -164,24 +171,37 @@ class RegionMaxKL(Region):
 
 
 class RegionMaxMaha(Region):
+    get_obj = Region.get_maha
+
+    @property
+    def error(self):
+        return float(self.error_fs.cov) * len(self)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.error_fs = FeatStatSingle(mu=self.obj)
 
-        if self.active_grp is None:
-            self.active_grp = list(self.feat_stat.keys())
-            if len(self.active_grp) != 2:
-                raise AttributeError('active_grp needed if > 2 grps')
+    def __add__(self, other):
+        if isinstance(other, type(0)) and other == 0:
+            reg_out = super().__add__(other)
+            reg_out.error_fs = self.error_fs
+            return reg_out
 
-    get_obj = Region.get_maha
+        if not isinstance(other, RegionMaxMaha):
+            raise TypeError
+
+        reg_out = super().__add__(other)
+        reg_out.error_fs = self.error_fs + other.error_fs
+
+        if reg_out.error_fs.n != len(reg_out):
+            raise AttributeError
+
+        return reg_out
+
+    __radd__ = __add__
 
     @staticmethod
     def get_obj_pair(reg_1, reg_2, reg_union=None):
         if reg_union is None:
             reg_union = reg_1 + reg_2
-
-        d = 0
-        r2_union = reg_union.get_maha()
-        for reg in (reg_1, reg_2):
-            d += (r2_union - reg.get_maha()) ** 2
-
-        return d
+        return reg_union.error - reg_1.error - reg_2.error
