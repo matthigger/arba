@@ -6,7 +6,7 @@ from mh_pytools import file
 from pnl_segment.adaptive.part_graph_factory import part_graph_factory
 from pnl_segment.adaptive.region import Region
 from pnl_segment.simulate.effect import Effect, EffectDm
-from pnl_segment.simulate.mask import Mask
+from pnl_segment.space.mask import Mask
 
 
 def increment_to_unique(folder, num_width=3):

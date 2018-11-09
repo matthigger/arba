@@ -3,7 +3,7 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.point_cloud.ref_space import RefSpace
+from pnl_segment.space.ref_space import RefSpace
 from scipy.ndimage import binary_dilation
 
 

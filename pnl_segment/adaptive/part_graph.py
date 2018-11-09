@@ -9,7 +9,7 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 import mh_pytools.parallel
-from ..point_cloud import ref_space
+from ..space import ref_space
 
 
 class PartGraph(nx.Graph):

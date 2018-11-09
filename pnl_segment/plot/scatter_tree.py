@@ -5,7 +5,7 @@ import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from pnl_segment.simulate.mask import Mask
+from pnl_segment.space.mask import Mask
 
 
 def size_v_mu_diff(*args, **kwargs):

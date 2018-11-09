@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from mh_pytools import file
 from pnl_data.set.cidar_post import folder
-from pnl_segment.simulate.mask import Mask
+from pnl_segment.space.mask import Mask
 
 obj = 'max_maha'
 folder_out = folder / 'split_all_35'

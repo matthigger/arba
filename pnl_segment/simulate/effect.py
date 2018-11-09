@@ -9,7 +9,7 @@ from scipy.stats import mannwhitneyu
 
 from pnl_segment.adaptive.feat_stat import FeatStat
 from copy import deepcopy
-from pnl_segment.simulate.mask import Mask
+from pnl_segment.space.mask import Mask
 
 
 class Effect:

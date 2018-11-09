@@ -3,7 +3,7 @@ import pathlib
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.point_cloud.point_cloud_xyz import PointCloudXYZ
+from pnl_segment.space.point_cloud_xyz import PointCloudXYZ
 
 folder_data = pathlib.Path(__file__).parent / 'data'
 

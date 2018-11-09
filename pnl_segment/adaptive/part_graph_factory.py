@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 
 from pnl_segment.adaptive import region, part_graph
-from pnl_segment.point_cloud import point_cloud_ijk
+from pnl_segment.space import point_cloud_ijk
 
 
 def part_graph_factory(obj, file_tree_dict, history=False):
