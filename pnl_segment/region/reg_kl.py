@@ -7,7 +7,7 @@ from .reg import Region
 class RegionKL(Region):
     @property
     def kl(self):
-        return self.obj
+        return self._obj
 
     @property
     def error(self):
@@ -21,7 +21,6 @@ class RegionKL(Region):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._obj = None
         self.error_fs = FeatStatSingle(mu=self.kl)
 
     def get_obj(self):

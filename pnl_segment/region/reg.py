@@ -22,11 +22,11 @@ class Region:
             # allows use of sum(reg_iter)
             return type(self)(self.pc_ijk, self.fs_dict)
 
-        feat_stat = {grp: self.fs_dict[grp] + other.feat_stat[grp]
-                     for grp in self.fs_dict.keys()}
+        fs_dict = {grp: self.fs_dict[grp] + other.fs_dict[grp]
+                   for grp in self.fs_dict.keys()}
 
         return type(self)(pc_ijk=self.pc_ijk + other.pc_ijk,
-                          feat_stat=feat_stat)
+                          fs_dict=fs_dict)
 
     __radd__ = __add__
 

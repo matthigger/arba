@@ -47,10 +47,10 @@ def seg_graph_factory(obj, file_tree_dict, history=False):
         pc_ijk = PointCloudIJK(np.atleast_2d(ijk), ref=ref_list[0])
 
         # construct region obj
-        feat_stat = dict()
+        fs_dict = dict()
         for grp, ft in file_tree_dict.items():
-            feat_stat[grp] = ft.ijk_fs_dict[ijk]
-        reg = reg_type(pc_ijk, feat_stat=feat_stat)
+            fs_dict[grp] = ft.ijk_fs_dict[ijk]
+        reg = reg_type(pc_ijk, fs_dict=fs_dict)
 
         # store in seg_graph
         sg.add_node(reg)

@@ -6,7 +6,7 @@ class RegionMaha(RegionKL):
     def maha(self):
         return self._obj
 
-    def get_obj(self, active_grp=None):
+    def get_obj(self):
         """ negative Mahalanobis squared between active_grp
 
         (assumes each distribution is normal and covar are equal).  Note that
@@ -18,10 +18,7 @@ class RegionMaha(RegionKL):
         where sig is the common covariance / region size (in voxels)
         """
 
-        if active_grp is None:
-            active_grp = self.active_grp
-
-        fs0, fs1 = (self.fs_dict[grp] for grp in active_grp)
+        fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
         fs_sum = fs0 + fs1

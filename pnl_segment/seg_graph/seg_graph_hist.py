@@ -70,7 +70,6 @@ class SegGraphHistory(SegGraph):
         def build_part_graph(reg_set):
             # build seg_graph
             seg_graph = SegGraph()
-            seg_graph.obj_fnc = self.obj_fnc
             seg_graph.obj_fnc_max = np.inf
             seg_graph.add_nodes_from(reg_set)
             return seg_graph
@@ -105,7 +104,7 @@ class SegGraphHistory(SegGraph):
 
         for seg_graph in self:
             size.append(len(seg_graph))
-            error.append(sum(r.error) for r in seg_graph.nodes)
+            error.append(sum(r.error for r in seg_graph.nodes))
 
         # find
         max_err = max(error)

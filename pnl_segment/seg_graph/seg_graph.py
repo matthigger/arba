@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 import mh_pytools.parallel
 from ..space import get_ref
+from ..region import Region
 
 
 class SegGraph(nx.Graph):
@@ -18,6 +19,7 @@ class SegGraph(nx.Graph):
         super().__init__()
         self._obj_edge_list = None
         self.file_tree_dict = None
+        self.obj_fnc_max = np.inf
 
     def to_nii(self, f_out, ref, **kwargs):
         # load reference image
@@ -281,6 +283,6 @@ class SegGraph(nx.Graph):
             tqdm_dict = {'desc': 'compute obj per edge',
                          'disable': not verbose}
             for reg_pair in tqdm(edge_list, **tqdm_dict):
-                obj = self.obj_fnc(*reg_pair)
+                obj = Region.get_error_delta(*reg_pair)
                 if obj < self.obj_fnc_max:
                     self._obj_edge_list.add((obj, reg_pair))
