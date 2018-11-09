@@ -2,7 +2,11 @@ import shlex
 import subprocess
 from collections import defaultdict
 
+import matplotlib.pyplot as plt
 import nibabel as nib
+import numpy as np
+import seaborn as sns
+from matplotlib.backends.backend_pdf import PdfPages
 from tqdm import tqdm
 
 from mh_pytools import file
@@ -10,11 +14,14 @@ from pnl_data.set.cidar_post import folder
 from pnl_segment.simulate.mask import Mask
 
 obj = 'max_maha'
-folder_out = folder / '2018_all_1'
+folder_out = folder / 'split_all_35'
 folder_fill = folder_out / 'healthy_run000'
 f_stat_template = '{obj}_{method}.nii.gz'
 method_list = ['vba', 'arba', 'rba', 'truth']
 tfce = True
+f_out_pdf = folder_out / 'snr_auc.pdf'
+
+
 # mask_whole = Mask.from_nii(f_nii=folder_fill / 'active_mask.nii.gz')
 
 
@@ -31,7 +38,7 @@ def fill(f_stat, f_fill, mask, f_out):
 method_snr_auc_dict = defaultdict(list)
 folder_missing_list = list()
 for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
-    if not folder.is_dir():
+    if not folder.is_dir() or 'compare' in str(folder):
         continue
 
     # load active mask (of experiment)
@@ -71,3 +78,27 @@ for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
 # save
 f_out = folder_out / 'snr_auc.p.gz'
 file.save(method_snr_auc_dict, f_out)
+
+# plot
+method_set = set(method for method, _ in method_snr_auc_dict.keys())
+sns.set(font_scale=1.2)
+plt.subplots(1, 1)
+plt.gca().set_xscale("log", nonposx='clip')
+for method in method_set:
+    snr_auc_dict = [(snr, np.mean(auc_list))
+                    for (_method, snr), auc_list in method_snr_auc_dict.items()
+                    if _method == method]
+    snr_auc = sorted(snr_auc_dict)
+    snr = [x[0] for x in snr_auc]
+    auc = [x[1] for x in snr_auc]
+    plt.plot(snr, auc, label=method)
+plt.legend()
+# plt.gca().set_xscale('log')
+plt.gca().set_xlim(left=min(snr), right=max(snr))
+plt.xlabel('maha / voxel')
+plt.ylabel('auc')
+
+fig = plt.gcf()
+fig.set_size_inches(10, 7)
+with PdfPages(str(f_out_pdf)) as pdf:
+    pdf.savefig(fig)
