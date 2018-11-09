@@ -3,10 +3,10 @@ import pathlib
 import numpy as np
 
 from mh_pytools import file
-from pnl_segment.seg_graph.factory import part_graph_factory
-from pnl_segment.region.region import Region
-from pnl_segment.simulate.effect import Effect, EffectDm
-from pnl_segment.space.mask import Mask
+from .effect import Effect, EffectDm
+from ..region import RegionMaha
+from ..seg_graph import seg_graph_factory
+from ..space import Mask
 
 
 def increment_to_unique(folder, num_width=3):
@@ -107,47 +107,50 @@ class Simulator:
             file.save(effect, file=folder / 'effect.p.gz')
 
         # build part seg_graph
-        pg_hist = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
-                                     history=True)
+        sg_hist = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
+                                    history=True)
+
+        def fnc(reg):
+            return RegionMaha.get_obj(reg) * len(reg)
 
         # save mask
         mask.to_nii(folder / 'active_mask.nii.gz')
-        file.save(pg_hist, file=folder / 'pg_init.p.gz')
-        pg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
+        file.save(sg_hist, file=folder / 'sg_init.p.gz')
+        sg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=Region.get_maha)
+                       fnc=fnc)
 
         # reduce + save
-        pg_hist.reduce_to(1, verbose=verbose)
-        file.save(pg_hist, file=folder / 'pg_hist.p.gz')
+        sg_hist.reduce_to(1, verbose=verbose)
+        file.save(sg_hist, file=folder / 'sg_hist.p.gz')
 
-        # # split tree into regions + save
-        # pg_span = pg_hist.get_spanning_region(Region.get_maha, max=True)
-        # file.save(pg_span, file=folder / 'pg_span.p.gz')
-        #
-        # pg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
-        #                ref=self.file_tree.ref,
-        #                fnc=Region.get_maha)
+        # split tree into regions + save
+        sg_span = sg_hist.get_min_error_span()
+        file.save(sg_span, file=folder / 'sg_span.p.gz')
+
+        sg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
+                       ref=self.file_tree.ref,
+                       fnc=fnc)
 
         if f_rba is not None:
             # build naive segmentation, aggregate via a priori atlas
-            pg_rba = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
-                                        history=False)
-            pg_rba.combine_by_reg(f_rba)
-            file.save(pg_rba, file=folder / 'pg_rba.p.gz')
-            pg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
+            sg_rba = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
+                                       history=False)
+            sg_rba.combine_by_reg(f_rba)
+            file.save(sg_rba, file=folder / 'sg_rba.p.gz')
+            sg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
                           ref=self.file_tree.ref,
-                          fnc=Region.get_maha)
+                          fnc=fnc)
 
             if not isinstance(effect, EffectDm):
                 # build 'perfect' segmentation, aggregate only effect mask
-                pg_rba = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
-                                            history=False)
-                pg_rba.combine_by_reg(f_mask_effect)
-                file.save(pg_rba, file=folder / 'pg_truth.p.gz')
-                pg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
+                sg_rba = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
+                                           history=False)
+                sg_rba.combine_by_reg(f_mask_effect)
+                file.save(sg_rba, file=folder / 'sg_truth.p.gz')
+                sg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
                               ref=self.file_tree.ref,
-                              fnc=Region.get_maha)
+                              fnc=fnc)
 
     def run_healthy(self, obj, **kwargs):
         eff = EffectDm()
