@@ -1,10 +1,12 @@
 import nibabel as nib
 import numpy as np
 
-from . import point_cloud_ijk, point_cloud, ref_space
+from .point_cloud import PointCloud
+from .point_cloud_ijk import PointCloudIJK
+from .ref_space import get_ref
 
 
-class PointCloudXYZ(point_cloud.PointCloud):
+class PointCloudXYZ(PointCloud):
     """ stores an array of points
     """
 
@@ -12,17 +14,17 @@ class PointCloudXYZ(point_cloud.PointCloud):
         """ maps into some ijk space (rounding to int), returns PointCloudIJK
         """
 
-        ref = ref_space.get_ref(ref)
+        ref = get_ref(ref)
 
         ijk = ref.from_rasmm(self.x, round_flag=True)
 
-        return point_cloud_ijk.PointCloudIJK(ijk, ref)
+        return PointCloudIJK(ijk, ref)
 
     @staticmethod
     def from_nii(f_nii, **kwargs):
         """ read in nii mask
         """
-        pc_ijk = point_cloud_ijk.PointCloudIJK.from_nii(f_nii, **kwargs)
+        pc_ijk = PointCloudIJK.from_nii(f_nii, **kwargs)
         return pc_ijk.to_xyz()
 
     def to_nii(self, f_nii, ref, **kwargs):
@@ -35,7 +37,7 @@ class PointCloudXYZ(point_cloud.PointCloud):
         """ build from trk file
         """
         tract = nib.streamlines.load(str(f_trk))
-        ref = ref_space.get_ref(str(f_trk))
+        ref = get_ref(str(f_trk))
 
         if tract.streamlines:
             return sum(PointCloudXYZ(line, ref) for line in tract.streamlines)

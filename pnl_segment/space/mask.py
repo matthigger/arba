@@ -2,9 +2,9 @@ import tempfile
 
 import nibabel as nib
 import numpy as np
-
-from pnl_segment.space.ref_space import RefSpace
 from scipy.ndimage import binary_dilation
+
+from .ref_space import RefSpace
 
 
 def check_ref(fnc):

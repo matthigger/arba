@@ -1,10 +1,12 @@
 import nibabel as nib
 import numpy as np
 
-from . import ref_space, point_cloud, point_cloud_xyz
+from .point_cloud import PointCloud
+from .point_cloud_xyz import PointCloudXYZ
+from .ref_space import get_ref, RefSpace
 
 
-class PointCloudIJK(point_cloud.PointCloud):
+class PointCloudIJK(PointCloud):
     """ stores an array of voxels
     """
 
@@ -23,7 +25,7 @@ class PointCloudIJK(point_cloud.PointCloud):
         """
         if ref is None:
             # map into scanner space if no other space given
-            ref = ref_space.RefSpace(affine=np.eye(4))
+            ref = RefSpace(affine=np.eye(4))
 
         # map into scanner x_rasmm
         x_rasmm = self.ref.to_rasmm(self.x)
@@ -31,14 +33,14 @@ class PointCloudIJK(point_cloud.PointCloud):
         # map into new space
         x = ref.from_rasmm(x_rasmm)
 
-        return point_cloud_xyz.PointCloudXYZ(x, ref)
+        return PointCloudXYZ(x, ref)
 
     @staticmethod
     def from_nii(f_nii, target_idx=None):
         """ read in point cloud from a mask
         """
         # get reference space
-        ref = ref_space.get_ref(f_nii)
+        ref = get_ref(f_nii)
 
         # read in volume
         img_mask = nib.load(str(f_nii))

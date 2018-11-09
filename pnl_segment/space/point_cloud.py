@@ -1,6 +1,6 @@
 import numpy as np
 
-from . import ref_space
+from .ref_space import get_ref
 
 
 class PointCloud:
@@ -33,14 +33,14 @@ class PointCloud:
         if not isinstance(x, np.ndarray):
             x = np.array(x)
         self.x = x
-        self.ref = ref_space.get_ref(ref)
+        self.ref = get_ref(ref)
 
     def swap_ref(self, ref):
         """ swaps orientation to a new ref
         """
         x = self.ref.to_rasmm(self.x)
 
-        ref_to = ref_space.get_ref(ref)
+        ref_to = get_ref(ref)
         x = ref_to.from_rasmm(x)
 
         return self.__class__(x, ref=ref)
