@@ -9,7 +9,6 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 import mh_pytools.parallel
-from .size_reg import SizeReg
 from ..point_cloud import ref_space
 
 
@@ -299,12 +298,17 @@ class PartGraph(nx.Graph):
 
 
 class PartGraphHistory(PartGraph):
-    """ has a history of which regions were combined """
+    """ has a history of which regions were combined
+
+    Attributes:
+        tree_history (nx.Digraph): directed graph, from component reg to sum
+        reg_history_list (list): stores ordering of calls to combine()
+    """
 
     def __init__(self):
         super().__init__()
         self.tree_history = nx.DiGraph()
-        self.size_reg = SizeReg()
+        self.reg_history_list = list()
 
     def combine(self, reg_iter):
         reg_sum = super().combine(reg_iter)
@@ -312,6 +316,7 @@ class PartGraphHistory(PartGraph):
         for reg in reg_iter:
             self.tree_history.add_edge(reg, reg_sum)
 
+        self.reg_history_list.append(reg_sum)
         return reg_sum
 
     def get_max_fnc_array(self, fnc, ref):
@@ -347,7 +352,68 @@ class PartGraphHistory(PartGraph):
         img = nib.Nifti1Image(x, ref.affine)
         img.to_filename(str(f_out))
 
-    def get_spanning_region(self, fnc, max=True, subtract_mean=True):
+    def __iter__(self):
+        """ iterates through all version of part_graph through its history
+
+        NOTE: these part_graphs are not connected, neighboring regions do not
+        have edges between them.
+        """
+
+        def build_part_graph(reg_set):
+            # build part_graph
+            pg = PartGraph()
+            pg.obj_fnc = self.obj_fnc
+            pg.obj_fnc_max = np.inf
+            pg.add_nodes_from(reg_set)
+            return pg
+
+        # get all leaf nodes (reg without ancestors in tree_history)
+        reg_set = {r for r in self.tree_history.nodes
+                   if not nx.ancestors(self.tree_history, r)}
+
+        yield build_part_graph(reg_set)
+
+        for reg_next in self.reg_history_list:
+            # subtract the kids, add the next node
+            reg_kids = set(self.tree_history.predecessors(reg_next))
+            reg_set = (reg_set - reg_kids) | {reg_next}
+
+            yield build_part_graph(reg_set)
+
+    def get_min_error_span(self):
+        """ returns the part_graph which minimzes regularized error
+
+        regularized error = error + (size - 1) / (max_size - 1) * max_error
+
+        where size is the number of regions in the part_graph, max_size is the
+        most number of regions the part_graph had (1 per voxel) and max_error
+        is the maximum error (occurs at size = 1)
+
+        Returns:
+            pg (part_graph):
+        """
+        size = list()
+        error = list()
+
+        for pg in self:
+            size.append(len(pg))
+            error.append(sum(r.error) for r in pg.nodes)
+
+        # find
+        max_err = max(error)
+        max_size = max(size)
+        error_reg = [e + (s - 1) / (max_size - 1) * max_err
+                     for e, s in zip(error, size)]
+
+        min_reg_size = min(zip(error_reg, size))[1]
+
+        for pg in self:
+            if len(pg) == min_reg_size:
+                return pg
+
+        raise RuntimeError('optimal part_graph not found')
+
+    def get_spanning_region(self, fnc, max=True):
         """ get subset of self.tree_history that covers with min fnc (greedy)
 
         by cover, we mean that each leaf in self.tree_history has exactly one
@@ -359,14 +425,7 @@ class PartGraphHistory(PartGraph):
             max (bool): toggles whether max fnc is chosen (otherwise min)
         """
         reg_list = self.tree_history.nodes
-        f = [np.log10(fnc(r)) for r in reg_list]
-
-        if subtract_mean:
-            size = [len(r) for r in reg_list]
-            self.size_reg.fit(size, f)
-
-            f = np.atleast_2d(f).reshape((-1, 1)) - self.size_reg.predict(size)
-            f = list(f.flatten())
+        f = [fnc(r) for r in reg_list]
 
         # sort a list of regions by fnc
         reg_list = sorted(zip(f, reg_list), reverse=max)
