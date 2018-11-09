@@ -46,7 +46,8 @@ def size_v_mahalanobis(*args, **kwargs):
 
 def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
                  mask_label='% mask', reg_highlight=[],
-                 dict_highlight=None, edge=True, reg_list=None, ax=None):
+                 dict_highlight=None, edge=True, reg_list=None, ax=None,
+                 log_x=True, log_y=True):
     if ax is None:
         fig, ax = plt.subplots(1, 1)
 
@@ -106,13 +107,17 @@ def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
         nx.draw_networkx_edges(pg, pos=node_pos, edgelist=edgelist)
 
     # label / cleanup
-    ax.set_yscale('log')
-    ax.set_xscale('log')
+    if log_y:
+        ax.set_yscale('log')
+
+    if log_x:
+        ax.set_xscale('log')
     log_scale_shift = 1.2
     x_list = [x[0] for x in node_pos.values()]
     y_list = [x[1] for x in node_pos.values()]
     x_lim = min(x_list) / log_scale_shift, max(x_list) * log_scale_shift
-    y_lim = np.percentile(y_list, 5) / log_scale_shift, max(y_list) * log_scale_shift
+    y_lim = np.percentile(y_list, 5) / log_scale_shift, max(
+        y_list) * log_scale_shift
     plt.gca().set_xbound(x_lim)
     plt.gca().set_ybound(y_lim)
     plt.xlabel('size (vox)')
