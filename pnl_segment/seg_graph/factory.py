@@ -1,24 +1,18 @@
-""" constructs PartGraph objects
-
-a PartGraph can operate on one set of images (growing to minimize variance) or
-two sets of images (identifyign regions of max kl diff).  this difference in
-behavior is encapsulated in the region objects (pnl_segment.seg_graph.region)
-"""
-
 import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-import pnl_segment.seg_graph.seg_graph_hist
-from pnl_segment.region import region
-from pnl_segment.space import point_cloud_ijk
+from .seg_graph import SegGraph
+from .seg_graph_hist import SegGraphHistory
+from ..region import RegionMinVar, RegionKL, RegionMaha
+from ..space import PointCloudIJK
 
 
-def part_graph_factory(obj, file_tree_dict, history=False):
+def seg_graph_factory(obj, file_tree_dict, history=False):
     """ init PartGraph via img
 
     Args:
-        obj (str): either 'min_var', 'max_kl' or 'max_maha'
+        obj (str): either 'min_var', 'kl' or 'maha'
         file_tree_dict (dict): keys are grp, values are FileTree
         history (bool): toggles whether seg_graph keeps history (see
                         PartGraphHistory)
@@ -27,28 +21,19 @@ def part_graph_factory(obj, file_tree_dict, history=False):
         seg_graph (PartGraph)
     """
     # get appropriate region constructor
-    if obj.lower() == 'min_var':
-        reg_type = region.RegionMinVar
-    elif obj.lower() == 'max_kl':
-        reg_type = region.RegionMaxKL
-    elif obj.lower() == 'max_maha':
-        reg_type = region.RegionMaxMaha
-    else:
-        raise AttributeError(f'objective not recognized: {obj}')
+    obj_dict = {'min_var': RegionMinVar,
+                'kl': RegionKL,
+                'maha': RegionMaha}
+    reg_type = obj_dict[obj.lower()]
 
     # init empty seg_graph
     if history:
-        pg = pnl_segment.seg_graph.seg_graph_hist.PartGraphHistory()
+        sg = SegGraphHistory()
     else:
-        pg = pg.PartGraph()
+        sg = SegGraph()
 
     # store
-    pg.file_tree_dict = file_tree_dict
-
-    # init obj_fnc
-    # todo: wordy, remove this and put into seg_graph (maybe even hard code
-    # name of fnc: 'get_obj_pair')
-    pg.obj_fnc = getattr(reg_type, 'get_obj_pair')
+    sg.file_tree_dict = file_tree_dict
 
     # check that all file trees have same ref
     ref_list = [ft.ref for ft in file_tree_dict.values()]
@@ -59,8 +44,7 @@ def part_graph_factory(obj, file_tree_dict, history=False):
     ijk_set = set.intersection(*mask_list)
     for ijk in ijk_set:
         # construct pc_ijk
-        pc_ijk = point_cloud_ijk.PointCloudIJK(np.atleast_2d(ijk),
-                                               ref=ref_list[0])
+        pc_ijk = PointCloudIJK(np.atleast_2d(ijk), ref=ref_list[0])
 
         # construct region obj
         feat_stat = dict()
@@ -69,13 +53,13 @@ def part_graph_factory(obj, file_tree_dict, history=False):
         reg = reg_type(pc_ijk, feat_stat=feat_stat)
 
         # store in seg_graph
-        pg.add_node(reg)
+        sg.add_node(reg)
 
     # add edges
-    reg_by_ijk = {tuple(r.pc_ijk.x[0, :]): r for r in pg.nodes}
-    add_edges(pg, reg_by_ijk)
+    reg_by_ijk = {tuple(r.pc_ijk.x[0, :]): r for r in sg.nodes}
+    add_edges(sg, reg_by_ijk)
 
-    return pg
+    return sg
 
 
 def add_edges(pg, reg_by_ijk, verbose=False, f_constraint=None):

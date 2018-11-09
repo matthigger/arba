@@ -2,10 +2,10 @@ import networkx as nx
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.seg_graph.seg_graph import PartGraph
+from .seg_graph import SegGraph
 
 
-class PartGraphHistory(PartGraph):
+class SegGraphHistory(SegGraph):
     """ has a history of which regions were combined
 
     Attributes:
@@ -69,11 +69,11 @@ class PartGraphHistory(PartGraph):
 
         def build_part_graph(reg_set):
             # build seg_graph
-            pg = PartGraph()
-            pg.obj_fnc = self.obj_fnc
-            pg.obj_fnc_max = np.inf
-            pg.add_nodes_from(reg_set)
-            return pg
+            seg_graph = SegGraph()
+            seg_graph.obj_fnc = self.obj_fnc
+            seg_graph.obj_fnc_max = np.inf
+            seg_graph.add_nodes_from(reg_set)
+            return seg_graph
 
         # get all leaf nodes (reg without ancestors in tree_history)
         reg_set = {r for r in self.tree_history.nodes
@@ -98,14 +98,14 @@ class PartGraphHistory(PartGraph):
         is the maximum error (occurs at size = 1)
 
         Returns:
-            pg (seg_graph):
+            seg_graph (SegGraph):
         """
         size = list()
         error = list()
 
-        for pg in self:
-            size.append(len(pg))
-            error.append(sum(r.error) for r in pg.nodes)
+        for seg_graph in self:
+            size.append(len(seg_graph))
+            error.append(sum(r.error) for r in seg_graph.nodes)
 
         # find
         max_err = max(error)
@@ -115,9 +115,9 @@ class PartGraphHistory(PartGraph):
 
         min_reg_size = min(zip(error_reg, size))[1]
 
-        for pg in self:
-            if len(pg) == min_reg_size:
-                return pg
+        for seg_graph in self:
+            if len(seg_graph) == min_reg_size:
+                return seg_graph
 
         raise RuntimeError('optimal seg_graph not found')
 
@@ -162,9 +162,9 @@ class PartGraphHistory(PartGraph):
                 continue
 
         # build seg_graph
-        pg = PartGraph()
-        pg.obj_fnc = self.obj_fnc
-        pg.obj_fnc_max = np.inf
-        pg.add_nodes_from(min_reg_list)
+        seg_graph = SegGraph()
+        seg_graph.obj_fnc = self.obj_fnc
+        seg_graph.obj_fnc_max = np.inf
+        seg_graph.add_nodes_from(min_reg_list)
 
-        return pg
+        return seg_graph

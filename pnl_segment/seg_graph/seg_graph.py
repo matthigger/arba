@@ -9,22 +9,19 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 import mh_pytools.parallel
-from ..space import ref_space
+from ..space import get_ref
 
 
-class PartGraph(nx.Graph):
+class SegGraph(nx.Graph):
     def __init__(self):
-        # see PartGraphFactory to instantiate PartGraph, this should not be
-        # used directly
+        # see factory, use of __init__ directly is discouraged
         super().__init__()
-        self.obj_fnc = None
-        self.obj_fnc_max = np.inf
         self._obj_edge_list = None
         self.file_tree_dict = None
 
     def to_nii(self, f_out, ref, **kwargs):
         # load reference image
-        ref = ref_space.get_ref(ref)
+        ref = get_ref(ref)
         if ref.shape is None:
             raise AttributeError('ref must have shape')
 
@@ -87,13 +84,6 @@ class PartGraph(nx.Graph):
             self.add_edge(reg_sum, r_neighbr)
 
         return reg_sum
-
-    def discard_zero_var(self):
-        """ discards all regions which do not vary
-        """
-        for reg in list(self.nodes):
-            if any(fs.var[0][0] == 0 for fs in reg.feat_stat):
-                self.remove_node(reg)
 
     def combine_by_reg(self, f_region, verbose=False):
         """ combines regions which share an idx in f_region (some parcellation)
@@ -294,5 +284,3 @@ class PartGraph(nx.Graph):
                 obj = self.obj_fnc(*reg_pair)
                 if obj < self.obj_fnc_max:
                     self._obj_edge_list.add((obj, reg_pair))
-
-
