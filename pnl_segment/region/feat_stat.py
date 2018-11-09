@@ -204,3 +204,10 @@ class FeatStatEmpty(FeatStat):
 
     def __init__(self, *args, **kwargs):
         pass
+
+
+def get_maha_from_fs(fs0, fs1):
+    """ computes mahalanobis from two feat_stat"""
+    mu_diff = fs0.mu - fs1.mu
+    fs_sum = fs0 + fs1
+    return mu_diff @ fs_sum.cov_inv @ mu_diff
