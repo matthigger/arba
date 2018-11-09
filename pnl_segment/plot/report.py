@@ -1,16 +1,16 @@
 import numpy as np
 import seaborn as sns
-from matplotlib import pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from pnl_segment.adaptive import pval
-from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
-
 from graph.region import plot_stat, roi_and_prob_feat
 from graph.scatter_tree import size_v_mahalanobis
+from matplotlib import pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
 
 
 def fnc_sort(reg, grp_cmp='healthy', grp_test='effect'):
-    p, r2 = pval.get_pval(reg, grp_cmp=grp_cmp, grp_test=grp_test)
+    raise AttributeError('reimplement pval')
+    # p, r2 = pval.get_pval(reg, grp_cmp=grp_cmp, grp_test=grp_test)
 
     return -r2, p
 
