@@ -29,7 +29,7 @@ class FeatStat:
 
     @property
     def d(self):
-        return len(self.mu)
+        return self.mu.size
 
     @property
     def cov_det(self):
@@ -176,7 +176,7 @@ class FeatStatSingle(FeatStat):
 
     @property
     def cov(self):
-        d = len(self.mu)
+        d = self.d
         return np.zeros((d, d))
 
     def __init__(self, mu, n=1, cov=None):
