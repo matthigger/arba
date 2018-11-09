@@ -1,4 +1,3 @@
-from .feat_stat import get_maha_from_fs
 from .reg_kl import RegionKL
 
 
@@ -24,4 +23,6 @@ class RegionMaha(RegionKL):
 
         fs0, fs1 = (self.fs_dict[grp] for grp in active_grp)
 
-        return get_maha_from_fs(fs0, fs1)
+        mu_diff = fs0.mu - fs1.mu
+        fs_sum = fs0 + fs1
+        return mu_diff @ fs_sum.cov_inv @ mu_diff
