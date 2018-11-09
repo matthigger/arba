@@ -3,8 +3,8 @@ import pathlib
 import numpy as np
 
 from mh_pytools import file
-from pnl_segment.adaptive.part_graph_factory import part_graph_factory
-from pnl_segment.adaptive.region import Region
+from pnl_segment.seg_graph.factory import part_graph_factory
+from pnl_segment.region.region import Region
 from pnl_segment.simulate.effect import Effect, EffectDm
 from pnl_segment.space.mask import Mask
 
@@ -21,7 +21,7 @@ def increment_to_unique(folder, num_width=3):
 
 
 class Simulator:
-    """ manages simulation: paths, samples effects, runs part_graph.reduce()
+    """ manages simulation: paths, samples effects, runs seg_graph.reduce()
 
     Attributes:
         file_tree (FileTree):
@@ -106,7 +106,7 @@ class Simulator:
             effect.mask.to_nii(f_mask_effect)
             file.save(effect, file=folder / 'effect.p.gz')
 
-        # build part graph
+        # build part seg_graph
         pg_hist = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
                                      history=True)
 

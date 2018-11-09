@@ -1,7 +1,7 @@
 from itertools import permutations
 
 import numpy as np
-from pnl_segment.adaptive.feat_stat import FeatStatSingle
+from pnl_segment.region.feat_stat import FeatStatSingle
 
 
 def get_obj_pair_delta(reg1, reg2, reg_union=None):

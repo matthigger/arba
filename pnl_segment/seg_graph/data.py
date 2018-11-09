@@ -5,7 +5,7 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from .feat_stat import FeatStatEmpty, FeatStat
+from pnl_segment.region.feat_stat import FeatStatEmpty, FeatStat
 from ..space.ref_space import get_ref
 from pnl_segment.space.mask import Mask
 

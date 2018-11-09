@@ -2,14 +2,15 @@
 
 a PartGraph can operate on one set of images (growing to minimize variance) or
 two sets of images (identifyign regions of max kl diff).  this difference in
-behavior is encapsulated in the region objects (pnl_segment.adaptive.region)
+behavior is encapsulated in the region objects (pnl_segment.seg_graph.region)
 """
 
 import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from pnl_segment.adaptive import region, part_graph
+import pnl_segment.seg_graph.seg_graph_hist
+from pnl_segment.region import region
 from pnl_segment.space import point_cloud_ijk
 
 
@@ -19,11 +20,11 @@ def part_graph_factory(obj, file_tree_dict, history=False):
     Args:
         obj (str): either 'min_var', 'max_kl' or 'max_maha'
         file_tree_dict (dict): keys are grp, values are FileTree
-        history (bool): toggles whether part_graph keeps history (see
+        history (bool): toggles whether seg_graph keeps history (see
                         PartGraphHistory)
 
     Returns:
-        part_graph (PartGraph)
+        seg_graph (PartGraph)
     """
     # get appropriate region constructor
     if obj.lower() == 'min_var':
@@ -35,17 +36,17 @@ def part_graph_factory(obj, file_tree_dict, history=False):
     else:
         raise AttributeError(f'objective not recognized: {obj}')
 
-    # init empty graph
+    # init empty seg_graph
     if history:
-        pg = part_graph.PartGraphHistory()
+        pg = pnl_segment.seg_graph.seg_graph_hist.PartGraphHistory()
     else:
-        pg = part_graph.PartGraph()
+        pg = pg.PartGraph()
 
     # store
     pg.file_tree_dict = file_tree_dict
 
     # init obj_fnc
-    # todo: wordy, remove this and put into part_graph (maybe even hard code
+    # todo: wordy, remove this and put into seg_graph (maybe even hard code
     # name of fnc: 'get_obj_pair')
     pg.obj_fnc = getattr(reg_type, 'get_obj_pair')
 
@@ -67,7 +68,7 @@ def part_graph_factory(obj, file_tree_dict, history=False):
             feat_stat[grp] = ft.ijk_fs_dict[ijk]
         reg = reg_type(pc_ijk, feat_stat=feat_stat)
 
-        # store in graph
+        # store in seg_graph
         pg.add_node(reg)
 
     # add edges

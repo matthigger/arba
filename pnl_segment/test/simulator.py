@@ -7,7 +7,7 @@ import numpy as np
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder as folder_data
 from pnl_data.set.cidar_post import get_name
-from pnl_segment.adaptive.data import FileTree
+from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator
 
 num_locations = 1

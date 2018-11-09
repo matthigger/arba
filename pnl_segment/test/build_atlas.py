@@ -10,7 +10,7 @@ contains regions of similar feature (min cov)
 from collections import defaultdict
 
 from pnl_data.set.cidar_post import folder, get_name
-from pnl_segment.adaptive.part_graph_factory import part_graph_factory
+from pnl_segment.seg_graph.factory import part_graph_factory
 from mh_pytools import file
 import numpy as np
 
@@ -27,7 +27,7 @@ for label in feat_tuple:
     for f in folder_data.glob(f'*{label}.nii.gz'):
         f_img_tree[get_name(f.stem)][label] = f
 
-# build f_img_dict (grouped tree for part_graph)
+# build f_img_dict (grouped tree for seg_graph)
 f_img_dict = {'h': [[d[f] for f in feat_tuple] for d in f_img_tree.values()]}
 
 # f_fa is an arbitrary fa image, used for ref space and masking

@@ -3,7 +3,7 @@ import numpy as np
 from pnl_segment.adaptive.data import FileTree
 from pnl_segment.adaptive.feat_stat import FeatStat
 from pnl_segment.adaptive.part_graph_factory import part_graph_factory
-from pnl_segment.graph.scatter_tree import size_v_mahalanobis
+from pnl_segment.seg_graph.scatter_tree import size_v_mahalanobis
 from pnl_segment.simulate.effect import Effect
 from pnl_segment.simulate.mask import Mask
 from pnl_segment.point_cloud.ref_space import RefSpace
@@ -40,5 +40,5 @@ pg_hist = part_graph_factory(obj=obj, file_tree_dict=ft_dict,
                              history=True)
 pg_hist.reduce_to(1, verbose=True)
 
-# graph
+# seg_graph
 size_v_mahalanobis(pg=pg_hist.tree_history, mask=mask_effect)

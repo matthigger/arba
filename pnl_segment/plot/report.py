@@ -5,7 +5,7 @@ from graph.scatter_tree import size_v_mahalanobis
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from pnl_segment.adaptive.part_graph_factory import get_ijk_dict
+from pnl_segment.seg_graph.factory import get_ijk_dict
 
 
 def fnc_sort(reg, grp_cmp='healthy', grp_test='effect'):

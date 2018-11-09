@@ -7,7 +7,7 @@ import numpy as np
 from scipy.ndimage import binary_dilation
 from scipy.stats import mannwhitneyu
 
-from pnl_segment.adaptive.feat_stat import FeatStat
+from pnl_segment.region.feat_stat import FeatStat
 from copy import deepcopy
 from pnl_segment.space.mask import Mask
 
