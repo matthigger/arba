@@ -10,15 +10,18 @@ from pnl_data.set.cidar_post import get_name
 from pnl_segment.adaptive.data import FileTree
 from pnl_segment.simulate import simulator
 
-rep_per_snr = 10
-snr_vec = np.logspace(-2, 1, 20)
+num_locations = 1
+# snr_vec = np.logspace(0, -2, 5)
+snr_vec = [1]
 p_effect = .5
-effect_rad = 3
-active_rad = 3
+effect_rad = 4
+active_rad = 4
 obj = 'max_maha'
 feat_list = ['fa', 'md']
+resample = False
+par_flag = False
 f_rba = folder_data / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-folder = folder_data / '2018_Oct_29_10_32AM20'
+folder = folder_data / 'split_all_35'
 # folder = None
 
 np.random.seed(1)
@@ -36,28 +39,37 @@ if folder is None:
         for f in _folder_data.glob(f'*{feat}.nii.gz'):
             sbj_feat_file_tree[get_name(f.stem)][feat] = f
 
-    # only test two sbj
-    for sbj in list(sbj_feat_file_tree.keys())[2:]:
-        del sbj_feat_file_tree[sbj]
+    # # only test two sbj
+    # for sbj in list(sbj_feat_file_tree.keys())[4:]:
+    #     del sbj_feat_file_tree[sbj]
 
     # init simulator, split into groups
     file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree, verbose=True)
     sim = simulator.Simulator(file_tree=file_tree, folder=folder)
-    sim.split(p_effect=p_effect)
+    sim.split(p_effect=p_effect, verbose=True)
 
     file.save(sim, folder / 'sim.p.gz')
 else:
     sim = file.load(folder / 'sim.p.gz')
+    sim.folder = folder
 
-# sim.run_healthy(obj=obj, verbose=True)
+# sim.run_effect(snr=100, obj=obj, verbose=True, f_rba=f_rba)
+# sim.run_healthy(obj=obj, verbose=True, f_rba=f_rba)
 
+effect_mask_list = [sim.sample_effect_mask(radius=effect_rad)
+                    for _ in range(num_locations)]
 arg_list = list()
 for snr in snr_vec:
-    for _ in range(rep_per_snr):
-        arg_list.append({'snr': snr,
-                         'obj': obj,
-                         'active_rad': active_rad,
-                         'radius': effect_rad,
-                         'f_rba': f_rba})
+    for effect_mask in effect_mask_list:
+        d = {'snr': snr,
+             'obj': obj,
+             'active_rad': active_rad,
+             'effect_mask': effect_mask,
+             'f_rba': f_rba,
+             'resample': resample}
+        arg_list.append(d)
+        if not par_flag:
+            sim.run_effect(verbose=True, **d)
 
-parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=sim)
+if par_flag:
+    parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=sim)

@@ -4,7 +4,7 @@ import numpy as np
 
 from mh_pytools import file
 from pnl_segment.adaptive.part_graph_factory import part_graph_factory
-from pnl_segment.adaptive.region import get_maha
+from pnl_segment.adaptive.region import Region
 from pnl_segment.simulate.effect import Effect, EffectDm
 from pnl_segment.simulate.mask import Mask
 
@@ -115,21 +115,19 @@ class Simulator:
         file.save(pg_hist, file=folder / 'pg_init.p.gz')
         pg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=get_maha)
+                       fnc=Region.get_maha)
 
-        # reduce
+        # reduce + save
         pg_hist.reduce_to(1, verbose=verbose)
-
-        pg_span = pg_hist.get_spanning_region(get_maha, max=True)
-
-        # save
-        file.save(pg_span, file=folder / 'pg_span.p.gz')
-
         file.save(pg_hist, file=folder / 'pg_hist.p.gz')
 
-        pg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
-                       ref=self.file_tree.ref,
-                       fnc=get_maha)
+        # # split tree into regions + save
+        # pg_span = pg_hist.get_spanning_region(Region.get_maha, max=True)
+        # file.save(pg_span, file=folder / 'pg_span.p.gz')
+        #
+        # pg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
+        #                ref=self.file_tree.ref,
+        #                fnc=Region.get_maha)
 
         if f_rba is not None:
             # build naive segmentation, aggregate via a priori atlas
@@ -139,7 +137,7 @@ class Simulator:
             file.save(pg_rba, file=folder / 'pg_rba.p.gz')
             pg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
                           ref=self.file_tree.ref,
-                          fnc=get_maha)
+                          fnc=Region.get_maha)
 
             if not isinstance(effect, EffectDm):
                 # build 'perfect' segmentation, aggregate only effect mask
@@ -149,9 +147,7 @@ class Simulator:
                 file.save(pg_rba, file=folder / 'pg_truth.p.gz')
                 pg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
                               ref=self.file_tree.ref,
-                              fnc=get_maha)
-
-        return pg_span, pg_hist
+                              fnc=Region.get_maha)
 
     def run_healthy(self, obj, **kwargs):
         eff = EffectDm()
