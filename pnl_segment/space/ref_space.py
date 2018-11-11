@@ -30,6 +30,9 @@ class RefSpace:
         self.affine_inv = np.linalg.inv(self.affine)
         self.shape = shape
 
+    def __str__(self):
+        return f'RefSpace(affine={self.affine}, shape={self.shape})'
+
     def to_rasmm(self, x):
         """ maps from ijk space to scanner xyz """
         return apply_affine(self.affine, x)
@@ -54,6 +57,8 @@ class RefSpace:
 def get_ref(ref):
     """ convenience: accepts path to trk, nii or a RefSpace.  returns RefSpace
     """
+    if ref is None:
+        return None
 
     if not isinstance(ref, RefSpace):
         f_ref = pathlib.Path(ref)
