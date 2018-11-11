@@ -30,7 +30,7 @@ class RefSpace:
         self.affine_inv = np.linalg.inv(self.affine)
         self.shape = shape
 
-    def __str__(self):
+    def __repr__(self):
         return f'RefSpace(affine={self.affine}, shape={self.shape})'
 
     def to_rasmm(self, x):
@@ -57,16 +57,16 @@ class RefSpace:
 def get_ref(ref):
     """ convenience: accepts path to trk, nii or a RefSpace.  returns RefSpace
     """
-    if ref is None:
-        return None
+    if ref is None or isinstance(ref, RefSpace):
+        return ref
 
-    if not isinstance(ref, RefSpace):
-        f_ref = pathlib.Path(ref)
-        if '.trk' in f_ref.suffixes:
-            ref = RefSpace.from_trk(f_ref)
-        elif '.nii' in f_ref.suffixes:
-            ref = RefSpace.from_nii(f_ref)
-        else:
-            raise AttributeError('ref not recognized')
+    if isinstance(ref, nib.Nifti1Image) or isinstance(ref, nib.Nifti2Image):
+        return RefSpace(affine=ref.affine, shape=ref.shape)
 
-    return ref
+    f_ref = pathlib.Path(ref)
+    if '.trk' in f_ref.suffixes:
+        return RefSpace.from_trk(f_ref)
+    elif '.nii' in f_ref.suffixes:
+        return RefSpace.from_nii(f_ref)
+    else:
+        raise AttributeError('ref not recognized')

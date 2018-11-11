@@ -5,7 +5,7 @@ class Region:
     aggregated greedily to minimize the 'error' function defined.
 
     Attributes:
-        pc_ijk (PointCloudIJK)
+        pc_ijk (PointCloud): set of voxels (tuples of ijk)
         fs_dict (dict): contains feat stats for img sets of different grps
     """
 
