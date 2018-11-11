@@ -2,228 +2,55 @@ import tempfile
 
 import nibabel as nib
 import numpy as np
-from scipy.ndimage import binary_dilation
 
-from .ref_space import RefSpace
-
-
-def check_ref(fnc):
-    def wrapped(self, other):
-        if hasattr(other, 'ref_space'):
-            if self.ref_space != other.ref_space:
-                raise AttributeError('incompatible ref space')
-
-        fnc_array = getattr(self.x, fnc.__name__)
-
-        if isinstance(other, Mask):
-            other = other.x
-
-        return Mask(fnc_array(other), ref_space=self.ref_space)
-
-    return wrapped
+from .ref_space import get_ref
+from .point_cloud import PointCloud
 
 
-class Mask:
+class Mask(np.ndarray):
     """ array
-
-    >>> m1 = Mask(np.eye(3))
-    >>> [1, 1] in m1
-    True
-    >>> (2, 0) in m1
-    False
-    >>> list(m1)
-    [(0, 0), (1, 1), (2, 2)]
-    >>> data = np.arange(18).reshape((3, 3, 2))
-    >>> data[:, :, 0]
-    array([[ 0,  2,  4],
-           [ 6,  8, 10],
-           [12, 14, 16]])
-    >>> m1.apply(data)
-    array([[ 0,  1],
-           [ 8,  9],
-           [16, 17]])
-    >>> data_inserted = m1.insert(data, np.arange(6) * -1)
-    >>> data_inserted[:, :, 0]
-    array([[ 0,  2,  4],
-           [ 6, -2, 10],
-           [12, 14, -4]])
-    >>> m2 = m1 + m1 * 10 - (m1 / 10)
-    >>> m2.x
-    array([[10.9,  0. ,  0. ],
-           [ 0. , 10.9,  0. ],
-           [ 0. ,  0. , 10.9]])
-    >>> m2.negate().x
-    array([[False,  True,  True],
-           [ True, False,  True],
-           [ True,  True, False]])
     """
 
-    def __iter__(self):
-        return iter(tuple(ijk) for ijk in np.vstack(np.where(self.x > 0)).T)
+    @staticmethod
+    def from_img(img):
+        ref = get_ref(img)
+        return Mask(img.get_data(), ref=ref)
 
-    def iter_multidim(self, n):
-        for ijk in self:
-            for _n in range(n):
-                yield (*ijk, _n)
+    @staticmethod
+    def from_nii(f_nii):
+        return Mask.from_img(nib.load(str(f_nii)))
 
-    def __contains__(self, ijk):
-        return bool(self.x[tuple(ijk)])
+    def __new__(cls, input_array, ref=None):
+        # https://docs.scipy.org/doc/numpy-1.15.0/user/basics.subclassing.html
+        obj = np.asarray(input_array).astype(bool).view(cls)
+        obj.ref = get_ref(ref)
+        return obj
 
-    @property
-    def shape(self):
-        return self.x.shape
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        self.ref = getattr(obj, 'ref', None)
 
     def __len__(self):
-        return np.sum((self.x > 0).flatten())
+        return np.sum((self).flatten())
 
-    def __init__(self, x, ref_space=None):
-        self.x = x.astype(bool)
-        self.ref_space = ref_space
+    def to_point_cloud(self):
+        ijk_gen = (tuple(x) for x in np.vstack(np.where(self)).T)
+        return PointCloud(ijk_gen, ref=self.ref)
 
-    def negate(self):
-        return Mask(np.logical_not(self.x), ref_space=self.ref_space)
-
-    @check_ref
-    def __add__(self, other):
-        pass
-
-    @check_ref
-    def __mul__(self, other):
-        pass
-
-    @check_ref
-    def __truediv__(self, other):
-        pass
-
-    @check_ref
-    def __sub__(self, other):
-        pass
-
-    @check_ref
-    def __radd__(self, other):
-        pass
-
-    @check_ref
-    def __rsub__(self, other):
-        pass
-
-    @check_ref
-    def __rmul__(self, other):
-        pass
-
-    @staticmethod
-    def from_img(img, fnc_include=None):
-        # defaults to include all positive values in mask
-        if fnc_include is None:
-            def is_positive(x):
-                return x > 0
-
-            fnc_include = is_positive
-
-        ref = RefSpace(affine=img.affine, shape=img.shape)
-        return Mask(fnc_include(img.get_data()), ref_space=ref)
-
-    @staticmethod
-    def from_nii(f_nii, **kwargs):
-        return Mask.from_img(nib.load(str(f_nii)), **kwargs)
-
-    def to_nii(self, f_out=None, f_ref=None):
+    def to_nii(self, f_out=None, ref=None):
         # get f_out
         if f_out is None:
             _, f_out = tempfile.mkstemp(suffix='.nii.gz')
 
         # get ref
-        if f_ref:
-            ref = RefSpace.from_nii(f_ref)
-        else:
-            ref = self.ref_space
+        ref = get_ref(ref)
+        if ref is None:
+            ref = self.ref
 
         # save
-        img = nib.Nifti1Image(self.x.astype(np.int8), affine=ref.affine)
+        # todo: how to output as bool type (not uint8)?
+        img = nib.Nifti1Image(self.x.astype(np.uint8), affine=ref.affine)
         img.to_filename(str(f_out))
 
         return f_out
-
-    def insert(self, data_img, x, add=False):
-        """ inserts x into data_img where mask is
-
-        Args:
-            data_img (np.array): base image
-            x (np.array): points to be added
-            add (bool): toggles whether data is replaced or added
-
-        Returns:
-            data_img
-        """
-        # iterate through idx
-        if len(data_img.shape) > len(self.shape):
-            if len(data_img.shape) > len(self.shape) + 1:
-                raise AttributeError('data img has more than 1 dim than mask')
-            d = data_img.shape[-1]
-            ijk_iter = self.iter_multidim(d)
-        else:
-            d = 1
-            ijk_iter = iter(self)
-
-        if len(x.flatten()) != len(self) * d:
-            raise AttributeError('size mismatch, data len does not match mask')
-
-        # insert given data
-        for _x, ijk in zip(x.flatten(), ijk_iter):
-            if add:
-                data_img[ijk] += _x
-            else:
-                data_img[ijk] = _x
-
-        return data_img
-
-    def apply(self, data):
-        # validate mask shape
-        if not np.array_equal(self.shape, data.shape[:len(self.shape)]):
-            raise AttributeError('shape mismatch')
-
-        if len(data.shape) > len(self.shape) + 1:
-            raise AttributeError('data shape more than 1 dim larger than mask')
-
-        return data[self.x.astype(bool)]
-
-    def apply_from_nii(self, f_nii):
-        img = nib.load(str(f_nii))
-        if self.ref_space is not None and \
-                not np.array_equal(img.affine, self.ref_space.affine):
-            raise AttributeError('affine mismatch')
-
-        return self.apply(img.get_data())
-
-    def dilate(self, r):
-        x = binary_dilation(self.x, iterations=r)
-        return Mask(x, ref_space=self.ref_space)
-
-    @staticmethod
-    def build_intersection(mask_list, thresh=1):
-        """ builds intersection of a set of masks
-
-        Args:
-            mask_list (list): list of masks
-            thresh (float): in (0, 1], how many of masks true @ ijk to include
-
-        Returns:
-            mask (Mask): intersection of masks
-        """
-        # get 'intersection'
-        c = len(mask_list) * thresh
-        x_all = sum(m.x.astype(bool) for m in mask_list) >= c
-
-        # if all ref_space are same, keep it, otherwise discard
-        ref_space = mask_list[0].ref_space
-        for m in mask_list[1:]:
-            if m.ref_space != ref_space:
-                ref_space = None
-                break
-
-        return Mask(x_all, ref_space=ref_space)
-
-    @staticmethod
-    def build_intersection_from_nii(f_nii_list, **kwargs):
-        mask_list = [Mask.from_nii(f) for f in f_nii_list]
-        return Mask.build_intersection(mask_list, **kwargs)
