@@ -10,7 +10,7 @@ contains regions of similar feature (min cov)
 from collections import defaultdict
 
 from pnl_data.set.cidar_post import folder, get_name
-from pnl_segment.seg_graph.factory import part_graph_factory
+from pnl_segment.seg_graph.factory import seg_graph_factory
 from mh_pytools import file
 import numpy as np
 
@@ -34,8 +34,8 @@ f_img_dict = {'h': [[d[f] for f in feat_tuple] for d in f_img_tree.values()]}
 f_fa = next(iter(f_img_dict.values()))[0][0]
 
 # segment
-pg = part_graph_factory(obj='min_var', grp_to_min_var='h',
-                        f_img_dict=f_img_dict, f_mask=f_fa, verbose=True)
+pg = seg_graph_factory(obj='min_var', grp_to_min_var='h',
+                       f_img_dict=f_img_dict, f_mask=f_fa, verbose=True)
 z = np.ceil(np.log10(max(gran_array)))
 for gran in gran_array:
     pg.reduce_to(gran, edge_per_step=edge_per_step, verbose=True)

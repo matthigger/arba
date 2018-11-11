@@ -89,7 +89,7 @@ f_mask = build_mask(mask_radius)
 f_mask_effect = folder_data / 'mask_effect.nii.gz'
 build_mask(eff_radius, f=f_mask_effect)
 
-# build f_img_dict (see part_graph_factory._build_part_graph for ex)
+# build f_img_dict (see seg_graph_factory._build_part_graph for ex)
 f_img_dict = defaultdict(list)
 for _ in range(n_healthy):
     f_img_dict['healthy'].append((sample_img(f_fa),

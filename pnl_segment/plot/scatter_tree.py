@@ -6,6 +6,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from pnl_segment.space.mask import Mask
+from pnl_segment.region import RegionMaha
 
 
 def size_v_mu_diff(*args, **kwargs):
@@ -39,12 +40,12 @@ def size_v_mahalanobis(*args, **kwargs):
     ylabel = 'mahalanobis to healthy'
 
     def get_maha(reg):
-        return reg.get_maha()
+        return RegionMaha.get_obj(reg) * len(reg)
 
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
-def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
+def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
                  mask_label='% mask', reg_highlight=[],
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
                  log_x=True, log_y=True):
@@ -67,7 +68,8 @@ def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
     # get node_pos
     node_pos = dict()
     if reg_list is None:
-        reg_list = pg.nodes
+        reg_list = sg.nodes
+    reg_list = set(reg_list) | set(reg_highlight)
 
     for reg in reg_list:
         size = len(reg)
@@ -93,8 +95,7 @@ def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
         return sc
 
     # draw non highlight nodes
-    reg_list = set(reg_list) - set(reg_highlight)
-    sc = plot_node(reg_list, cmap=cmap)
+    sc = plot_node(set(reg_list) - set(reg_highlight), cmap=cmap)
 
     # draw highlight nodes
     if reg_highlight:
@@ -103,8 +104,8 @@ def scatter_tree(pg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
     # draw edges
     if edge:
         reg_set = set(reg_list)
-        edgelist = [e for e in pg.edges if set(e).issubset(reg_set)]
-        nx.draw_networkx_edges(pg, pos=node_pos, edgelist=edgelist)
+        edgelist = [e for e in sg.edges if set(e).issubset(reg_set)]
+        nx.draw_networkx_edges(sg, pos=node_pos, edgelist=edgelist)
 
     # label / cleanup
     if log_y:

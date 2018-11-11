@@ -13,12 +13,12 @@ from mh_pytools import file
 from pnl_data.set.cidar_post import folder
 from pnl_segment.space.mask import Mask
 
-obj = 'max_maha'
+obj = 'maha'
 folder_out = folder / 'split_all_35'
 folder_fill = folder_out / 'healthy_run000'
 f_stat_template = '{obj}_{method}.nii.gz'
 method_list = ['vba', 'arba', 'rba', 'truth']
-tfce = True
+tfce = False
 f_out_pdf = folder_out / 'snr_auc.pdf'
 
 

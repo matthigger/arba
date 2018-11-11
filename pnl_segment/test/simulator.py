@@ -10,13 +10,13 @@ from pnl_data.set.cidar_post import get_name
 from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator
 
-num_locations = 1
-# snr_vec = np.logspace(0, -2, 5)
-snr_vec = [1]
+num_locations = 6
+snr_vec = np.logspace(0, -2, 5)
+# snr_vec = [1]
 p_effect = .5
 effect_rad = 4
 active_rad = 4
-obj = 'max_maha'
+obj = 'maha'
 feat_list = ['fa', 'md']
 resample = False
 par_flag = False

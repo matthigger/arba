@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def size_vs_error(pg_hist):
+def size_vs_error(sg_hist):
     size = list()
     error = list()
 
-    for pg in pg_hist:
+    for pg in sg_hist:
         size.append(len(pg))
         error.append(sum(r.error for r in pg.nodes))
 
