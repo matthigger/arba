@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 
 from ..region.feat_stat import FeatStatEmpty, FeatStat
-from ..space import get_ref, Mask
+from ..space import get_ref, Mask, PointCloud
 
 
 class FileTree:
@@ -89,7 +89,7 @@ class FileTree:
         ft.sbj_feat_file_tree = self.sbj_feat_file_tree
 
         ijk_set = mask.to_point_cloud()
-        ijk_set &= {self.ijk_fs_dict.keys()}
+        ijk_set &= {x for x in self.ijk_fs_dict.keys()}
         for ijk in ijk_set:
             ft.ijk_fs_dict[ijk] = self.ijk_fs_dict[ijk]
 
@@ -237,7 +237,17 @@ class FileTree:
         for ijk, fs in self.ijk_fs_dict.items():
             if fs.n >= n:
                 x[ijk] = True
-        return Mask(x, ref_space=self.ref)
+        return Mask(x, ref=self.ref)
+
+    def get_point_cloud(self, p=0):
+        """ returns a point_cloud which has at least p percent of sbj included
+        """
+        pc = PointCloud({}, ref=self.ref)
+        n = len(list(self.sbj_iter)) * p
+        for ijk, fs in self.ijk_fs_dict.items():
+            if fs.n >= n:
+                pc.add(ijk)
+        return pc
 
     def split(self, p=.5, unload_self=False, unload_kids=True, verbose=False):
         """ splits data into two groups

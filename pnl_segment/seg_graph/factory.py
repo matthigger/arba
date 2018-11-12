@@ -40,8 +40,8 @@ def seg_graph_factory(obj, file_tree_dict, history=False):
     if any(ref_list[0] != ref for ref in ref_list[1:]):
         raise AttributeError('ref space mismatch')
 
-    mask_list = [set(ft.get_mask()) for ft in file_tree_dict.values()]
-    ijk_set = set.intersection(*mask_list)
+    pc_gen = (ft.get_point_cloud() for ft in file_tree_dict.values())
+    ijk_set = set.intersection(*pc_gen)
     for ijk in ijk_set:
         # construct pc_ijk
         pc_ijk = PointCloud({tuple(ijk)}, ref=ref_list[0])
@@ -56,7 +56,7 @@ def seg_graph_factory(obj, file_tree_dict, history=False):
         sg.add_node(reg)
 
     # add edges
-    reg_by_ijk = {tuple(r.pc_ijk.x[0, :]): r for r in sg.nodes}
+    reg_by_ijk = {next(iter(r.pc_ijk)): r for r in sg.nodes}
     add_edges(sg, reg_by_ijk)
 
     return sg

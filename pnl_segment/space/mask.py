@@ -2,9 +2,10 @@ import tempfile
 
 import nibabel as nib
 import numpy as np
+from scipy.ndimage.morphology import binary_dilation
 
-from .ref_space import get_ref
 from .point_cloud import PointCloud
+from .ref_space import get_ref
 
 
 class Mask(np.ndarray):
@@ -50,7 +51,11 @@ class Mask(np.ndarray):
 
         # save
         # todo: how to output as bool type (not uint8)?
-        img = nib.Nifti1Image(self.x.astype(np.uint8), affine=ref.affine)
+        img = nib.Nifti1Image(self.astype(np.uint8), affine=ref.affine)
         img.to_filename(str(f_out))
 
         return f_out
+
+    def dilate(self, r):
+        x = binary_dilation(self, iterations=r)
+        return Mask(x, ref=self.ref)

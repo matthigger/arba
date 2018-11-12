@@ -40,7 +40,7 @@ class Effect:
             raise AttributeError('snr must be positive')
 
         # get feat stat across mask
-        fs = sum(ijk_fs_dict[ijk] for ijk in mask)
+        fs = sum(ijk_fs_dict[ijk] for ijk in mask.to_point_cloud())
 
         # get direction u
         if u is None:
@@ -74,8 +74,8 @@ class Effect:
             """ loads f_nii, ensures proper space
             """
             img = nib.load(str(f_nii))
-            if self.mask.ref_space is not None and \
-                    not np.array_equal(img.affine, self.mask.ref_space.affine):
+            if self.mask.ref is not None and \
+                    not np.array_equal(img.affine, self.mask.ref.affine):
                 raise AttributeError('space mismatch')
             return img.get_data()
 
@@ -115,8 +115,11 @@ class Effect:
         Returns:
             auc (float): value in [0, 1]
         """
-        stat_vec = mask.apply(x)
-        truth_vec = mask.apply(self.mask.x)
+        # mask the statistic
+        stat_vec = x[mask]
+
+        # mask the ground truth to relevant area
+        truth_vec = self.mask[mask]
 
         return Effect._get_auc(stat_vec, truth_vec)
 
@@ -164,6 +167,7 @@ class Effect:
                                                size=len(self))
 
         # add effect
+        raise NotImplementedError
         x = self.mask.insert(x, effect, add=True)
 
         return x
@@ -175,7 +179,8 @@ class Effect:
         if copy:
             file_tree = deepcopy(file_tree)
 
-        ijk_set = set(self.mask).intersection(file_tree.ijk_fs_dict.keys())
+        ijk_set = self.mask.to_point_cloud()
+        ijk_set &= {x for x in file_tree.ijk_fs_dict.keys()}
         for ijk in ijk_set:
             fs = file_tree.ijk_fs_dict[ijk]
 

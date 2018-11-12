@@ -25,7 +25,7 @@ class Region:
         fs_dict = {grp: self.fs_dict[grp] + other.fs_dict[grp]
                    for grp in self.fs_dict.keys()}
 
-        return type(self)(pc_ijk=self.pc_ijk + other.pc_ijk,
+        return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
                           fs_dict=fs_dict)
 
     __radd__ = __add__

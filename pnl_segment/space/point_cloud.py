@@ -68,23 +68,6 @@ class PointCloud(set):
 
         return PointCloud.from_ijk_array(x, ref=ref)
 
-    def __eq__(self, other):
-        # note: resorting pts spoils equality
-        return np.array_equal(self.x, other.x)
-
-    def __add__(self, other, check_ref=True):
-        """ adds points to the point cloud
-        """
-        # ensure affines are equivalent
-        if check_ref and self.ref != other.ref:
-            raise AttributeError('cant merge different ref spaces')
-
-        pc_set = super().__add__(other)
-
-        return PointCloud(pc_set, ref=self.ref)
-
-    __radd__ = __add__
-
     def to_mask_array(self, idx_err_flag=True):
         """ builds mask array, default 1 in voxels with pt present, 0 otherwise
 

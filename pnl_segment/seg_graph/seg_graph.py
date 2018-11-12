@@ -48,13 +48,16 @@ class SegGraph(nx.Graph):
             def fnc(reg):
                 return reg_to_idx[reg]
 
-        reg_list = list(filter(fnc_include, self.nodes))
+        if fnc_include is None:
+            reg_list = list(self.nodes)
+        else:
+            reg_list = list(filter(fnc_include, self.nodes))
 
         # build output array
         x = np.zeros(reg_list[0].pc_ijk.ref.shape)
         for reg in reg_list:
             val = fnc(reg)
-            for _x in reg.pc_ijk.x:
+            for _x in reg.pc_ijk:
                 if not overlap and x[tuple(_x)] != 0:
                     raise AttributeError('regions are not disjoint')
                 x[tuple(_x)] += val
@@ -98,7 +101,7 @@ class SegGraph(nx.Graph):
         for reg in self.nodes:
             if len(reg.pc_ijk) != 1:
                 raise AttributeError('regions must consist of single vox')
-            ijk = tuple(reg.pc_ijk.x[0, :])
+            ijk = next(iter(reg.pc_ijk))
             ijk_reg_dict[ijk] = reg
 
         # load f_region

@@ -6,7 +6,6 @@ from mh_pytools import file
 from .effect import Effect, EffectDm
 from ..region import RegionMaha
 from ..seg_graph import seg_graph_factory
-from ..space import Mask
 
 
 def increment_to_unique(folder, num_width=3):
@@ -53,7 +52,7 @@ class Simulator:
     def sample_effect_mask(self, radius, **kwargs):
         effect_mask = Effect.sample_mask(prior_array=self.eff_prior_arr,
                                          radius=radius)
-        effect_mask.ref_space = self.file_tree.ref
+        effect_mask.ref = self.file_tree.ref
 
         return effect_mask
 
@@ -78,7 +77,7 @@ class Simulator:
         if active_rad is not None:
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(active_rad)
-            mask = Mask.build_intersection([mask_eff_dilated, mask])
+            mask = np.logical_and(mask_eff_dilated, mask)
 
         # apply mask (and copies file_tree, ft_dict has no memory intersection
         # with self.ft_dict)

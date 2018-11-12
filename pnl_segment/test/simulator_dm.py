@@ -21,7 +21,7 @@ dim_eff = 4
 ref = RefSpace(shape=tuple([dim_size] * 3))
 mask_effect = np.zeros(ref.shape)
 mask_effect[:dim_eff, :dim_eff, :dim_eff] = 1
-mask_effect = Mask(mask_effect, ref_space=ref)
+mask_effect = Mask(mask_effect, ref=ref)
 
 # build file tree
 ft_dict = dict()

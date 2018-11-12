@@ -57,13 +57,8 @@ def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
         dict_highlight = {'linewidths': 3, 'edgecolors': 'k'}
 
     # get pts with effect mask
-    if isinstance(mask, set):
-        mask_ijk = mask
-    elif isinstance(mask, Mask):
-        mask_ijk = set(mask)
-    elif mask is not None:
-        mask = nib.load(str(mask)).get_data()
-        mask_ijk = set(tuple(x) for x in np.vstack(np.where(mask)).T)
+    if mask is not None and not isinstance(mask, set):
+        mask = Mask.from_nii(mask)
 
     # get node_pos
     node_pos = dict()
@@ -84,7 +79,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
             node_color = list()
             for reg in reg_list:
                 # get color
-                c = len([1 for ijk in reg.pc_ijk.x if tuple(ijk) in mask_ijk])
+                c = len([1 for ijk in reg.pc_ijk if mask[ijk]])
                 c *= 1 / len(reg)
                 node_color.append(c)
 
