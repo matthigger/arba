@@ -5,7 +5,7 @@ from tqdm import tqdm
 from .seg_graph import SegGraph
 from .seg_graph_hist import SegGraphHistory
 from ..region import RegionMinVar, RegionKL, RegionMaha
-from ..space import PointCloudIJK
+from ..space import PointCloud
 
 
 def seg_graph_factory(obj, file_tree_dict, history=False):
@@ -44,7 +44,7 @@ def seg_graph_factory(obj, file_tree_dict, history=False):
     ijk_set = set.intersection(*mask_list)
     for ijk in ijk_set:
         # construct pc_ijk
-        pc_ijk = PointCloudIJK(np.atleast_2d(ijk), ref=ref_list[0])
+        pc_ijk = PointCloud({tuple(ijk)}, ref=ref_list[0])
 
         # construct region obj
         fs_dict = dict()

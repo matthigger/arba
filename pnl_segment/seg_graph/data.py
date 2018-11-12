@@ -88,8 +88,9 @@ class FileTree:
         ft.feat_list = self.feat_list
         ft.sbj_feat_file_tree = self.sbj_feat_file_tree
 
-        ijk_intersection = set(mask).intersection(self.ijk_fs_dict.keys())
-        for ijk in ijk_intersection:
+        ijk_set = mask.to_point_cloud()
+        ijk_set &= {self.ijk_fs_dict.keys()}
+        for ijk in ijk_set:
             ft.ijk_fs_dict[ijk] = self.ijk_fs_dict[ijk]
 
             # copy sbj specific info
@@ -196,7 +197,7 @@ class FileTree:
             f_nii_list = list()
             for sbj in sbj_list:
                 f_nii_list += list(self.sbj_feat_file_tree[sbj].values())
-            mask = Mask.build_intersection_from_nii(f_nii_list)
+            mask = sum(Mask.from_nii(f_nii) for f_nii in f_nii_list)
 
         tqdm_dict = {'disable': not verbose,
                      'desc': 'load data per sbj'}
@@ -213,7 +214,7 @@ class FileTree:
             data = np.stack(data, axis=3)
 
             # store data
-            for ijk in mask:
+            for ijk in mask.to_point_cloud():
                 x = data[ijk[0], ijk[1], ijk[2], :]
                 if x.all():
                     # only add vectors if each element is positive
