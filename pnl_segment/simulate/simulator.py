@@ -109,15 +109,15 @@ class Simulator:
         sg_hist = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
                                     history=True)
 
-        def fnc(reg):
+        def weighted_maha(reg):
             return RegionMaha.get_obj(reg) * len(reg)
 
         # save mask
         mask.to_nii(folder / 'active_mask.nii.gz')
-        file.save(sg_hist, file=folder / 'sg_init.p.gz')
+        file.save(sg_hist, file=folder / 'sg_vba.p.gz')
         sg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=fnc)
+                       fnc=weighted_maha)
 
         # reduce + save
         sg_hist.reduce_to(1, verbose=verbose)
@@ -125,11 +125,11 @@ class Simulator:
 
         # split tree into regions + save
         sg_span = sg_hist.get_min_error_span()
-        file.save(sg_span, file=folder / 'sg_span.p.gz')
+        file.save(sg_span, file=folder / 'sg_arba.p.gz')
 
         sg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
                        ref=self.file_tree.ref,
-                       fnc=fnc)
+                       fnc=weighted_maha)
 
         if f_rba is not None:
             # build naive segmentation, aggregate via a priori atlas
@@ -139,7 +139,7 @@ class Simulator:
             file.save(sg_rba, file=folder / 'sg_rba.p.gz')
             sg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
                           ref=self.file_tree.ref,
-                          fnc=fnc)
+                          fnc=weighted_maha)
 
             if not isinstance(effect, EffectDm):
                 # build 'perfect' segmentation, aggregate only effect mask
@@ -149,7 +149,7 @@ class Simulator:
                 file.save(sg_rba, file=folder / 'sg_truth.p.gz')
                 sg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
                               ref=self.file_tree.ref,
-                              fnc=fnc)
+                              fnc=weighted_maha)
 
     def run_healthy(self, obj, **kwargs):
         eff = EffectDm()

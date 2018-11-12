@@ -10,8 +10,8 @@ from pnl_data.set.cidar_post import get_name
 from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator
 
-num_locations = 6
-snr_vec = np.logspace(0, -2, 5)
+num_locations = 10
+snr_vec = np.logspace(-2, 2, 20)
 # snr_vec = [1]
 p_effect = .5
 effect_rad = 4
@@ -21,7 +21,7 @@ feat_list = ['fa', 'md']
 resample = False
 par_flag = False
 f_rba = folder_data / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-folder = folder_data / 'split_all_35'
+folder = folder_data / '2018_Nov_12_08_16AM31'
 # folder = None
 
 np.random.seed(1)
@@ -39,8 +39,8 @@ if folder is None:
         for f in _folder_data.glob(f'*{feat}.nii.gz'):
             sbj_feat_file_tree[get_name(f.stem)][feat] = f
 
-    # # only test two sbj
-    # for sbj in list(sbj_feat_file_tree.keys())[4:]:
+    # # only test 2 sbj
+    # for sbj in list(sbj_feat_file_tree.keys())[2:]:
     #     del sbj_feat_file_tree[sbj]
 
     # init simulator, split into groups

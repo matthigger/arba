@@ -6,6 +6,7 @@ from functools import reduce
 import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_dilation
+from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu
 
 from ..region import FeatStat
@@ -121,26 +122,7 @@ class Effect:
         # mask the ground truth to relevant area
         truth_vec = self.mask[mask]
 
-        return Effect._get_auc(stat_vec, truth_vec)
-
-    def get_auc_from_nii(self, f_nii):
-        """ computes auc of statistic given in f_nii
-
-        Args:
-            f_nii (str or Path): path to statistic image
-
-        Returns:
-            auc (float): value in [0, 1]
-        """
-        stat_mask = Mask.from_nii(f_nii)
-        stat_vec = stat_mask.apply_from_nii(f_nii)
-        truth_vec = stat_mask.apply(self.mask.x)
-
-        return Effect.__get_auc(stat_vec, truth_vec)
-
-    @staticmethod
-    def _get_auc(stat_vec, truth_vec):
-
+        # compute x, y
         x = stat_vec[truth_vec == 0]
         y = stat_vec[truth_vec == 1]
         try:
@@ -153,6 +135,16 @@ class Effect:
         # pval = min(u.pvalue, 1 - u.pvalue)
 
         return auc
+
+    def get_dice(self, mask):
+        """ computes dice score
+        """
+
+        if sum(mask.flatten()):
+            return 1 - dice(mask.flatten(), self.mask.flatten())
+        else:
+            # no area detected
+            return 0
 
     def apply(self, x):
         """ applies effect to array x

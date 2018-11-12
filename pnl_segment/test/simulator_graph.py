@@ -11,11 +11,12 @@ from tqdm import tqdm
 
 from mh_pytools import file
 from pnl_data.set.cidar_post import folder
-from pnl_segment.space.mask import Mask
+from pnl_segment.plot.snr_vs_dice import snr_vs_dice
+from pnl_segment.space.mask import Mask, get_ref
 
+spec = .05
 obj = 'maha'
-folder_out = folder / 'split_all_35'
-folder_fill = folder_out / 'healthy_run000'
+folder_out = folder / '2018_Nov_12_08_16AM31'
 f_stat_template = '{obj}_{method}.nii.gz'
 method_list = ['vba', 'arba', 'rba', 'truth']
 tfce = False
@@ -28,36 +29,26 @@ f_out_pdf = folder_out / 'snr_auc.pdf'
 def fill(f_stat, f_fill, mask, f_out):
     stat = nib.load(str(f_stat)).get_data()
     fill = nib.load(str(f_fill)).get_data()
-    for ijk in mask:
+    for ijk in mask.to_point_cloud():
         fill[ijk] = stat[ijk]
     img = nib.Nifti1Image(fill, nib.load(str(f_stat)).affine)
     img.to_filename(str(f_out))
 
 
 # get mask of img
+sg_eff_dict = defaultdict(list)
 method_snr_auc_dict = defaultdict(list)
 folder_missing_list = list()
 for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
-    if not folder.is_dir() or 'compare' in str(folder):
+    if not folder.is_dir():
         continue
 
     # load active mask (of experiment)
     mask = Mask.from_nii(folder / 'active_mask.nii.gz')
 
-    # # build filled stat
-    # for method in method_list:
-    #     if method == 'tfce':
-    #         continue
-    #     f = f_stat_template.format(obj=obj, method=method)
-    #     f_stat = folder / f
-    #     f_fill = folder_fill / f
-    #     f_out = str(f_stat).replace('.nii.gz', '_fill.nii.gz')
-    #
-    #     fill(f_stat, f_fill, mask, f_out)
-
     # build tfce img + compute auc
+    f_vba = folder / f_stat_template.format(obj=obj, method='vba')
     if tfce:
-        f_vba = folder / f_stat_template.format(obj=obj, method='vba')
         f_tfce = folder / f_stat_template.format(obj=obj, method='tfce')
         cmd = f'fslmaths {f_vba} -tfce 2 0.5 6 {f_tfce}'
         subprocess.Popen(shlex.split(cmd)).wait()
@@ -66,6 +57,17 @@ for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
     # compute auc
     eff = file.load(folder / 'effect.p.gz')
     for method in method_list:
+        f_sg = folder / f'sg_{method}.p.gz'
+        if f_sg.exists():
+            sg = file.load(f_sg)
+            sg_eff_dict[method].append((sg, eff))
+
+            def is_sig(reg):
+                return reg.pval < (spec / len(sg))
+
+            sg.to_nii(f_out=folder / f'detected_{method}.nii.gz',
+                      ref=get_ref(f_vba),
+                      fnc=is_sig)
         f = folder / f_stat_template.format(obj=obj, method=method)
         try:
             x = nib.load(str(f)).get_data()
@@ -74,6 +76,14 @@ for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
         auc = eff.get_auc(x, mask=mask)
 
         method_snr_auc_dict[method, eff.snr].append(auc)
+
+# plot snr vs dice
+f_out = folder_out / 'snr_dice.pdf'
+with PdfPages(str(f_out)) as pdf:
+    snr_vs_dice(sg_eff_dict)
+    plt.gca().set_xscale('log')
+    pdf.savefig(plt.gcf())
+    plt.close()
 
 # save
 f_out = folder_out / 'snr_auc.p.gz'

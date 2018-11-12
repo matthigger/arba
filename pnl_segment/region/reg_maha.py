@@ -1,3 +1,5 @@
+from scipy.stats import chi2
+
 from .reg_kl import RegionKL
 
 
@@ -23,3 +25,8 @@ class RegionMaha(RegionKL):
         mu_diff = fs0.mu - fs1.mu
         fs_sum = fs0 + fs1
         return mu_diff @ fs_sum.cov_inv @ mu_diff
+
+    @property
+    def pval(self):
+        d = next(iter(self.fs_dict.values())).d
+        return chi2.sf(self.maha * len(self), df=d)
