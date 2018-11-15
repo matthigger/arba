@@ -25,12 +25,11 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0, u=None, **kwargs):
+    def from_data(fs, mask, snr, cov_ratio=0, u=None, **kwargs):
         """ scales effect with observations
 
         Args:
-            ijk_fs_dict (dict): keys are ijk, values are feat_stat (needed to
-                                compute background variance)
+            fs (FeatStat): stats of affected area
             mask (Mask): effect location
             snr (float): ratio of effect to population variance
             cov_ratio (float): ratio of effect cov to population cov
@@ -39,9 +38,6 @@ class Effect:
 
         if snr < 0:
             raise AttributeError('snr must be positive')
-
-        # get feat stat across mask
-        fs = sum(ijk_fs_dict[ijk] for ijk in PointCloud.from_mask(mask))
 
         # get direction u
         if u is None:

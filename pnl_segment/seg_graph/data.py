@@ -22,10 +22,6 @@ class FileTree:
         feat_list (list): list of features, defines ordering of feat
         ref (RefSpace): defines shape and affine of data
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
-        sbj_ijk_fs_dict (dict): tree, keys are sbj, ijk.  leafs are feat stat
-                                stores stats per voxel and sbj ... can be
-                                set to None for memory savings by neuter(), but
-                                then obj is not capable of split()
     """
 
     @property
@@ -69,7 +65,6 @@ class FileTree:
         # init
         self.sbj_feat_file_tree = sbj_feat_file_tree
         self.ijk_fs_dict = defaultdict(FeatStatEmpty)
-        self.sbj_ijk_fs_dict = defaultdict(dict)
 
         # assign and validate feat_list
         self.feat_list = None
@@ -89,19 +84,11 @@ class FileTree:
                 elif self.ref != get_ref(f_nii):
                     raise AttributeError('space mismatch')
 
-    def neuter(self):
-        """ prevents calls to split(), though saves on memory
-
-        can be undone by calling unload() and load()
-        """
-        self.sbj_ijk_fs_dict = defaultdict(dict)
-
-    def load(self, verbose=False, per_sbj=False):
+    def load(self, verbose=False):
         """ loads files, adds data to statistics per voxel
 
         Args:
             verbose (bool): toggles command line output
-            per_sbj (bool): toggles saving per sbj stats (needed for split())
         """
         ijk_set = self.get_point_cloud()
 
@@ -111,24 +98,19 @@ class FileTree:
         for sbj, f_nii_dict in tqdm(self.sbj_feat_file_tree.items(),
                                     **tqdm_dict):
             # get data
-            ijk_data_dict = self.get_ijk_fs_dict(sbj, ijk_set, verbose=verbose)
-
-            if per_sbj:
-                # store per sbj
-                self.sbj_ijk_fs_dict[sbj] = ijk_data_dict
+            ijk_data_dict = self.get_ijk_fs_dict(sbj, ijk_set)
 
             # update stats per sbj
             for ijk, fs in ijk_data_dict.items():
                 # store aggregate stats
                 self.ijk_fs_dict[ijk] += fs
 
-    def get_ijk_fs_dict(self, sbj, ijk_set, verbose=False):
+    def get_ijk_fs_dict(self, sbj, ijk_set):
         """ returns data per ijk, loads from original files
 
         Args:
             sbj: sbj to load
             ijk_set (set): restrict ijk values in return dict
-            verbose (bool): toggles command line output
 
         Returns:
             ijk_fs_dict (dict): keys are ijk tuple, values are array of data
@@ -141,10 +123,8 @@ class FileTree:
         data_list = [nib.load(str(f)).get_data() for f in f_nii_list]
 
         # store data
-        tqdm_dict = {'disable': not verbose,
-                     'desc': 'build feat stat per ijk'}
         ijk_fs_dict = dict()
-        for ijk in tqdm(ijk_set, **tqdm_dict):
+        for ijk in ijk_set:
             x = np.array([data[ijk] for data in data_list])
             if not x.all():
                 continue
@@ -155,18 +135,11 @@ class FileTree:
     def apply_mask(self, mask):
         ft = FileTree(self.sbj_feat_file_tree)
         ft.ijk_fs_dict = defaultdict(FeatStatEmpty)
-        ft.sbj_ijk_fs_dict = defaultdict(dict)
 
         ijk_set = PointCloud.from_mask(mask)
         ijk_set &= {x for x in self.ijk_fs_dict.keys()}
         for ijk in ijk_set:
             ft.ijk_fs_dict[ijk] = self.ijk_fs_dict[ijk]
-
-            # copy sbj specific info
-            for sbj in self.sbj_iter:
-                if ijk in self.sbj_ijk_fs_dict[sbj].keys():
-                    ft.sbj_ijk_fs_dict[sbj][ijk] = \
-                        self.sbj_ijk_fs_dict[sbj][ijk]
 
         return ft
 
@@ -235,9 +208,6 @@ class FileTree:
         Returns:
             file_tree_list (list): FileTree for each grp
         """
-
-        if self.sbj_ijk_fs_dict is None:
-            raise AttributeError('per sbj data not present, call load() first')
 
         # compute n_effect
         n_grp0 = np.ceil(p * len(self)).astype(int)

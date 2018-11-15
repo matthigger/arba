@@ -46,12 +46,12 @@ if folder is None:
 
     # init simulator, split into groups
     file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
-    file_tree.load(verbose=True, per_sbj=True)
-    sim = simulator.Simulator(file_tree=file_tree, folder=folder)
-    sim.split(p_effect=p_effect, verbose=True)
+    sim = simulator.Simulator(file_tree=file_tree, folder=folder, verbose=True,
+                              p_effect=p_effect)
 
-    file_tree.neuter()
+    print('begin save')
     file.save(sim, folder / 'sim.p.gz')
+    print('end save')
 else:
     sim = file.load(folder / 'sim.p.gz')
     sim.folder = folder

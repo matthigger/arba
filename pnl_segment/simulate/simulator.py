@@ -5,7 +5,8 @@ import numpy as np
 from mh_pytools import file
 from .effect import Effect, EffectDm
 from ..region import RegionMaha
-from ..seg_graph import seg_graph_factory
+from ..seg_graph import seg_graph_factory, FeatStatEmpty
+from ..space import PointCloud
 
 
 def increment_to_unique(folder, num_width=3):
@@ -28,29 +29,26 @@ class Simulator:
     grp_effect = 'effect'
     grp_null = 'null'
 
-    def __init__(self, file_tree, folder, eff_prior_arr=None):
-        self.file_tree = file_tree
-        self.ft_dict = None
+    def __init__(self, file_tree, folder, eff_prior_arr=None, p_effect=.5,
+                 **kwargs):
+        self.ref = file_tree.ref
+        self.pc = file_tree.get_point_cloud()
+        self.feat_list = file_tree.feat_list
         self.folder = folder
 
         self.eff_prior_arr = eff_prior_arr
         if self.eff_prior_arr is None:
-            pc = self.file_tree.get_point_cloud()
-            self.eff_prior_arr = pc.to_mask(ref=file_tree.ref)
+            self.eff_prior_arr = self.pc.to_mask(ref=file_tree.ref)
 
-    def split(self, p_effect=.5, **kwargs):
-        if self.file_tree is None:
-            raise AttributeError('simulator has previously been split')
-
-        # split into two file_tree
-        ft_eff, ft_null = self.file_tree.split(p=p_effect, **kwargs)
+        # split into two file_trees
+        ft_eff, ft_null = file_tree.split(p=p_effect, **kwargs)
         self.ft_dict = {self.grp_effect: ft_eff,
                         self.grp_null: ft_null}
 
-    def sample_effect_mask(self, radius, **kwargs):
+    def sample_effect_mask(self, radius):
         effect_mask = Effect.sample_mask(prior_array=self.eff_prior_arr,
                                          radius=radius)
-        effect_mask.ref = self.file_tree.ref
+        effect_mask.ref = self.ref
 
         return effect_mask
 
@@ -60,9 +58,17 @@ class Simulator:
         if effect_mask is None:
             effect_mask = self.sample_effect_mask(**kwargs)
 
-        effect = Effect.from_data(ijk_fs_dict=self.file_tree.ijk_fs_dict,
-                                  mask=effect_mask,
-                                  snr=snr, **kwargs)
+        # find intersection of effect mask and observations
+        pc = self.pc.intersection(PointCloud.from_mask(effect_mask))
+
+        # compute stats of all observed data within mask
+        fs = FeatStatEmpty()
+        for ft in self.ft_dict.values():
+            for ijk in pc:
+                fs += ft.ijk_fs_dict[ijk]
+
+        # build effect
+        effect = Effect.from_data(fs=fs, snr=snr, mask=effect_mask, **kwargs)
 
         return effect
 
@@ -71,8 +77,7 @@ class Simulator:
         """ runs experiment
         """
         # get mask of active area
-        pc = self.file_tree.get_point_cloud()
-        mask = pc.to_mask()
+        mask = self.pc.to_mask()
         if active_rad is not None:
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(active_rad)
@@ -93,7 +98,7 @@ class Simulator:
         ft_dict[self.grp_effect] = effect.apply_to_file_tree(ft_effect)
 
         # output mean images of each feature per grp
-        for feat in self.file_tree.feat_list:
+        for feat in self.feat_list:
             for grp, ft in ft_dict.items():
                 f_out = folder / f'{grp}_{feat}.nii.gz'
                 ft.to_nii(f_out, feat=feat)
@@ -115,7 +120,7 @@ class Simulator:
         mask.to_nii(folder / 'active_mask.nii.gz')
         file.save(sg_hist, file=folder / 'sg_vba.p.gz')
         sg_hist.to_nii(f_out=folder / f'{obj}_vba.nii.gz',
-                       ref=self.file_tree.ref,
+                       ref=self.ref,
                        fnc=weighted_maha)
 
         # reduce + save
@@ -127,7 +132,7 @@ class Simulator:
         file.save(sg_span, file=folder / 'sg_arba.p.gz')
 
         sg_span.to_nii(f_out=folder / f'{obj}_arba.nii.gz',
-                       ref=self.file_tree.ref,
+                       ref=self.ref,
                        fnc=weighted_maha)
 
         if f_rba is not None:
@@ -137,7 +142,7 @@ class Simulator:
             sg_rba.combine_by_reg(f_rba)
             file.save(sg_rba, file=folder / 'sg_rba.p.gz')
             sg_rba.to_nii(f_out=folder / f'{obj}_rba.nii.gz',
-                          ref=self.file_tree.ref,
+                          ref=self.ref,
                           fnc=weighted_maha)
 
             if not isinstance(effect, EffectDm):
@@ -147,7 +152,7 @@ class Simulator:
                 sg_rba.combine_by_reg(f_mask_effect)
                 file.save(sg_rba, file=folder / 'sg_truth.p.gz')
                 sg_rba.to_nii(f_out=folder / f'{obj}_truth.nii.gz',
-                              ref=self.file_tree.ref,
+                              ref=self.ref,
                               fnc=weighted_maha)
 
     def run_healthy(self, obj, **kwargs):
