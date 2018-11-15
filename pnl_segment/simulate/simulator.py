@@ -35,19 +35,17 @@ class Simulator:
 
         self.eff_prior_arr = eff_prior_arr
         if self.eff_prior_arr is None:
-            self.eff_prior_arr = np.zeros(shape=file_tree.ref.shape)
-            for ijk in file_tree.ijk_fs_dict.keys():
-                self.eff_prior_arr[ijk] = 1
+            pc = self.file_tree.get_point_cloud()
+            self.eff_prior_arr = pc.to_mask(ref=file_tree.ref)
 
-    def split(self, p_effect=.5, lossy=True, **kwargs):
+    def split(self, p_effect=.5, **kwargs):
         if self.file_tree is None:
             raise AttributeError('simulator has previously been split')
 
         # split into two file_tree
-        ft_tuple = self.file_tree.split(p=p_effect,
-                                        unload_self=lossy,
-                                        unload_kids=True, **kwargs)
-        self.ft_dict = dict(zip((self.grp_effect, self.grp_null), ft_tuple))
+        ft_eff, ft_null = self.file_tree.split(p=p_effect, **kwargs)
+        self.ft_dict = {self.grp_effect: ft_eff,
+                        self.grp_null: ft_null}
 
     def sample_effect_mask(self, radius, **kwargs):
         effect_mask = Effect.sample_mask(prior_array=self.eff_prior_arr,
@@ -73,7 +71,8 @@ class Simulator:
         """ runs experiment
         """
         # get mask of active area
-        mask = self.file_tree.get_mask()
+        pc = self.file_tree.get_point_cloud()
+        mask = pc.to_mask()
         if active_rad is not None:
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(active_rad)
