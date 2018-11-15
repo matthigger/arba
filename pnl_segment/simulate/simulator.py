@@ -77,7 +77,7 @@ class Simulator:
         """ runs experiment
         """
         # get mask of active area
-        mask = self.pc.to_mask()
+        mask = self.pc.to_mask(self.ref)
         if active_rad is not None:
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(active_rad)
