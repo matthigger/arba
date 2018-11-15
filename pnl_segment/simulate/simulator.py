@@ -64,7 +64,7 @@ class Simulator:
 
         effect = Effect.from_data(ijk_fs_dict=self.file_tree.ijk_fs_dict,
                                   mask=effect_mask,
-                                  snr=snr)
+                                  snr=snr, **kwargs)
 
         return effect
 

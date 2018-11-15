@@ -10,7 +10,7 @@ from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu
 
 from ..region import FeatStat
-from ..space import Mask
+from ..space import Mask, PointCloud
 
 
 class Effect:
@@ -25,7 +25,7 @@ class Effect:
     """
 
     @staticmethod
-    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0, u=None):
+    def from_data(ijk_fs_dict, mask, snr, cov_ratio=0, u=None, **kwargs):
         """ scales effect with observations
 
         Args:
@@ -41,7 +41,7 @@ class Effect:
             raise AttributeError('snr must be positive')
 
         # get feat stat across mask
-        fs = sum(ijk_fs_dict[ijk] for ijk in mask.to_point_cloud())
+        fs = sum(ijk_fs_dict[ijk] for ijk in PointCloud.from_mask(mask))
 
         # get direction u
         if u is None:
@@ -146,6 +146,36 @@ class Effect:
             # no area detected
             return 0
 
+    def get_sens_spec(self, mask, mask_active):
+        """ returns sens + spec
+
+        Returns:
+            sens (float): percentage of affected voxels detected
+            spec (float): percentage of unaffected voxels undetected
+        """
+        signal = self.mask[mask_active].astype(bool)
+        estimate = mask[mask_active].astype(bool)
+
+        true_pos = np.count_nonzero(signal & estimate)
+        true = np.count_nonzero(signal)
+
+        if true:
+            sens = true_pos / true
+        else:
+            # if nothing to detect, we default to sensitivity 0 (graphing)
+            sens = np.nan
+
+        neg = np.count_nonzero(~signal)
+        true_neg = np.count_nonzero((~signal) & (~estimate))
+
+        if neg:
+            spec = true_neg / neg
+        else:
+            # if no negative estimates, we default to specificity 0 (graphing)
+            spec = np.nan
+
+        return sens, spec
+
     def apply(self, x):
         """ applies effect to array x
 
@@ -171,7 +201,7 @@ class Effect:
         if copy:
             file_tree = deepcopy(file_tree)
 
-        ijk_set = self.mask.to_point_cloud()
+        ijk_set = PointCloud.from_mask(self.mask)
         ijk_set &= {x for x in file_tree.ijk_fs_dict.keys()}
         for ijk in ijk_set:
             fs = file_tree.ijk_fs_dict[ijk]
@@ -266,10 +296,20 @@ class Effect:
             mask = np.logical_and(mask, reg_idx_list)
 
         # perform dilation
-        eff_mask = binary_dilation(eff_mask,
-                                   iterations=radius,
-                                   mask=mask)
-        return Mask(eff_mask.astype(int))
+        if isinstance(radius, int):
+            eff_mask = binary_dilation(eff_mask,
+                                       iterations=radius,
+                                       mask=mask)
+        elif len(radius) == 3:
+            pc = PointCloud.from_mask(eff_mask)
+            ijk = np.array(next(iter(pc)))
+            for delta in np.ndindex(radius):
+                pc.add(tuple(ijk + delta))
+            eff_mask = pc.to_mask(shape=prior_array.shape)
+            eff_mask = np.logical_and(eff_mask, prior_array)
+        else:
+            raise AttributeError(r'invalid radius given: {radius}')
+        return Mask(eff_mask)
 
 
 class EffectDm:

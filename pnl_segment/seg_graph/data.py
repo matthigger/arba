@@ -46,12 +46,13 @@ class FileTree:
                                   which have been resampled
         """
         # build normal distribution with same 1st, 2nd moments as vox in mask
-        ijk_set = set(mask).intersection(self.ijk_fs_dict.keys())
-        fs = sum(self.ijk_fs_dict[ijk] for ijk in ijk_set)
+        pc = PointCloud.from_mask(mask)
+        pc &= set(self.ijk_fs_dict.keys())
+        fs = sum(self.ijk_fs_dict[ijk] for ijk in pc)
         fs_normal = fs.to_normal()
 
         # resample
-        for ijk in set(mask).intersection(self.ijk_fs_dict.keys()):
+        for ijk in pc:
             # sample same number of values
             n = self.ijk_fs_dict[ijk].n
             x = np.atleast_2d(fs_normal.rvs(n)).T
@@ -88,7 +89,7 @@ class FileTree:
         ft.feat_list = self.feat_list
         ft.sbj_feat_file_tree = self.sbj_feat_file_tree
 
-        ijk_set = mask.to_point_cloud()
+        ijk_set = PointCloud.from_mask(mask)
         ijk_set &= {x for x in self.ijk_fs_dict.keys()}
         for ijk in ijk_set:
             ft.ijk_fs_dict[ijk] = self.ijk_fs_dict[ijk]
@@ -214,7 +215,7 @@ class FileTree:
             data = np.stack(data, axis=3)
 
             # store data
-            for ijk in mask.to_point_cloud():
+            for ijk in PointCloud.from_mask(mask):
                 x = data[ijk[0], ijk[1], ijk[2], :]
                 if x.all():
                     # only add vectors if each element is positive

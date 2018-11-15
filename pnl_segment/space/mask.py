@@ -4,7 +4,6 @@ import nibabel as nib
 import numpy as np
 from scipy.ndimage.morphology import binary_dilation
 
-from .point_cloud import PointCloud
 from .ref_space import get_ref
 
 
@@ -34,10 +33,6 @@ class Mask(np.ndarray):
 
     def __len__(self):
         return np.sum((self).flatten())
-
-    def to_point_cloud(self):
-        ijk_gen = (tuple(x) for x in np.vstack(np.where(self)).T)
-        return PointCloud(ijk_gen, ref=self.ref)
 
     def to_nii(self, f_out=None, ref=None):
         # get f_out

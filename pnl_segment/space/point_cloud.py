@@ -1,39 +1,52 @@
+import nibabel as nib
 import numpy as np
 
+from .mask import Mask
 from .ref_space import RefSpace, get_ref
 
 
 class PointCloud(set):
     """ a set of points in space (e.g. voxels), stored as set
 
-    note:
-    'mask_array' is a typical mask image
-    'ijk_array' is a (n x dim) array of the points
+    terminology note:
+    'mask_array' is a typical mask image, points are the ijk of non zero voxels
+    'array' is a (n x dim) array of points (either ijk of xyz)
     """
 
     @staticmethod
     def from_tract(f_trk):
         """ build from trk file
         """
-        raise NotImplementedError
-        # tract = nib.streamlines.load(str(f_trk))
-        # ref = get_ref(str(f_trk))
-        #
-        # if tract.streamlines:
-        #     return sum(PointCloudXYZ(line, ref) for line in tract.streamlines
-        # else:
-        #     return PointCloudXYZ(np.zeros((0, 3)), ref)
+        raise NotImplementedError('spacing issue, see test')
+        tract = nib.streamlines.load(str(f_trk))
+        ref = get_ref(str(f_trk))
+
+        # points assumed in xyz space
+        ref.affine[:3, :3] = np.eye(3)
+
+        if tract.streamlines:
+            pc_gen = (PointCloud.from_array(line)
+                      for line in tract.streamlines)
+            return PointCloud(set().union(*pc_gen), ref=ref)
+        else:
+            return PointCloud(np.zeros((0, 3)), ref)
 
     @staticmethod
-    def from_mask_array(x, **kwargs):
-        # convert to array of ijk idx
+    def from_mask(x, **kwargs):
+        # convert to array of 3-tuple
         x = np.vstack(np.where(x)).T
-        return PointCloud.from_ijk_array(x, **kwargs)
+
+        if isinstance(x, Mask):
+            if 'ref' in kwargs.keys() and x.ref != kwargs['ref']:
+                raise AttributeError('ref overspecified')
+            kwargs['ref'] = x.ref
+
+        return PointCloud.from_array(x, **kwargs)
 
     @staticmethod
-    def from_ijk_array(x, **kwargs):
-        ijk_gen = (tuple(_x) for _x in x)
-        return PointCloud(ijk_gen, **kwargs)
+    def from_array(x, **kwargs):
+        gen = (tuple(_x) for _x in x)
+        return PointCloud(gen, **kwargs)
 
     def __init__(self, *args, ref=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,7 +70,7 @@ class PointCloud(set):
             # defaults to rasmm with same shape
             ref = RefSpace(affine=np.eye(self.dim + 1), shape=self.ref.shape)
 
-        x = self.ref.to_rasmm(self.to_ijk_array())
+        x = self.ref.to_rasmm(self.to_array())
 
         ref_to = get_ref(ref)
         x = ref_to.from_rasmm(x)
@@ -66,34 +79,27 @@ class PointCloud(set):
         if round:
             x = np.rint(x).astype(int)
 
-        return PointCloud.from_ijk_array(x, ref=ref)
+        return PointCloud.from_array(x, ref=ref)
 
-    def to_mask_array(self, idx_err_flag=True):
-        """ builds mask array, default 1 in voxels with pt present, 0 otherwise
-
-        Args:
-            idx_err_flag (bool): toggles if error on ijk out of self.ref.shape
-
-        Returns:
-            x (np.array): 1s where ijk, 0s elsewhere
-        """
-
-        # init array
-        array = np.zeros(self.ref.shape, dtype=bool)
-
-        # throw error if any idx is outside (and idx_err_flag)
-        for x in self:
-            try:
-                # set mask to 1
-                array[x] = 1
-            except IndexError:
-                if idx_err_flag:
-                    # only throw error if idx_err_flag
-                    IndexError(f'{x} out of bounds in shape {self.ref.shape}')
-        return array
-
-    def to_ijk_array(self):
+    def to_array(self):
         return np.vstack(self)
+
+    def to_mask(self, ref=None, shape=None):
+        if (ref is None) == (shape is None):
+            raise AttributeError('either ref xor shape required')
+
+        if ref is None:
+            pc = self
+        else:
+            shape = ref.shape
+            pc = self.swap_ref(ref)
+
+        mask = np.zeros(shape)
+        for _x in pc:
+            _x = tuple(np.rint(_x).astype(int))
+            mask[_x] = 1
+
+        return Mask(mask, ref=ref)
 
     # https://stackoverflow.com/questions/798442/what-is-the-correct-or-best-way-to-subclass-the-python-set-class-adding-a-new
     @classmethod

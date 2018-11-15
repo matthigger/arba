@@ -57,7 +57,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
         dict_highlight = {'linewidths': 3, 'edgecolors': 'k'}
 
     # get pts with effect mask
-    if mask is not None and not isinstance(mask, set):
+    if mask is not None and not isinstance(mask, Mask):
         mask = Mask.from_nii(mask)
 
     # get node_pos

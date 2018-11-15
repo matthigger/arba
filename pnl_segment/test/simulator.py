@@ -10,19 +10,20 @@ from pnl_data.set.cidar_post import get_name
 from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator
 
-num_locations = 10
-snr_vec = np.logspace(-2, 2, 20)
+num_locations = 4
+snr_vec = np.logspace(-2, 2, 7)
 # snr_vec = [1]
 p_effect = .5
-effect_rad = 4
+effect_rad = (1, 1, 10)
 active_rad = 4
 obj = 'maha'
 feat_list = ['fa', 'md']
+effect_u = np.array([1, 0])
 resample = False
 par_flag = False
 f_rba = folder_data / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
 folder = folder_data / '2018_Nov_12_08_16AM31'
-# folder = None
+# folder = folder_data / 'one_vs_all'
 
 np.random.seed(1)
 random.seed(1)
@@ -66,7 +67,8 @@ for snr in snr_vec:
              'active_rad': active_rad,
              'effect_mask': effect_mask,
              'f_rba': f_rba,
-             'resample': resample}
+             'resample': resample,
+             'u': effect_u}
         arg_list.append(d)
         if not par_flag:
             sim.run_effect(verbose=True, **d)
