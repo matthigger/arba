@@ -270,8 +270,8 @@ class Effect:
 
         # choose effect centers via prior array (idx is linear idx)
         p = prior_array.flatten()
-        p = p / sum(p)
-        idx = np.random.choice(range(len(p)), size=n, p=p)
+        p = np.array(p / sum(p))
+        idx = np.random.choice(range(p.size), size=n, p=p)
 
         # build mask of effect centers
         eff_mask = np.zeros(shape)
