@@ -17,11 +17,19 @@ class RegionKL(Region):
         of the entire region stands in.  this is a measurement of how accurate
         the kl of the region represents the kl of its constituent voxels
         """
-        return float(self.error_fs.cov) * len(self)
+        d = self._obj - self.constit_obj
+        return np.inner(d, d)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, constit_obj=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.error_fs = FeatStatSingle(mu=self.kl)
+
+        if constit_obj is None:
+            self.constit_obj = np.array(self._obj)
+        else:
+            self.constit_obj = np.array(constit_obj)
+
+        if len(self.constit_obj.shape) > 1:
+            raise AttributeError('constit_obj shape isnt 1d')
 
     def get_obj(self):
         """ negative symmetric kullback liebler divergance * len(self.pc_ijk)
@@ -54,17 +62,19 @@ class RegionKL(Region):
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:
             reg_out = super().__add__(other)
-            reg_out.error_fs = self.error_fs
+            reg_out.constit_obj = self.constit_obj
             return reg_out
 
         if not isinstance(other, type(self)):
             raise TypeError
 
         reg_out = super().__add__(other)
-        reg_out.error_fs = self.error_fs + other.error_fs
+        reg_out.constit_obj = np.hstack((self.constit_obj, other.constit_obj))
 
-        if reg_out.error_fs.n != len(reg_out):
-            raise AttributeError
+        if reg_out.constit_obj.size != len(reg_out):
+            raise AttributeError('size mismatch')
+        if len(self.constit_obj.shape) > 1:
+            raise AttributeError('constit_obj shape isnt 1d')
 
         return reg_out
 
