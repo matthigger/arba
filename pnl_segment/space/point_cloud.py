@@ -44,6 +44,11 @@ class PointCloud(set):
         return PointCloud.from_array(x, **kwargs)
 
     @staticmethod
+    def from_nii(f_nii):
+        mask = Mask.from_nii(f_nii)
+        return PointCloud.from_mask(mask)
+
+    @staticmethod
     def from_array(x, **kwargs):
         gen = (tuple(_x) for _x in x)
         return PointCloud(gen, **kwargs)
