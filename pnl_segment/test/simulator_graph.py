@@ -2,113 +2,130 @@ import shlex
 import subprocess
 from collections import defaultdict
 
-import matplotlib.pyplot as plt
 import nibabel as nib
-import numpy as np
-import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-from tqdm import tqdm
+from scipy.stats import chi2
 
-from mh_pytools import file
+from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.plot.snr_vs_dice import snr_vs_dice
-from pnl_segment.space.mask import Mask, get_ref
+from pnl_segment.region.stats import BenHochYek
+from pnl_segment.seg_graph import SegGraph
+from pnl_segment.space import Mask, get_ref
 
 spec = .05
 obj = 'maha'
-folder_out = folder / '2018_Nov_12_08_16AM31'
+folder_out = folder / 'rad_5'
 f_stat_template = '{obj}_{method}.nii.gz'
-method_list = ['vba', 'arba', 'rba', 'truth']
-tfce = False
-f_out_pdf = folder_out / 'snr_auc.pdf'
+f_sg_template = 'sg_{method}.p.gz'
+method_set = {'vba', 'arba', 'rba', 'truth', 'tfce'}
+par_flag = True
 
 
-# mask_whole = Mask.from_nii(f_nii=folder_fill / 'active_mask.nii.gz')
+class regMahaDm:
+    def __init__(self, pc_ijk, maha, pval):
+        self.pc_ijk = pc_ijk
+        self.maha = maha
+        self.pval = pval
 
 
-def fill(f_stat, f_fill, mask, f_out):
-    stat = nib.load(str(f_stat)).get_data()
-    fill = nib.load(str(f_fill)).get_data()
-    for ijk in mask.to_point_cloud():
-        fill[ijk] = stat[ijk]
-    img = nib.Nifti1Image(fill, nib.load(str(f_stat)).affine)
-    img.to_filename(str(f_out))
-
-
-# get mask of img
-sg_eff_dict = defaultdict(list)
-method_snr_auc_dict = defaultdict(list)
-folder_missing_list = list()
-for folder in tqdm(folder_out.glob('*snr*'), desc='experiment'):
-    if not folder.is_dir():
-        continue
+def get_dice_auc(folder):
+    method_snr_auc_dict = defaultdict(list)
+    method_snr_dice_dict = defaultdict(list)
+    method_snr_sens_spec_dict = defaultdict(list)
 
     # load active mask (of experiment)
-    mask = Mask.from_nii(folder / 'active_mask.nii.gz')
+    mask_active = Mask.from_nii(folder / 'active_mask.nii.gz')
+    eff = file.load(folder / 'effect.p.gz')
 
     # build tfce img + compute auc
     f_vba = folder / f_stat_template.format(obj=obj, method='vba')
-    if tfce:
+    if 'tfce' in method_set:
         f_tfce = folder / f_stat_template.format(obj=obj, method='tfce')
         cmd = f'fslmaths {f_vba} -tfce 2 0.5 6 {f_tfce}'
         subprocess.Popen(shlex.split(cmd)).wait()
-        method_list.append('tfce')
 
-    # compute auc
-    eff = file.load(folder / 'effect.p.gz')
-    for method in method_list:
-        f_sg = folder / f'sg_{method}.p.gz'
-        if f_sg.exists():
-            sg = file.load(f_sg)
-            sg_eff_dict[method].append((sg, eff))
+        # build seg_graph_tfce (needed to compute dice)
+        f_vba_sg = folder / 'sg_vba.p.gz'
+        sg_vba = file.load(f_vba_sg)
 
-            def is_sig(reg):
-                return reg.pval < (spec / len(sg))
+        maha_tfce = nib.load(str(f_tfce)).get_data()
+        sg_tfce = SegGraph()
+        for reg in sg_vba.nodes:
+            ijk = next(iter(reg.pc_ijk))
+            maha = maha_tfce[tuple(ijk)]
+            pval = chi2.sf(maha, df=2)
+            reg_dm = regMahaDm(pc_ijk=reg.pc_ijk, maha=maha, pval=pval)
+            sg_tfce.add_node(reg_dm)
+        file.save(sg_tfce, folder / 'sg_tfce.p.gz')
 
-            sg.to_nii(f_out=folder / f'detected_{method}.nii.gz',
-                      ref=get_ref(f_vba),
-                      fnc=is_sig)
+    # compute dice / auc
+    for method in method_set:
+        # compute dice
+        f_sg = folder / f_sg_template.format(method=method)
+        sg = file.load(f_sg)
+
+        # determines if significant
+        pval_list = [reg.pval for reg in sg.nodes]
+        thresh = BenHochYek(pval_list, sig=spec)
+
+        def is_sig(reg):
+            return reg.pval < thresh
+
+        x = sg.to_array(fnc=is_sig)
+
+        dice = eff.get_dice(x)
+        ss = eff.get_sens_spec(x, mask_active)
+        method_snr_sens_spec_dict[method, eff.snr].append(ss)
+
+        f_out = folder / f'detected_{method}.nii.gz'
+        img = nib.Nifti1Image(x, affine=get_ref(f_vba).affine)
+        img.to_filename(str(f_out))
+
+        method_snr_dice_dict[method, eff.snr].append(dice)
+
+        # compute auc
         f = folder / f_stat_template.format(obj=obj, method=method)
         try:
             x = nib.load(str(f)).get_data()
         except FileNotFoundError:
             continue
-        auc = eff.get_auc(x, mask=mask)
+        auc = eff.get_auc(x, mask=mask_active)
 
         method_snr_auc_dict[method, eff.snr].append(auc)
 
-# plot snr vs dice
-f_out = folder_out / 'snr_dice.pdf'
-with PdfPages(str(f_out)) as pdf:
-    snr_vs_dice(sg_eff_dict)
-    plt.gca().set_xscale('log')
-    pdf.savefig(plt.gcf())
-    plt.close()
+    return method_snr_dice_dict, method_snr_auc_dict, method_snr_sens_spec_dict, eff
+
+
+# get mask of img
+arg_list = list()
+for folder in folder_out.glob('*snr*'):
+    if not folder.is_dir():
+        continue
+    arg_list.append({'folder': folder})
+
+method_snr_auc_dict = defaultdict(list)
+method_snr_dice_dict = defaultdict(list)
+method_snr_sens_spec_dict = defaultdict(list)
+eff_dict = defaultdict(list)
+if par_flag:
+    res = parallel.run_par_fnc(get_dice_auc, arg_list)
+    for d_dice, d_auc, d_ss, eff in res:
+        for k in d_dice.keys():
+            method_snr_auc_dict[k].append(d_auc[k])
+            method_snr_dice_dict[k].append(d_dice[k])
+            method_snr_sens_spec_dict[k].append(d_ss[k])
+        eff_dict[eff.snr].append(eff)
+
+else:
+    for d in arg_list:
+        d_dice, d_auc, d_ss, eff = get_dice_auc(**d)
+        for k in d_dice.keys():
+            method_snr_auc_dict[k].append(d_auc[k])
+            method_snr_dice_dict[k].append(d_dice[k])
+            method_snr_sens_spec_dict[k].append(d_ss[k])
+        eff_dict[eff.snr].append(eff)
 
 # save
-f_out = folder_out / 'snr_auc.p.gz'
-file.save(method_snr_auc_dict, f_out)
-
-# plot
-method_set = set(method for method, _ in method_snr_auc_dict.keys())
-sns.set(font_scale=1.2)
-plt.subplots(1, 1)
-plt.gca().set_xscale("log", nonposx='clip')
-for method in method_set:
-    snr_auc_dict = [(snr, np.mean(auc_list))
-                    for (_method, snr), auc_list in method_snr_auc_dict.items()
-                    if _method == method]
-    snr_auc = sorted(snr_auc_dict)
-    snr = [x[0] for x in snr_auc]
-    auc = [x[1] for x in snr_auc]
-    plt.plot(snr, auc, label=method)
-plt.legend()
-# plt.gca().set_xscale('log')
-plt.gca().set_xlim(left=min(snr), right=max(snr))
-plt.xlabel('maha / voxel')
-plt.ylabel('auc')
-
-fig = plt.gcf()
-fig.set_size_inches(10, 7)
-with PdfPages(str(f_out_pdf)) as pdf:
-    pdf.savefig(fig)
+f_out = folder_out / 'snr_auc_dice.p.gz'
+file.save((
+          method_snr_auc_dict, method_snr_dice_dict, method_snr_sens_spec_dict,
+          eff_dict), f_out)

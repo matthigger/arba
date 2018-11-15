@@ -1,2 +1,3 @@
 /poly_regress.p.gz
 /poly_regress_r2.nii.gz
+*.right.mask.nii.gz
