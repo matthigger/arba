@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def BenHochYek(p_list, sig=.05):
     """ returns threshold to reject null
 
@@ -19,6 +22,8 @@ def BenHochYek(p_list, sig=.05):
     0.0235
     """
 
+    raise NotImplementedError('needs testing')
+
     c_m = 1
     m = len(p_list)
 
@@ -36,3 +41,32 @@ def BenHochYek(p_list, sig=.05):
             return thresh
 
     return 0
+
+
+def HolmBonf(p_list, sig=.05):
+    """
+    >>> p_list = [.01, .04, .005, .03]
+    >>> [p for p in p_list if p < HolmBonf(p_list)]
+    [0.01, 0.005]
+    >>> p_list = [.01, .02]
+    >>> [p for p in p_list if p < HolmBonf(p_list)]
+    [0.01, 0.02]
+    >>> p_list = [.05, .05]
+    >>> [p for p in p_list if p < HolmBonf(p_list)]
+    []
+    """
+    p_list = sorted(p_list)
+    m = len(p_list)
+
+    for k, p in enumerate(p_list):
+        if p > sig / (m - k):
+            break
+        k += 1
+    if k == m:
+        # all are significant
+        return 1
+    elif k == 0:
+        # nothing is significant
+        return 0
+    else:
+        return np.mean((p_list[k], p_list[k - 1]))
