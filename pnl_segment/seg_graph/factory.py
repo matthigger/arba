@@ -40,8 +40,8 @@ def seg_graph_factory(obj, file_tree_dict, history=False):
     if any(ref_list[0] != ref for ref in ref_list[1:]):
         raise AttributeError('ref space mismatch')
 
-    pc_gen = (ft.get_point_cloud() for ft in file_tree_dict.values())
-    ijk_set = set.intersection(*pc_gen)
+    ijk_set = (set(ft.ijk_fs_dict.keys()) for ft in file_tree_dict.values())
+    ijk_set = set.intersection(*ijk_set)
     for ijk in ijk_set:
         # construct pc_ijk
         pc_ijk = PointCloud({tuple(ijk)}, ref=ref_list[0])
