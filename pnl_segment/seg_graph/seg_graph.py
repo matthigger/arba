@@ -9,11 +9,15 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 import mh_pytools.parallel
-from ..space import get_ref
 from ..region import Region
+from ..space import get_ref
 
 
 class SegGraph(nx.Graph):
+    @property
+    def error(self):
+        return sum(reg.error for reg in self)
+
     def __init__(self):
         # see factory, use of __init__ directly is discouraged
         super().__init__()
