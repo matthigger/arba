@@ -7,7 +7,7 @@ from mh_pytools import file
 from pnl_data.set.cidar_post import folder
 from pnl_segment.plot.snr_vs_dice import line_confidence
 
-folder_out = folder / 'rad_5'
+folder_out = folder / '2018_Nov_16_12_34AM35'
 
 # load
 f_out = folder_out / 'snr_auc_dice.p.gz'

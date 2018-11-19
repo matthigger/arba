@@ -24,4 +24,27 @@ def size_vs_error(sg_hist):
     plt.legend()
 
     plt.xlabel('size (num regions in segmentation)')
-    plt.ylabel('error in cluster (var added from voxel to region)')
+    plt.ylabel('error (var added from voxel to region)')
+
+
+def size_vs_error_normed(sg_hist):
+    size = list()
+    error = list()
+
+    for pg in sg_hist:
+        size.append(len(pg))
+        error.append(sum(r.error for r in pg.nodes))
+
+    sns.set()
+    plt.plot(size, error, label='error')
+
+    max_err = max(error)
+    error_reg = [e / max_err for e in error]
+
+    plt.plot(size, error_reg, label='normalized error')
+    plt.legend()
+    plt.gca().set_xscale('log')
+    plt.gca().set_yscale('log')
+
+    plt.xlabel('size (num regions in segmentation)')
+    plt.ylabel('normalized error (var added from voxel to region)')

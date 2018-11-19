@@ -7,13 +7,14 @@ from scipy.stats import chi2
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.region.stats import BenHochYek
+from pnl_segment.region.stats import HolmBonf
 from pnl_segment.seg_graph import SegGraph
+import os
 from pnl_segment.space import Mask, get_ref
 
 spec = .05
 obj = 'maha'
-folder_out = folder / 'rad_5'
+folder_out = folder / '2018_Nov_16_12_34AM35'
 f_stat_template = '{obj}_{method}.nii.gz'
 f_sg_template = 'sg_{method}.p.gz'
 method_set = {'vba', 'arba', 'rba', 'truth', 'tfce'}
@@ -34,7 +35,8 @@ def get_dice_auc(folder):
 
     # load active mask (of experiment)
     mask_active = Mask.from_nii(folder / 'active_mask.nii.gz')
-    eff = file.load(folder / 'effect.p.gz')
+    f_eff = folder / 'effect.p.gz'
+    eff = file.load(f_eff)
 
     # build tfce img + compute auc
     f_vba = folder / f_stat_template.format(obj=obj, method='vba')
@@ -57,6 +59,10 @@ def get_dice_auc(folder):
             sg_tfce.add_node(reg_dm)
         file.save(sg_tfce, folder / 'sg_tfce.p.gz')
 
+    f_detect_stat = folder / 'detect_stats.txt'
+    if f_detect_stat.exists():
+        os.remove(str(f_detect_stat))
+
     # compute dice / auc
     for method in method_set:
         # compute dice
@@ -65,7 +71,10 @@ def get_dice_auc(folder):
 
         # determines if significant
         pval_list = [reg.pval for reg in sg.nodes]
-        thresh = BenHochYek(pval_list, sig=spec)
+        if method == 'arba':
+            thresh = spec / len(pval_list)
+        else:
+            thresh = HolmBonf(pval_list, sig=spec)
 
         def is_sig(reg):
             return reg.pval < thresh
@@ -75,6 +84,19 @@ def get_dice_auc(folder):
         dice = eff.get_dice(x)
         ss = eff.get_sens_spec(x, mask_active)
         method_snr_sens_spec_dict[method, eff.snr].append(ss)
+
+        with open(str(f_detect_stat), 'a') as f:
+            r_max = max(sg.nodes, key=lambda r: r.maha)
+
+            s_list = [f'{method}:',
+                      f'    dice: {dice:.3f}',
+                      f'    sens: {ss[0]:.3f}',
+                      f'    spec: {ss[1]:.3f}',
+                      f'    num_reg: {len(sg)}',
+                      f'    thresh: {thresh:.2e}',
+                      f'    max maha: {r_max.maha:.3e}',
+                      f'    min pval: {r_max.pval:.3e}']
+            f.write('\n'.join(s_list) + '\n\n')
 
         f_out = folder / f'detected_{method}.nii.gz'
         img = nib.Nifti1Image(x, affine=get_ref(f_vba).affine)
@@ -127,5 +149,5 @@ else:
 # save
 f_out = folder_out / 'snr_auc_dice.p.gz'
 file.save((
-          method_snr_auc_dict, method_snr_dice_dict, method_snr_sens_spec_dict,
-          eff_dict), f_out)
+    method_snr_auc_dict, method_snr_dice_dict, method_snr_sens_spec_dict,
+    eff_dict), f_out)
