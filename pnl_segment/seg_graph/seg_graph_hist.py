@@ -87,6 +87,27 @@ class SegGraphHistory(SegGraph):
 
             yield build_part_graph(reg_set)
 
+    def get_span_less_p_error(self, p=.5):
+        """ gets the smallest (from hist) with at most p perc of current error
+
+        Returns:
+            seg_graph (SegGraph):
+        """
+
+        # create a list of all seg_graph in history
+        sg_list = list(self)
+
+        # err_max is error if considering entire volume as 1 region
+        sg_smallest = sg_list[-1]
+        err_thresh = sg_smallest.error * p
+
+        return sg_list[-20]
+
+        # search from smallest to largest
+        for sg in reversed(sg_list):
+            if sg.error <= err_thresh:
+                return sg
+
     def get_min_error_span(self):
         """ returns the seg_graph which minimzes regularized error
 
@@ -102,9 +123,9 @@ class SegGraphHistory(SegGraph):
         size = list()
         error = list()
 
-        for seg_graph in self:
-            size.append(len(seg_graph))
-            error.append(sum(r.error for r in seg_graph.nodes))
+        for sg in self:
+            size.append(len(sg))
+            error.append(sg.error)
 
         # find
         max_err = max(error)
@@ -162,8 +183,7 @@ class SegGraphHistory(SegGraph):
 
         # build seg_graph
         seg_graph = SegGraph()
-        seg_graph.obj_fnc = self.obj_fnc
-        seg_graph.obj_fnc_max = np.inf
+        seg_graph.obj_fnc_max = self.obj_fnc_max
         seg_graph.add_nodes_from(min_reg_list)
 
         return seg_graph
