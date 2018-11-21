@@ -17,12 +17,11 @@ class PointCloud(set):
     def from_tract(f_trk):
         """ build from trk file
         """
-        raise NotImplementedError('spacing issue, see test')
         tract = nib.streamlines.load(str(f_trk))
         ref = get_ref(str(f_trk))
 
         # points assumed in xyz space
-        ref.affine[:3, :3] = np.eye(3)
+        ref.affine = np.eye(4)
 
         if tract.streamlines:
             pc_gen = (PointCloud.from_array(line)
