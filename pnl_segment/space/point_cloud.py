@@ -95,6 +95,7 @@ class PointCloud(set):
         if ref is None:
             pc = self
         else:
+            ref = get_ref(ref)
             shape = ref.shape
             pc = self.swap_ref(ref)
 
