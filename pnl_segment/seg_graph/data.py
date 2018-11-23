@@ -92,12 +92,16 @@ class FileTree:
                 elif self.ref != get_ref(f_nii):
                     raise AttributeError('space mismatch')
 
-    def load(self, verbose=False):
+    def load(self, ijk_set=None, verbose=False):
         """ loads files, adds data to statistics per voxel
 
         Args:
+            ijk_set (Set): ijk tuples to load
             verbose (bool): toggles command line output
         """
+
+        if ijk_set is None:
+            ijk_set = self.point_cloud
 
         # store files
         tqdm_dict = {'disable': not verbose,
@@ -105,7 +109,7 @@ class FileTree:
         for sbj, f_nii_dict in tqdm(self.sbj_feat_file_tree.items(),
                                     **tqdm_dict):
             # get data
-            ijk_data_dict = self.get_ijk_fs_dict(sbj, ijk_set=self.point_cloud)
+            ijk_data_dict = self.get_ijk_fs_dict(sbj, ijk_set=ijk_set)
 
             # update stats per sbj
             for ijk, fs in ijk_data_dict.items():
@@ -196,9 +200,6 @@ class FileTree:
             f_nii_list += list(self.sbj_feat_file_tree[sbj].values())
         pc_list = [PointCloud.from_nii(f_nii) for f_nii in f_nii_list]
         pc = PointCloud(set.intersection(*pc_list), ref=self.ref)
-
-        if len(self.ijk_fs_dict) not in (0, len(pc)):
-            raise AttributeError('point cloud doesnt match ijk_fs_dict')
 
         return pc
 
