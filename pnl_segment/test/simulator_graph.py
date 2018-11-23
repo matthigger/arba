@@ -1,24 +1,24 @@
+import os
 import shlex
 import subprocess
 from collections import defaultdict
 
 import nibabel as nib
 from scipy.stats import chi2
+from statsmodels.stats.multitest import multipletests
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.region.stats import HolmBonf
 from pnl_segment.seg_graph import SegGraph
-import os
 from pnl_segment.space import Mask, get_ref
 
 spec = .05
-obj = 'maha'
 folder_out = folder / '2018_Nov_16_12_34AM35'
-f_stat_template = '{obj}_{method}.nii.gz'
+f_stat_template = 'wmaha_{method}.nii.gz'
 f_sg_template = 'sg_{method}.p.gz'
-method_set = {'vba', 'arba', 'rba', 'truth', 'tfce'}
+method_set = {'vba', 'arba', 'rba', 'perf'}
 par_flag = True
+recompute_arba = True
 
 
 class regMahaDm:
@@ -26,6 +26,16 @@ class regMahaDm:
         self.pc_ijk = pc_ijk
         self.maha = maha
         self.pval = pval
+
+
+def arba_fnc(reg, sig=.05):
+    c = reg.pval
+    return c
+    # if c < sig:
+    #     return c
+    #
+    # # invalid
+    # return None
 
 
 def get_dice_auc(folder):
@@ -39,9 +49,9 @@ def get_dice_auc(folder):
     eff = file.load(f_eff)
 
     # build tfce img + compute auc
-    f_vba = folder / f_stat_template.format(obj=obj, method='vba')
+    f_vba = folder / f_stat_template.format(method='vba')
     if 'tfce' in method_set:
-        f_tfce = folder / f_stat_template.format(obj=obj, method='tfce')
+        f_tfce = folder / f_stat_template.format(method='tfce')
         cmd = f'fslmaths {f_vba} -tfce 2 0.5 6 {f_tfce}'
         subprocess.Popen(shlex.split(cmd)).wait()
 
@@ -59,25 +69,38 @@ def get_dice_auc(folder):
             sg_tfce.add_node(reg_dm)
         file.save(sg_tfce, folder / 'sg_tfce.p.gz')
 
+    if recompute_arba:
+        sg_hist = file.load(folder / 'sg_hist.p.gz')
+        # sg_arba = sg_hist.get_spanning_region(arba_fnc, max=False)
+        # sg_arba = sg_hist.get_n(10)
+        sg_arba = sg_hist.get_sig_hierarchical()
+        print(f'snr: {eff.snr:.2e}, len(sg_arba): {len(sg_arba)}')
+        file.save(sg_arba, folder / 'sg_arba.p.gz')
+
     f_detect_stat = folder / 'detect_stats.txt'
     if f_detect_stat.exists():
         os.remove(str(f_detect_stat))
 
     # compute dice / auc
-    for method in method_set:
+    for method in sorted(method_set):
         # compute dice
         f_sg = folder / f_sg_template.format(method=method)
         sg = file.load(f_sg)
 
         # determines if significant
-        pval_list = [reg.pval for reg in sg.nodes]
-        if method == 'arba':
-            thresh = spec / len(pval_list)
+        if method is 'arba':
+            def is_sig(*args, **kwargs):
+                return True
         else:
-            thresh = HolmBonf(pval_list, sig=spec)
+            pval_list = [reg.pval for reg in sg.nodes]
+            is_sig_vec = multipletests(pval_list, alpha=spec, method='hs')[0]
+            sig_reg_set = {r for r, is_sig in zip(sg.nodes, is_sig_vec) if
+                           is_sig}
+            sig_reg_pval_list = [r.pval for r in sig_reg_set]
+            thresh = max(sig_reg_pval_list, default=spec)
 
-        def is_sig(reg):
-            return reg.pval < thresh
+            def is_sig(reg):
+                return reg in sig_reg_set
 
         x = sg.to_array(fnc=is_sig)
 
@@ -86,16 +109,15 @@ def get_dice_auc(folder):
         method_snr_sens_spec_dict[method, eff.snr].append(ss)
 
         with open(str(f_detect_stat), 'a') as f:
-            r_max = max(sg.nodes, key=lambda r: r.maha)
-
             s_list = [f'{method}:',
                       f'    dice: {dice:.3f}',
                       f'    sens: {ss[0]:.3f}',
                       f'    spec: {ss[1]:.3f}',
-                      f'    num_reg: {len(sg)}',
-                      f'    thresh: {thresh:.2e}',
-                      f'    max maha: {r_max.maha:.3e}',
-                      f'    min pval: {r_max.pval:.3e}']
+                      f'    num_reg: {len(sg)}']
+
+            if method != 'arba':
+                s_list += [f'    pval thresh: {thresh:.2e}',
+                           f'    pval_sig: {sorted(sig_reg_pval_list)}']
             f.write('\n'.join(s_list) + '\n\n')
 
         f_out = folder / f'detected_{method}.nii.gz'
@@ -105,11 +127,10 @@ def get_dice_auc(folder):
         method_snr_dice_dict[method, eff.snr].append(dice)
 
         # compute auc
-        f = folder / f_stat_template.format(obj=obj, method=method)
-        try:
-            x = nib.load(str(f)).get_data()
-        except FileNotFoundError:
-            continue
+        def get_pval(reg):
+            return reg.pval
+
+        x = sg.to_array(get_pval)
         auc = eff.get_auc(x, mask=mask_active)
 
         method_snr_auc_dict[method, eff.snr].append(auc)

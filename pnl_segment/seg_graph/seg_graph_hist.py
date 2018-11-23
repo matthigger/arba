@@ -27,6 +27,59 @@ class SegGraphHistory(SegGraph):
         self.reg_history_list.append(reg_sum)
         return reg_sum
 
+    def get_sig_hierarchical(self, alpha=.05):
+        """ builds seg_graph of 'edge significant' reg
+
+        todo: ref
+
+        todo: no start @ root, start @ min pval ... can we holm these init reg?
+
+        a region is 'edge significant' if it is significant but none of the
+        parent regions which comprise it are.  if there are no comprising
+        regions (ie it is a single voxel) then it is edge significant.
+
+        Args:
+            alpha (float): false positive rate
+
+        Returns:
+            sg_sig (SegGraph): all significant nodes
+        """
+        # get root nodes
+        reg_root_list = [r for r in self.tree_history
+                         if not nx.descendants(self.tree_history, r)]
+
+        # adjust significance for root nodes
+        p = alpha / len(reg_root_list)
+
+        # build seg_graph
+        sg_sig = SegGraph()
+        sg_sig.obj_fnc_max = self.obj_fnc_max
+
+        # build set of significant regions
+        sig_reg_set = {(r, p) for r in reg_root_list if r.pval <= p}
+
+        while sig_reg_set:
+            # choose any significant region
+            r, p = sig_reg_set.pop()
+
+            # get list of its significant parents
+            r_parents = list(self.tree_history.predecessors(r))
+            p *= 1 / len(r_parents)
+            r_parents = [r for r in r_parents if r.pval <= p]
+            # todo: root nodes need not divide p
+
+            if not r_parents:
+                # if no significant parents, r is 'edge significant'
+                sg_sig.add_node(r)
+            else:
+                # if any child is significant, add it to searchable set
+                sig_reg_set |= {(r, p) for r in r_parents}
+
+        return sg_sig
+
+    def get_n(self, n):
+        return list(self)[-n]
+
     def get_max_fnc_array(self, fnc, ref):
         """ gets array which maximizes fnc
 
@@ -87,7 +140,7 @@ class SegGraphHistory(SegGraph):
 
             yield build_part_graph(reg_set)
 
-    def get_span_less_p_error(self, p=.5):
+    def get_span_less_p_error(self, p=.9):
         """ gets the smallest (from hist) with at most p perc of current error
 
         Returns:
@@ -101,11 +154,10 @@ class SegGraphHistory(SegGraph):
         sg_smallest = sg_list[-1]
         err_thresh = sg_smallest.error * p
 
-        return sg_list[-20]
-
         # search from smallest to largest
         for sg in reversed(sg_list):
             if sg.error <= err_thresh:
+                print(f'len of final sg: {len(sg)}')
                 return sg
 
     def get_min_error_span(self):
@@ -152,11 +204,22 @@ class SegGraphHistory(SegGraph):
                        which can be ordered
             max (bool): toggles whether max fnc is chosen (otherwise min)
         """
-        reg_list = self.tree_history.nodes
-        f = [fnc(r) for r in reg_list]
+        # build seg_graph
+        seg_graph = SegGraph()
+        seg_graph.obj_fnc_max = self.obj_fnc_max
 
-        # sort a list of regions by fnc
-        reg_list = sorted(zip(f, reg_list), reverse=max)
+        # compute fnc + sort
+        reg_list = []
+        for r in self.tree_history.nodes:
+            f = fnc(r)
+            if f is None:
+                # None acts as sentinel for invalid region
+                continue
+            reg_list.append((f, r))
+        reg_list = sorted(reg_list, reverse=max)
+
+        if not reg_list:
+            return seg_graph
 
         # a list of all regions which contain some ijk value which has been
         # included in min_reg_list
@@ -164,7 +227,7 @@ class SegGraphHistory(SegGraph):
 
         # get list of spanning region with min fnc
         min_reg_list = list()
-        while unspanned_reg:
+        while unspanned_reg and reg_list:
             # get reg with min val
             _z, reg = reg_list.pop(0)
 
@@ -181,9 +244,7 @@ class SegGraphHistory(SegGraph):
                 # region intersects some ijk which is already in min_reg_list
                 continue
 
-        # build seg_graph
-        seg_graph = SegGraph()
-        seg_graph.obj_fnc_max = self.obj_fnc_max
+        # add nodes
         seg_graph.add_nodes_from(min_reg_list)
 
         return seg_graph

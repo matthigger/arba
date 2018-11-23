@@ -17,7 +17,7 @@ method_snr_auc_dict, method_snr_dice_tree, method_snr_sens_spec_dict, eff_dict =
 method_list = sorted({x[0] for x in method_snr_sens_spec_dict.keys()})
 snr_list = sorted({x[1] for x in method_snr_sens_spec_dict.keys()})
 
-method_list.remove('truth')
+method_list.remove('perf')
 
 sns.set(font_scale=1.2)
 cm = plt.get_cmap('Set1')
