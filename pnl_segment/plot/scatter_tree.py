@@ -1,12 +1,11 @@
 import matplotlib as mpl
 import networkx as nx
-import nibabel as nib
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from pnl_segment.space.mask import Mask
 from pnl_segment.region import RegionMaha
+from pnl_segment.space.mask import Mask
 
 
 def size_v_mu_diff(*args, **kwargs):
@@ -43,6 +42,15 @@ def size_v_mahalanobis(*args, **kwargs):
         return RegionMaha.get_obj(reg) * len(reg)
 
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+
+
+def size_v_pval(*args, **kwargs):
+    ylabel = 'pval'
+
+    def get_pval(reg):
+        return reg.pval
+
+    scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
 
 
 def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,

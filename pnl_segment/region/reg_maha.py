@@ -1,4 +1,4 @@
-from scipy.stats import chi2
+from scipy.stats import f
 
 from .reg_kl import RegionKL
 
@@ -28,5 +28,9 @@ class RegionMaha(RegionKL):
 
     @property
     def pval(self):
-        d = next(iter(self.fs_dict.values())).d
-        return chi2.sf(self.maha * len(self), df=d)
+        n, m = [fs.n for fs in self.fs_dict.values()]
+        p = next(iter(self.fs_dict.values())).d
+
+        f_stat = self.maha * n * m / (n + m)
+        f_stat *= (n + m - p - 1) / (p * (n + m - 2))
+        return f.sf(f_stat, dfd=p, dfn=n + m - p - 1)
