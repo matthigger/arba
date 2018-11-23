@@ -77,15 +77,15 @@ class Simulator:
         """ runs experiment
         """
         # get mask of active area
-        mask = self.pc.to_mask(self.ref)
+        mask_active = self.pc.to_mask(self.ref)
         if active_rad is not None:
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(active_rad)
-            mask = np.logical_and(mask_eff_dilated, mask)
+            mask_active = np.logical_and(mask_eff_dilated, mask_active)
 
         # apply mask (and copies file_tree, ft_dict has no memory intersection
         # with self.ft_dict)
-        ft_dict = {label: ft.apply_mask(mask)
+        ft_dict = {label: ft.apply_mask(mask_active)
                    for label, ft in self.ft_dict.items()}
 
         # resample if need be:
@@ -115,7 +115,7 @@ class Simulator:
                                     history=True)
 
         # save mask
-        mask.to_nii(folder / 'active_mask.nii.gz')
+        mask_active.to_nii(folder / 'active_mask.nii.gz')
         self.save_sg(sg=sg_hist, folder=folder, label='vba')
 
         # reduce + save
@@ -143,13 +143,19 @@ class Simulator:
                 self.save_sg(sg=sg_perf, folder=folder, label='perf')
 
     def save_sg(self, sg, label, folder):
-        def weighted_maha(reg):
+        def get_maha(reg):
+            return RegionMaha.get_obj(reg)
+
+        def get_wmaha(reg):
             return RegionMaha.get_obj(reg) * len(reg)
 
         file.save(sg, file=folder / f'sg_{label}.p.gz')
         sg.to_nii(f_out=folder / f'maha_{label}.nii.gz',
                   ref=self.ref,
-                  fnc=weighted_maha)
+                  fnc=get_maha)
+        sg.to_nii(f_out=folder / f'wmaha_{label}.nii.gz',
+                  ref=self.ref,
+                  fnc=get_wmaha)
 
     def run_healthy(self, obj, **kwargs):
         eff = EffectDm()
