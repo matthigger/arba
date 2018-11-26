@@ -44,11 +44,16 @@ def size_v_mahalanobis(*args, **kwargs):
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
-def size_v_pval(*args, **kwargs):
-    ylabel = 'pval'
+def size_v_pval(*args, corrected=False, size=None, **kwargs):
 
-    def get_pval(reg):
-        return reg.pval
+    if corrected:
+        ylabel = 'multi compare corrected pval'
+        def get_pval(reg):
+            return reg.pval * size / len(reg)
+    else:
+        ylabel = 'pval'
+        def get_pval(reg):
+            return reg.pval
 
     scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
 
@@ -110,23 +115,26 @@ def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
         edgelist = [e for e in sg.edges if set(e).issubset(reg_set)]
         nx.draw_networkx_edges(sg, pos=node_pos, edgelist=edgelist)
 
-    # label / cleanup
+    # set log scales
     if log_y:
         ax.set_yscale('log')
 
     if log_x:
         ax.set_xscale('log')
+
+    # label / cleanup
     log_scale_shift = 1.2
     x_list = [x[0] for x in node_pos.values()]
-    y_list = [x[1] for x in node_pos.values()]
+    y_list = [x[1] for x in node_pos.values() if x[1] > 0]
     x_lim = min(x_list) / log_scale_shift, max(x_list) * log_scale_shift
-    y_lim = np.percentile(y_list, 5) / log_scale_shift, max(
-        y_list) * log_scale_shift
+    y_lim = min(y_list) / log_scale_shift, max(y_list) * log_scale_shift
     plt.gca().set_xbound(x_lim)
     plt.gca().set_ybound(y_lim)
+
+    # label
     plt.xlabel('size (vox)')
     plt.ylabel(ylabel)
     if mask is not None:
         cb1 = plt.colorbar(sc, orientation='vertical')
         cb1.set_label(mask_label)
-    plt.minorticks_on()
+    plt.grid(True)
