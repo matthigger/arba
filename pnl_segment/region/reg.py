@@ -55,3 +55,6 @@ class Region:
 
     def get_obj(self):
         raise NotImplementedError
+
+    def reset_obj(self):
+        self.__obj = None

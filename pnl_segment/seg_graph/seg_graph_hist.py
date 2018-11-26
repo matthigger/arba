@@ -1,5 +1,4 @@
 import networkx as nx
-import nibabel as nib
 import numpy as np
 
 from .seg_graph import SegGraph
@@ -12,6 +11,42 @@ class SegGraphHistory(SegGraph):
         tree_history (nx.Digraph): directed seg_graph, from component reg to sum
         reg_history_list (list): stores ordering of calls to combine()
     """
+
+    def __iter__(self):
+        """ iterates through all version of seg_graph through its history
+
+        NOTE: these part_graphs are not connected, neighboring regions do not
+        have edges between them.
+        """
+
+        def build_part_graph(reg_set):
+            # build seg_graph
+            seg_graph = SegGraph()
+            seg_graph.obj_fnc_max = np.inf
+            seg_graph.add_nodes_from(reg_set)
+            return seg_graph
+
+        # get all leaf nodes (reg without ancestors in tree_history)
+        reg_set = set(self.leaf_iter)
+
+        yield build_part_graph(reg_set)
+
+        for reg_next in self.reg_history_list:
+            # subtract the kids, add the next node
+            reg_kids = set(self.tree_history.predecessors(reg_next))
+            reg_set = (reg_set - reg_kids) | {reg_next}
+
+            yield build_part_graph(reg_set)
+
+    @property
+    def leaf_iter(self):
+        return (r for r in self.tree_history.nodes
+                if not nx.ancestors(self.tree_history, r))
+
+    @property
+    def root_iter(self):
+        return (r for r in self.tree_history
+                if not nx.descendants(self.tree_history, r))
 
     def __init__(self):
         super().__init__()
@@ -27,7 +62,7 @@ class SegGraphHistory(SegGraph):
         self.reg_history_list.append(reg_sum)
         return reg_sum
 
-    def get_sig_hierarchical(self, alpha=.05):
+    def cut_hierarchical(self, alpha=.05):
         """ builds seg_graph of 'edge significant' reg
 
         todo: ref
@@ -44,43 +79,47 @@ class SegGraphHistory(SegGraph):
         Returns:
             sg_sig (SegGraph): all significant nodes
         """
-        # get root nodes
-        reg_root_list = [r for r in self.tree_history
-                         if not nx.descendants(self.tree_history, r)]
-
-        # adjust significance for root nodes
-        p = alpha / len(reg_root_list)
 
         # build seg_graph
         sg_sig = SegGraph()
         sg_sig.obj_fnc_max = self.obj_fnc_max
 
-        # build set of significant regions
-        sig_reg_set = {(r, p) for r in reg_root_list if r.pval <= p}
+        # get number of voxels
+        num_vox = sum(len(r) for r in self.root_iter)
 
-        while sig_reg_set:
-            # choose any significant region
-            r, p = sig_reg_set.pop()
+        def is_sig(reg):
+            return reg.pval <= (alpha * len(reg) / num_vox)
 
-            # get list of its significant parents
-            r_parents = list(self.tree_history.predecessors(r))
-            p *= 1 / len(r_parents)
-            r_parents = [r for r in r_parents if r.pval <= p]
-            # todo: root nodes need not divide p
+        def get_sig_predecessors(reg_iter):
+            """
+            Returns:
+                reg_sig (set): set of all significnat predecessors
+                reg_parent (set): set of all checked clusters
+            """
+            parent_iter = (set(self.tree_history.predecessors(r))
+                           for r in reg_iter)
+            reg_parent = set.union(*parent_iter)
+            reg_sig = set(filter(is_sig, reg_parent))
 
-            if not r_parents:
-                # if no significant parents, r is 'edge significant'
-                sg_sig.add_node(r)
-            else:
-                # if any child is significant, add it to searchable set
-                sig_reg_set |= {(r, p) for r in r_parents}
+            if reg_sig:
+                _reg_sig, _reg_parent = get_sig_predecessors(reg_sig)
+                reg_sig |= _reg_sig
+                reg_parent |= _reg_parent
+            return reg_sig, reg_parent
 
-        return sg_sig
+        root_sig = list(filter(is_sig, self.root_iter))
+        if root_sig:
+            reg_sig, reg_checked = get_sig_predecessors(root_sig)
+            sg_sig.add_nodes_from(reg_sig)
+        else:
+            reg_checked = set()
 
-    def get_n(self, n):
+        return sg_sig, reg_checked
+
+    def cut_n(self, n):
         return list(self)[-n]
 
-    def get_max_fnc_array(self, fnc, ref):
+    def cut_max_fnc_array(self, fnc, ref):
         """ gets array which maximizes fnc
 
         every voxel belongs to many regions in tree_history, this assigns to
@@ -103,44 +142,7 @@ class SegGraphHistory(SegGraph):
 
         return x
 
-    def max_fnc_to_nii(self, fnc, f_out):
-        """ builds array according get_max_fnc_array(), writes to nii
-        """
-
-        ref = next(iter(self.file_tree_dict.values())).ref
-        x = self.get_max_fnc_array(fnc, ref)
-
-        img = nib.Nifti1Image(x, ref.affine)
-        img.to_filename(str(f_out))
-
-    def __iter__(self):
-        """ iterates through all version of seg_graph through its history
-
-        NOTE: these part_graphs are not connected, neighboring regions do not
-        have edges between them.
-        """
-
-        def build_part_graph(reg_set):
-            # build seg_graph
-            seg_graph = SegGraph()
-            seg_graph.obj_fnc_max = np.inf
-            seg_graph.add_nodes_from(reg_set)
-            return seg_graph
-
-        # get all leaf nodes (reg without ancestors in tree_history)
-        reg_set = {r for r in self.tree_history.nodes
-                   if not nx.ancestors(self.tree_history, r)}
-
-        yield build_part_graph(reg_set)
-
-        for reg_next in self.reg_history_list:
-            # subtract the kids, add the next node
-            reg_kids = set(self.tree_history.predecessors(reg_next))
-            reg_set = (reg_set - reg_kids) | {reg_next}
-
-            yield build_part_graph(reg_set)
-
-    def get_span_less_p_error(self, p=.9):
+    def cut_span_less_p_error(self, p=.9):
         """ gets the smallest (from hist) with at most p perc of current error
 
         Returns:
@@ -160,7 +162,7 @@ class SegGraphHistory(SegGraph):
                 print(f'len of final sg: {len(sg)}')
                 return sg
 
-    def get_min_error_span(self):
+    def cut_min_error_span(self):
         """ returns the seg_graph which minimzes regularized error
 
         regularized error = error + (size - 1) / (max_size - 1) * max_error
@@ -193,7 +195,7 @@ class SegGraphHistory(SegGraph):
 
         raise RuntimeError('optimal seg_graph not found')
 
-    def get_spanning_region(self, fnc, max=True):
+    def cut_spanning_region(self, fnc, max=True):
         """ get subset of self.tree_history that covers with min fnc (greedy)
 
         by cover, we mean that each leaf in self.tree_history has exactly one
@@ -248,3 +250,32 @@ class SegGraphHistory(SegGraph):
         seg_graph.add_nodes_from(min_reg_list)
 
         return seg_graph
+
+    def harmonize_via_add(self):
+        """ adds, uniformly, to each grp to ensure same average over whole reg
+
+        note: the means meet at the weighted average of their means (more
+        observations => smaller movement)
+
+        Returns:
+            mu_offset_dict (dict): keys are grp, values are offsets of average
+        """
+
+        # add together root nodes
+        fs_dict = sum(self.root_iter).fs_dict
+
+        # sum different groups
+        fs_all = sum(fs_dict.values())
+
+        # build mu_offset_dict
+        mu_offset_dict = {grp: fs_all.mu - fs.mu for grp, fs in
+                          fs_dict.items()}
+
+        # add to all regions
+        all_reg = set(self.tree_history.nodes) | set(self.nodes)
+        for r in all_reg:
+            for grp, mu in mu_offset_dict.items():
+                r.fs_dict[grp].mu += mu
+            r.reset_obj()
+
+        return mu_offset_dict
