@@ -36,10 +36,10 @@ def size_v_cov_tr(*args, **kwargs):
 
 
 def size_v_mahalanobis(*args, **kwargs):
-    ylabel = 'mahalanobis to healthy'
+    ylabel = 'mahalanobis between img'
 
     def get_maha(reg):
-        return RegionMaha.get_obj(reg) * len(reg)
+        return RegionMaha.get_obj(reg)
 
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
