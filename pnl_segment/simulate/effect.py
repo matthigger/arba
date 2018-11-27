@@ -63,6 +63,10 @@ class Effect:
         self.cov = np.atleast_2d(cov)
         self.snr = snr
 
+    def make_dm_effect(self):
+        mask = Mask(np.zeros(self.mask.shape))
+        return Effect(mask=mask, mean=self.mean, cov=self.cov, snr=self.snr)
+
     def __len__(self):
         return len(self.mask)
 
@@ -306,23 +310,3 @@ class Effect:
         else:
             raise AttributeError(r'invalid radius given: {radius}')
         return Mask(eff_mask)
-
-
-class EffectDm:
-    """ dummy effect, doesn't do anything to img, stands in Effect """
-
-    def __len__(self):
-        return 0
-
-    def apply(self, x):
-        return x
-
-    def apply_from_to_nii(self, f_nii_dict, f_nii_dict_out=None):
-        if f_nii_dict_out is not None:
-            for feat, f in f_nii_dict.items():
-                os.symlink(f, f_nii_dict_out[feat])
-
-        return f_nii_dict_out
-
-    def apply_to_file_tree(self, file_tree):
-        return file_tree

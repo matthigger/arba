@@ -237,8 +237,15 @@ class FileTree:
         tqdm_dict = {'total': 2,
                      'desc': 'aggregate stats per subgroup',
                      'disable': not verbose}
+
+        # todo: clumsy, maybe load after split?
+        ijk_set = set(self.ijk_fs_dict.keys())
+        if not ijk_set:
+            ijk_set = None
+
         for sbj_grp in tqdm((sbj_grp0, sbj_grp1), **tqdm_dict):
-            ft = self.get_subset(sbj_grp, **kwargs, verbose=verbose)
+            ft = self.get_subset(sbj_grp, ijk_set=ijk_set, **kwargs,
+                                 verbose=verbose)
             file_tree_list.append(ft)
 
         return file_tree_list

@@ -3,7 +3,7 @@ import pathlib
 import numpy as np
 
 from mh_pytools import file
-from .effect import Effect, EffectDm
+from .effect import Effect
 from ..region import RegionMaha
 from ..seg_graph import seg_graph_factory, FeatStatEmpty
 from ..space import PointCloud
@@ -72,30 +72,39 @@ class Simulator:
 
         return effect
 
-    def run(self, effect, obj, folder, active_rad=None, verbose=False,
-            f_rba=None, resample=False, **kwargs):
+    def run(self, effect, obj, ft_dict, verbose=False, resample=False,
+            save=False, **kwargs):
         """ runs experiment
         """
-        # get mask of active area
-        mask_active = self.pc.to_mask(self.ref)
-        if active_rad is not None:
-            # only work in a dilated region around the effect
-            mask_eff_dilated = effect.mask.dilate(active_rad)
-            mask_active = np.logical_and(mask_eff_dilated, mask_active)
-
-        # apply mask (and copies file_tree, ft_dict has no memory intersection
-        # with self.ft_dict)
-        ft_dict = {label: ft.apply_mask(mask_active)
-                   for label, ft in self.ft_dict.items()}
 
         # resample if need be:
-        if resample:
+        if resample and np.count_nonzero(effect.mask):
             for grp, ft in ft_dict.items():
                 ft.resample_iid(effect.mask)
 
         # apply effect to effect group
         ft_effect = ft_dict[self.grp_effect]
         ft_dict[self.grp_effect] = effect.apply_to_file_tree(ft_effect)
+
+        # build part seg_graph
+        sg_hist = seg_graph_factory(obj=obj,
+                                    file_tree_dict=ft_dict,
+                                    history=True)
+
+        # reduce
+        sg_hist.reduce_to(1, verbose=verbose)
+
+        # save
+        if save:
+            self.save(sg_hist, ft_dict, effect, obj, **kwargs)
+
+        return sg_hist
+
+    def save(self, sg_hist, ft_dict, effect, obj, folder,
+             f_rba=None):
+
+        # save sg_hist
+        file.save(sg_hist, file=folder / 'sg_arba.p.gz')
 
         # output mean images of each feature per grp
         for feat in self.feat_list:
@@ -104,43 +113,18 @@ class Simulator:
                 ft.to_nii(f_out, feat=feat)
 
         # save effect
-        if not isinstance(effect, EffectDm):
-            f_mask_effect = folder / 'effect_mask.nii.gz'
-            effect.mask.to_nii(f_mask_effect)
-            file.save(effect, file=folder / 'effect.p.gz')
+        f_mask_effect = folder / 'effect_mask.nii.gz'
+        effect.mask.to_nii(f_mask_effect)
+        file.save(effect, file=folder / 'effect.p.gz')
 
-        # build part seg_graph
-        sg_hist = seg_graph_factory(obj=obj,
-                                    file_tree_dict=ft_dict,
-                                    history=True)
-
-        # save mask
-        mask_active.to_nii(folder / 'active_mask.nii.gz')
-        self.save_sg(sg=sg_hist, folder=folder, label='vba')
-
-        # reduce + save
-        sg_hist.reduce_to(1, verbose=verbose)
-        file.save(sg_hist, file=folder / 'sg_hist.p.gz')
-
-        # split tree into regions + save
-        # sg_arba = sg_hist.get_min_error_span()
-        # sg_arba = sg_hist.get_spanning_region(weighted_maha, max=True)
-        sg_arba = sg_hist.get_span_less_p_error()
-        self.save_sg(sg=sg_arba, folder=folder, label='arba')
+        # build sg_vba / sg_rba
+        sg_vba = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
+                                   history=False)
+        self.save_sg(sg=sg_vba, folder=folder, label='vba')
 
         if f_rba is not None:
-            # build naive segmentation, aggregate via a priori atlas
-            sg_rba = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
-                                       history=False)
-            sg_rba.combine_by_reg(f_rba)
-            self.save_sg(sg=sg_rba, folder=folder, label='rba')
-
-            if not isinstance(effect, EffectDm):
-                # build 'perfect' segmentation, aggregate only effect mask
-                sg_perf = seg_graph_factory(obj=obj, file_tree_dict=ft_dict,
-                                            history=False)
-                sg_perf.combine_by_reg(f_mask_effect)
-                self.save_sg(sg=sg_perf, folder=folder, label='perf')
+            sg_vba.combine_by_reg(f_rba)
+            self.save_sg(sg=sg_vba, folder=folder, label='rba')
 
     def save_sg(self, sg, label, folder):
         def get_maha(reg):
@@ -157,12 +141,39 @@ class Simulator:
                   ref=self.ref,
                   fnc=get_wmaha)
 
-    def run_healthy(self, obj, **kwargs):
-        eff = EffectDm()
-        folder = increment_to_unique(self.folder / 'healthy')
-        self.run(effect=eff, obj=obj, folder=folder, **kwargs)
-
-    def run_effect(self, snr, obj, **kwargs):
-        eff = self.sample_effect(snr, **kwargs)
+    def run_effect(self, snr, obj, active_rad, **kwargs):
+        # get folder
         folder = increment_to_unique(self.folder / f'snr_{snr:.3E}')
-        self.run(effect=eff, obj=obj, folder=folder, **kwargs)
+
+        # sample effect
+        effect = self.sample_effect(snr, **kwargs)
+
+        # get mask of active area + save
+        mask_active = self.pc.to_mask(self.ref)
+        if active_rad is not None:
+            # only work in a dilated region around the effect
+            mask_eff_dilated = effect.mask.dilate(active_rad)
+            mask_active = np.logical_and(mask_eff_dilated, mask_active)
+        mask_active.to_nii(folder / 'active_mask.nii.gz')
+
+        # apply mask (and copies file_tree, ft_dict has no memory intersection
+        # with self.ft_dict)
+        ft_dict = {label: ft.apply_mask(mask_active)
+                   for label, ft in self.ft_dict.items()}
+
+        # # run sham
+        # ft0, ft1 = ft_dict[self.grp_null].split()
+        # ft_dict_dm = {self.grp_null: ft0, self.grp_effect: ft1}
+        # sg_hist_dm = self.run(effect=effect.make_dm_effect(),
+        #                       obj=obj,
+        #                       ft_dict=ft_dict_dm,
+        #                       **kwargs)
+        # # maha_scaler = sg_hist_dm.get_maha_scaler()
+        # file.save(sg_hist_dm, folder / 'sg_hist_dm.p.gz')
+
+        # run effect
+        sg_hist = self.run(effect=effect,
+                           obj=obj,
+                           folder=folder,
+                           ft_dict=ft_dict,
+                           **kwargs)
