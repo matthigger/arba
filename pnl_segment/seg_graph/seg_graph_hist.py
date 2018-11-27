@@ -65,9 +65,9 @@ class SegGraphHistory(SegGraph):
     def cut_hierarchical(self, alpha=.05):
         """ builds seg_graph of 'edge significant' reg
 
-        todo: ref
-
-        todo: no start @ root, start @ min pval ... can we holm these init reg?
+        https://stat.ethz.ch/~nicolai/hierarchical.pdf
+        Hierarchical Testing of Variable Importance
+        Nicolai Meinshausen
 
         a region is 'edge significant' if it is significant but none of the
         parent regions which comprise it are.  if there are no comprising
@@ -110,11 +110,20 @@ class SegGraphHistory(SegGraph):
         root_sig = list(filter(is_sig, self.root_iter))
         if root_sig:
             reg_sig, reg_checked = get_sig_predecessors(root_sig)
-            sg_sig.add_nodes_from(reg_sig)
+
+            # only regions which don't have any significant parents are minimal
+            reg_sig_min = set()
+            for reg in reg_sig:
+                reg_par = set(self.tree_history.predecessors(reg))
+                if not reg_par.intersection(reg_sig):
+                    reg_sig_min.add(reg)
+
+            sg_sig.add_nodes_from(reg_sig_min)
         else:
             reg_checked = set()
+            reg_sig = set()
 
-        return sg_sig, reg_checked
+        return sg_sig, reg_sig, reg_checked
 
     def cut_n(self, n):
         return list(self)[-n]
@@ -260,20 +269,10 @@ class SegGraphHistory(SegGraph):
         Returns:
             mu_offset_dict (dict): keys are grp, values are offsets of average
         """
-
-        # add together root nodes
-        fs_dict = sum(self.root_iter).fs_dict
-
-        # sum different groups
-        fs_all = sum(fs_dict.values())
-
-        # build mu_offset_dict
-        mu_offset_dict = {grp: fs_all.mu - fs.mu for grp, fs in
-                          fs_dict.items()}
+        mu_offset_dict = super().harmonize_via_add()
 
         # add to all regions
-        all_reg = set(self.tree_history.nodes) | set(self.nodes)
-        for r in all_reg:
+        for r in self.tree_history.nodes:
             for grp, mu in mu_offset_dict.items():
                 r.fs_dict[grp].mu += mu
             r.reset_obj()
