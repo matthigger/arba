@@ -1,5 +1,7 @@
 import networkx as nx
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from scipy.stats import chi2
 
 from .seg_graph import SegGraph
 
@@ -61,6 +63,46 @@ class SegGraphHistory(SegGraph):
 
         self.reg_history_list.append(reg_sum)
         return reg_sum
+
+    def get_maha_scaler(self, n=100):
+        """ returns linear transform which fits scaled maha to chi2
+
+        if samples were independent, scaled maha would be chi2
+
+        Args:
+            n (int): number of pts to sample in cdf
+
+        Returns:
+            lin_regress (LinearRegression): maps scaled maha to chi2
+        """
+        raise NotImplementedError
+
+        # percentiles to match
+        p = 1 - np.geomspace(.0001, 1, n)
+
+        # cdf percentiles
+        reg_any = next(iter(self.nodes))
+        d = next(iter(reg_any.fs_dict.values())).d
+        perc_chi2 = chi2.ppf(p, df=d)
+
+        # observed percentiles
+        scaled_maha = [r.maha * len(r) for r in self.tree_history]
+        perc_obs = np.percentile(scaled_maha, p * 100)
+
+        import matplotlib.pyplot as plt
+        plt.plot(p, perc_chi2, label='chi2')
+        plt.plot(p, perc_obs, label='obs')
+        plt.legend()
+        plt.show()
+
+        # regress
+        lr = LinearRegression()
+        perc_chi2 = np.atleast_2d(perc_chi2)
+        perc_obs = np.atleast_2d(perc_obs)
+        lr.fit(perc_obs, perc_chi2)
+
+        return lr
+
 
     def cut_hierarchical(self, alpha=.05):
         """ builds seg_graph of 'edge significant' reg
