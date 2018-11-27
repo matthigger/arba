@@ -1,4 +1,5 @@
-from scipy.stats import f
+import numpy as np
+from scipy.stats import chi2
 
 from .reg_kl import RegionKL
 
@@ -23,14 +24,11 @@ class RegionMaha(RegionKL):
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        fs_sum = fs0 + fs1
-        return mu_diff @ fs_sum.cov_inv @ mu_diff
+        cov = (fs0.n * fs0.cov + fs1.n * fs1.cov) / (fs0.n + fs1.n - 2)
+        return mu_diff @ np.linalg.inv(cov) @ mu_diff
 
     @property
     def pval(self):
-        n, m = [fs.n for fs in self.fs_dict.values()]
         p = next(iter(self.fs_dict.values())).d
 
-        f_stat = self.maha * n * m / (n + m)
-        f_stat *= (n + m - p - 1) / (p * (n + m - 2))
-        return f.sf(f_stat, dfd=p, dfn=n + m - p - 1)
+        return chi2.sf(self.maha * len(self), df=p)
