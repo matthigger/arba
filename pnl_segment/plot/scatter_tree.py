@@ -1,8 +1,8 @@
-import matplotlib as mpl
+import matplotlib.cm
+import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import seaborn as sns
-from matplotlib import pyplot as plt
 
 from pnl_segment.region import RegionMaha
 from pnl_segment.space.mask import Mask
@@ -45,23 +45,27 @@ def size_v_mahalanobis(*args, **kwargs):
 
 
 def size_v_pval(*args, corrected=False, size=None, **kwargs):
-
     if corrected:
         ylabel = 'multi compare corrected pval'
+
         def get_pval(reg):
             return reg.pval * size / len(reg)
     else:
         ylabel = 'pval'
+
         def get_pval(reg):
             return reg.pval
 
     scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
 
 
-def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
+def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight=[],
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
                  log_x=True, log_y=True):
+    if cmap is None:
+        cmap = matplotlib.cm.coolwarm
+
     if ax is None:
         fig, ax = plt.subplots(1, 1)
 
@@ -98,7 +102,8 @@ def scatter_tree(sg, fnc, ylabel, cmap=mpl.cm.coolwarm, mask=None,
 
         sc = nx.draw_networkx_nodes(reg_list, pos=node_pos,
                                     nodelist=reg_list,
-                                    node_color=node_color, **kwargs)
+                                    node_color=node_color, vmin=0, vmax=1,
+                                    **kwargs)
 
         return sc
 
