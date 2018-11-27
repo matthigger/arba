@@ -40,7 +40,7 @@ class SegGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, fnc=None, fnc_include=None, overlap=False):
+    def to_array(self, fnc=None, fnc_include=None, overlap=False, shape=None):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
@@ -57,8 +57,11 @@ class SegGraph(nx.Graph):
         else:
             reg_list = list(filter(fnc_include, self.nodes))
 
+        if shape is None:
+            shape = reg_list[0].pc_ijk.ref.shape
+
         # build output array
-        x = np.zeros(reg_list[0].pc_ijk.ref.shape)
+        x = np.zeros(shape)
         for reg in reg_list:
             val = fnc(reg)
             for _x in reg.pc_ijk:
@@ -274,6 +277,7 @@ class SegGraph(nx.Graph):
 
         if paralell:
             # compute (paralell) objective per edge
+            raise NotImplementedError
             pool = multiprocessing.Pool()
             res = pool.starmap_async(self.obj_fnc, edge_list)
             obj_list = mh_pytools.parallel.join(pool, res,
@@ -293,3 +297,31 @@ class SegGraph(nx.Graph):
                 obj = Region.get_error_delta(*reg_pair)
                 if obj < self.obj_fnc_max:
                     self._obj_edge_list.add((obj, reg_pair))
+
+    def harmonize_via_add(self):
+        """ adds, uniformly, to each grp to ensure same average over whole reg
+
+        note: the means meet at the weighted average of their means (more
+        observations => smaller movement)
+
+        Returns:
+            mu_offset_dict (dict): keys are grp, values are offsets of average
+        """
+
+        # add together root nodes
+        fs_dict = sum(self.nodes).fs_dict
+
+        # sum different groups
+        fs_all = sum(fs_dict.values())
+
+        # build mu_offset_dict
+        mu_offset_dict = {grp: fs_all.mu - fs.mu for grp, fs in
+                          fs_dict.items()}
+
+        # add to all regions
+        for r in self.nodes:
+            for grp, mu in mu_offset_dict.items():
+                r.fs_dict[grp].mu += mu
+            r.reset_obj()
+
+        return mu_offset_dict
