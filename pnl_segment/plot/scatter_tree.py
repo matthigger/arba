@@ -44,6 +44,15 @@ def size_v_mahalanobis(*args, **kwargs):
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
+def size_v_wmahalanobis(*args, **kwargs):
+    ylabel = 'mahalanobis between img'
+
+    def get_maha(reg):
+        return RegionMaha.get_obj(reg) * len(reg)
+
+    scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+
+
 def size_v_pval(*args, corrected=False, size=None, **kwargs):
     if corrected:
         ylabel = 'multi compare corrected pval'
@@ -60,7 +69,7 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
 
 
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
-                 mask_label='% mask', reg_highlight=[],
+                 mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
                  log_x=True, log_y=True):
     if cmap is None:

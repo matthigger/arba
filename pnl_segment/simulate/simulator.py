@@ -100,11 +100,11 @@ class Simulator:
 
         return sg_hist
 
-    def save(self, sg_hist, ft_dict, effect, obj, folder,
-             f_rba=None):
+    def save(self, sg_hist, ft_dict, effect, obj, folder, f_rba=None,
+             **kwargs):
 
         # save sg_hist
-        file.save(sg_hist, file=folder / 'sg_arba.p.gz')
+        file.save(sg_hist, file=folder / 'sg_hist.p.gz')
 
         # output mean images of each feature per grp
         for feat in self.feat_list:
@@ -176,4 +176,5 @@ class Simulator:
                            obj=obj,
                            folder=folder,
                            ft_dict=ft_dict,
+                           save=True,
                            **kwargs)
