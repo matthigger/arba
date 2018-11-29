@@ -10,7 +10,9 @@ class SegGraphHistory(SegGraph):
     """ has a history of which regions were combined
 
     Attributes:
-        tree_history (nx.Digraph): directed seg_graph, from component reg to sum
+        tree_history (nx.Digraph): directed seg_graph, from component reg to
+                                   sum.  "root" of tree is child, "leafs" are
+                                   its farthest ancestors
         reg_history_list (list): stores ordering of calls to combine()
     """
 
@@ -103,6 +105,27 @@ class SegGraphHistory(SegGraph):
 
         return lr
 
+    def make_monotonic(self):
+        """ ensures routes from composite regions to sums decrease in pval
+
+        cut_hierarchical requires that the pval associated with a region is not
+        just the probability that its specific volume shows significant
+        difference between populations, but the probability that any sub-volume
+        shows difference.  make_monotonic() changes pvalues to reflect the
+        sub-volumes given by the region hierarchy
+        """
+
+        # iterate through regions from smallest to largest
+        for reg in sorted(self.tree_history.nodes, key=len):
+
+            # check each parent
+            for reg_parent in self.tree_history.successors(reg):
+
+                # if pvalue increases propagate child's pval to parent
+                # (note: this pval can propagate to root given sort, fun!)
+                if reg_parent.pval > reg.pval:
+                    reg_parent.pval = reg.pval
+
     def cut_hierarchical(self, spec=.05):
         """ builds seg_graph of 'edge significant' reg
 
@@ -121,6 +144,9 @@ class SegGraphHistory(SegGraph):
             sg_sig (SegGraph): all significant nodes
         """
 
+        # ensure monotonicity
+        self.make_monotonic()
+
         # build seg_graph
         sg_sig = SegGraph()
         sg_sig.obj_fnc_max = self.obj_fnc_max
@@ -129,7 +155,8 @@ class SegGraphHistory(SegGraph):
         num_vox = sum(len(r) for r in self.root_iter)
 
         def is_sig(reg):
-            return reg.pval * num_vox / len(reg) <= spec
+            c = num_vox / len(reg)
+            return reg.pval * c <= spec
 
         def get_sig_predecessors(reg_iter):
             """

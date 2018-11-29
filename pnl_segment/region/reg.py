@@ -54,7 +54,7 @@ class Region:
     @pval.setter
     def pval(self, pval):
         # if pval is set, it is set permanently
-        self.self._pval_override = pval
+        self._pval_override = pval
 
     @staticmethod
     def get_error_delta(reg_1, reg_2, reg_union=None):
