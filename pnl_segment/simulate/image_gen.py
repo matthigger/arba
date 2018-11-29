@@ -1,3 +1,4 @@
+import os
 import tempfile
 from collections import defaultdict
 
@@ -26,7 +27,8 @@ class ImageGen:
 
     def sample(self, f_out=None, ref=None):
         if f_out is None:
-            _, f_out = tempfile.mkstemp(suffix='.nii.gz')
+            f, f_out = tempfile.mkstemp(suffix='.nii.gz')
+            os.close(f)
 
         if ref is None:
             ref = RefSpace(affine=np.eye(4), shape=self.shape)

@@ -1,3 +1,4 @@
+import os
 import tempfile
 
 import nibabel as nib
@@ -37,7 +38,8 @@ class Mask(np.ndarray):
     def to_nii(self, f_out=None, ref=None):
         # get f_out
         if f_out is None:
-            _, f_out = tempfile.mkstemp(suffix='.nii.gz')
+            f, f_out = tempfile.mkstemp(suffix='.nii.gz')
+            os.close(f)
 
         # get ref
         ref = get_ref(ref)

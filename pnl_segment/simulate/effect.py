@@ -84,7 +84,8 @@ class Effect:
         if f_nii_dict_out is None:
             f_nii_dict_out = dict()
             for feat in f_nii_dict.keys():
-                _, f_nii_dict_out[feat] = tempfile.mkstemp(suffix='.nii.gz')
+                f, f_nii_dict_out[feat] = tempfile.mkstemp(suffix='.nii.gz')
+                os.close(f)
 
         # load and stack data
         x_list = [load(f_nii_dict[label]) for label in self.feat_label]
