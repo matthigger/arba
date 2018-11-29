@@ -88,7 +88,7 @@ class PointCloud(set):
     def to_array(self):
         return np.vstack(self)
 
-    def to_mask(self, ref=None, shape=None):
+    def to_mask(self, ref=None, shape=None, ignore_out=False):
         if (ref is None) == (shape is None):
             raise AttributeError('either ref xor shape required')
 
@@ -102,7 +102,11 @@ class PointCloud(set):
         mask = np.zeros(shape)
         for _x in pc:
             _x = tuple(np.rint(_x).astype(int))
-            mask[_x] = 1
+            try:
+                mask[_x] = 1
+            except IndexError:
+                if not ignore_out:
+                    raise IndexError
 
         return Mask(mask, ref=ref)
 
