@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import chi2
+from scipy.stats import f
 
 from .reg_kl import RegionKL
 
@@ -27,8 +27,14 @@ class RegionMaha(RegionKL):
         cov = (fs0.n * fs0.cov + fs1.n * fs1.cov) / (fs0.n + fs1.n - 2)
         return mu_diff @ np.linalg.inv(cov) @ mu_diff
 
-    @property
-    def pval(self):
+    def get_pval(self):
+        # http: // math.bme.hu / ~marib / tobbvalt / tv5.pdf
+        # p = next(iter(self.fs_dict.values())).d
+        # chi2.sf(self.maha * len(self), df=p)
+
+        n, m = [fs.n for fs in self.fs_dict.values()]
         p = next(iter(self.fs_dict.values())).d
 
-        return chi2.sf(self.maha * len(self), df=p)
+        f_stat = self.maha * n * m / (n + m)
+        f_stat *= (n + m - p - 1) / (p * (n + m - 2))
+        return f.sf(f_stat, dfd=p, dfn=n + m - p - 1)

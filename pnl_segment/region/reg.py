@@ -13,9 +13,11 @@ class Region:
         self.pc_ijk = pc_ijk
         self.fs_dict = fs_dict
         self.__obj = None
+        self._pval = None
+        self._pval_override = None
 
     def __str__(self):
-        return f'{self.__class__} with {self.feat_stat}'
+        return f'{self.__class__} @ {self.pc_ijk} w/ {self.fs_dict}'
 
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:
@@ -40,6 +42,20 @@ class Region:
     def error(self):
         raise NotImplementedError
 
+    @property
+    def pval(self):
+        if self._pval_override is not None:
+            return self._pval_override
+
+        if self._pval is None:
+            self._pval = self.get_pval()
+        return self._pval
+
+    @pval.setter
+    def pval(self, pval):
+        # if pval is set, it is set permanently
+        self.self._pval_override = pval
+
     @staticmethod
     def get_error_delta(reg_1, reg_2, reg_union=None):
         if reg_union is None:
@@ -53,8 +69,12 @@ class Region:
             self.__obj = self.get_obj()
         return self.__obj
 
+    def get_pval(self):
+        raise NotImplementedError
+
     def get_obj(self):
         raise NotImplementedError
 
-    def reset_obj(self):
+    def reset(self):
         self.__obj = None
+        self._pval = None
