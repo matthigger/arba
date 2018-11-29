@@ -298,7 +298,7 @@ class SegGraph(nx.Graph):
                 if obj < self.obj_fnc_max:
                     self._obj_edge_list.add((obj, reg_pair))
 
-    def harmonize_via_add(self):
+    def harmonize_via_add(self, apply=True):
         """ adds, uniformly, to each grp to ensure same average over whole reg
 
         note: the means meet at the weighted average of their means (more
@@ -319,9 +319,10 @@ class SegGraph(nx.Graph):
                           fs_dict.items()}
 
         # add to all regions
-        for r in self.nodes:
-            for grp, mu in mu_offset_dict.items():
-                r.fs_dict[grp].mu += mu
-            r.reset_obj()
+        if apply:
+            for r in self.nodes:
+                for grp, mu in mu_offset_dict.items():
+                    r.fs_dict[grp].mu += mu
+                r.reset()
 
         return mu_offset_dict

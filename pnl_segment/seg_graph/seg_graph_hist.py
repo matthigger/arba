@@ -1,7 +1,7 @@
 import networkx as nx
 import numpy as np
-from sklearn.linear_model import LinearRegression
 from scipy.stats import chi2
+from sklearn.linear_model import LinearRegression
 
 from .seg_graph import SegGraph
 
@@ -103,8 +103,7 @@ class SegGraphHistory(SegGraph):
 
         return lr
 
-
-    def cut_hierarchical(self, alpha=.05):
+    def cut_hierarchical(self, spec=.05):
         """ builds seg_graph of 'edge significant' reg
 
         https://stat.ethz.ch/~nicolai/hierarchical.pdf
@@ -116,7 +115,7 @@ class SegGraphHistory(SegGraph):
         regions (ie it is a single voxel) then it is edge significant.
 
         Args:
-            alpha (float): false positive rate
+            spec (float): false positive rate
 
         Returns:
             sg_sig (SegGraph): all significant nodes
@@ -130,7 +129,7 @@ class SegGraphHistory(SegGraph):
         num_vox = sum(len(r) for r in self.root_iter)
 
         def is_sig(reg):
-            return reg.pval <= (alpha * len(reg) / num_vox)
+            return reg.pval * num_vox / len(reg) <= spec
 
         def get_sig_predecessors(reg_iter):
             """
@@ -170,7 +169,7 @@ class SegGraphHistory(SegGraph):
     def cut_n(self, n):
         return list(self)[-n]
 
-    def cut_max_fnc_array(self, fnc, ref):
+    def get_max_fnc_array(self, fnc, ref):
         """ gets array which maximizes fnc
 
         every voxel belongs to many regions in tree_history, this assigns to
@@ -246,7 +245,8 @@ class SegGraphHistory(SegGraph):
 
         raise RuntimeError('optimal seg_graph not found')
 
-    def cut_spanning_region(self, fnc, max=True):
+    def cut_spanning_region(self, fnc, max=True, n_region=None,
+                            n_region_max=None):
         """ get subset of self.tree_history that covers with min fnc (greedy)
 
         by cover, we mean that each leaf in self.tree_history has exactly one
@@ -256,7 +256,15 @@ class SegGraphHistory(SegGraph):
             fnc (fnc): function to be minimized (accepts regions, gives obj
                        which can be ordered
             max (bool): toggles whether max fnc is chosen (otherwise min)
+            n_region (int): maximum number of region (imposes that region sizes
+                            are at least 1 / n_region of total size)
         """
+        if n_region is None:
+            min_size = 1
+        else:
+            size = sum(len(r) for r in self.root_iter)
+            min_size = int(size / n_region)
+
         # build seg_graph
         seg_graph = SegGraph()
         seg_graph.obj_fnc_max = self.obj_fnc_max
@@ -264,6 +272,9 @@ class SegGraphHistory(SegGraph):
         # compute fnc + sort
         reg_list = []
         for r in self.tree_history.nodes:
+            if len(r) < min_size:
+                continue
+
             f = fnc(r)
             if f is None:
                 # None acts as sentinel for invalid region
@@ -288,6 +299,8 @@ class SegGraphHistory(SegGraph):
                 # region has no intersection with any reg in min_reg_list
                 # add to min_reg_list
                 min_reg_list.append(reg)
+                if len(min_reg_list) == n_region_max:
+                    break
 
                 # rm its descendants and ancestors from unspanned_reg
                 unspanned_reg -= {reg}
@@ -302,7 +315,7 @@ class SegGraphHistory(SegGraph):
 
         return seg_graph
 
-    def harmonize_via_add(self):
+    def harmonize_via_add(self, apply=True):
         """ adds, uniformly, to each grp to ensure same average over whole reg
 
         note: the means meet at the weighted average of their means (more
@@ -311,12 +324,14 @@ class SegGraphHistory(SegGraph):
         Returns:
             mu_offset_dict (dict): keys are grp, values are offsets of average
         """
-        mu_offset_dict = super().harmonize_via_add()
+        mu_offset_dict = super().harmonize_via_add(apply=False)
 
         # add to all regions
-        for r in self.tree_history.nodes:
-            for grp, mu in mu_offset_dict.items():
-                r.fs_dict[grp].mu += mu
-            r.reset_obj()
+        if apply:
+            node_set = set(self.tree_history.nodes) | set(self.nodes)
+            for r in node_set:
+                for grp, mu in mu_offset_dict.items():
+                    r.fs_dict[grp].mu += mu
+                r.reset()
 
         return mu_offset_dict
