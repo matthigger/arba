@@ -5,7 +5,7 @@ import seaborn as sns
 from pnl_segment.plot import scatter_tree
 from pnl_segment.region import FeatStat
 from pnl_segment.seg_graph import seg_graph_factory
-from pnl_segment.simulate import ImageGen
+from pnl_segment.simulate import Model
 from pnl_segment.space import Mask
 
 obj = 'maha'
@@ -31,7 +31,7 @@ for grp in ['healthy', 'effect']:
         else:
             ijk_fs_dict[ijk] = color_fs_dict['green']
 
-    image_gen = ImageGen(ijk_fs_dict, shape=shape)
+    image_gen = Model(ijk_fs_dict, shape=shape)
     ft_dict[grp] = image_gen.get_file_tree(n=n)
 
 sg_hist = seg_graph_factory(obj=obj, file_tree_dict=ft_dict, history=True)

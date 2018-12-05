@@ -1,3 +1,4 @@
 from .effect import *
-from .image_gen import *
+from .model import *
+from .model import *
 from .simulator import *
