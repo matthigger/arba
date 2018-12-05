@@ -5,7 +5,7 @@ import numpy as np
 from mh_pytools import file
 from .effect import Effect
 from ..region import RegionMaha
-from ..seg_graph import seg_graph_factory, FeatStatEmpty
+from ..seg_graph import seg_graph_factory, FeatStatEmpty, FileTree
 from ..space import PointCloud
 
 
@@ -73,7 +73,7 @@ class Simulator:
         return effect
 
     def run(self, effect, obj, ft_dict, verbose=False, resample=False,
-            save=False, **kwargs):
+            save=False, harmonize=False, **kwargs):
         """ runs experiment
         """
 
@@ -81,6 +81,11 @@ class Simulator:
         if resample and np.count_nonzero(effect.mask):
             for grp, ft in ft_dict.items():
                 ft.resample_iid(effect.mask)
+
+        # harmonize
+        if harmonize:
+            mu_offset = FileTree.harmonize_via_add(ft_dict.values(),
+                                                   apply=True)
 
         # apply effect to effect group
         ft_effect = ft_dict[self.grp_effect]

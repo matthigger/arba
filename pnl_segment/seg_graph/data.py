@@ -24,6 +24,34 @@ class FileTree:
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
     """
 
+    @staticmethod
+    def harmonize_via_add(ft_list, apply=True):
+        """ ensures that each file tree has same mean (over all ijk)
+
+        average is determined by summing across all file tree and ijk
+
+        Args:
+            ft_list (list): list of file trees
+            apply (bool): toggles whether to apply offset
+
+        Returns:
+            mu_offset_dict (dict): keys are file tree, values are offset needed
+        """
+
+        # find average
+        ft_fs_dict = {ft: sum(ft.ijk_fs_dict.values()) for ft in ft_list}
+        fs_average = sum(ft_fs_dict.values())
+        mu_offset_dict = {ft: fs_average.mu - fs.mu
+                          for ft, fs in ft_fs_dict.items()}
+
+        # apply (if need be)
+        if apply:
+            for ft, mu_delta in mu_offset_dict.items():
+                for ijk in ft.ijk_fs_dict.keys():
+                    ft.ijk_fs_dict[ijk].mu += mu_delta
+
+        return mu_offset_dict
+
     @property
     def point_cloud(self):
         if self._point_cloud is None:
