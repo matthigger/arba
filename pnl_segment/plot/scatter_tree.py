@@ -36,7 +36,7 @@ def size_v_cov_tr(*args, **kwargs):
 
 
 def size_v_mahalanobis(*args, **kwargs):
-    ylabel = 'mahalanobis between img'
+    ylabel = 'mahalanobis between groups'
 
     def get_maha(reg):
         return RegionMaha.get_obj(reg)
@@ -45,7 +45,7 @@ def size_v_mahalanobis(*args, **kwargs):
 
 
 def size_v_wmahalanobis(*args, **kwargs):
-    ylabel = 'mahalanobis between img'
+    ylabel = 'weighted mahalanobis between groups'
 
     def get_maha(reg):
         return RegionMaha.get_obj(reg) * len(reg)
