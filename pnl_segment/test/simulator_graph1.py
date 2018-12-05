@@ -5,7 +5,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from mh_pytools import file
 from pnl_data.set.cidar_post import folder
-from pnl_segment.plot.snr_vs_dice import line_confidence
+from pnl_segment import plot
 
 folder_out = folder / '2018_Nov_16_12_34AM35'
 
@@ -16,8 +16,6 @@ method_snr_auc_dict, method_snr_dice_tree, method_snr_sens_spec_dict, eff_dict =
 
 method_list = sorted({x[0] for x in method_snr_sens_spec_dict.keys()})
 snr_list = sorted({x[1] for x in method_snr_sens_spec_dict.keys()})
-
-method_list.remove('perf')
 
 sns.set(font_scale=1.2)
 cm = plt.get_cmap('Set1')
@@ -80,7 +78,7 @@ np.set_printoptions(2, suppress=False)
 f_out = folder_out / 'snr_auc.pdf'
 with PdfPages(str(f_out)) as pdf:
     fig, ax = plt.subplots(1, 1)
-    line_confidence(method_snr_auc_dict, xlabel='snr', ylabel='auc')
+    plot.line_confidence(method_snr_auc_dict, xlabel='snr', ylabel='auc')
     plt.gca().set_xscale('log')
     plt.suptitle(f'average eff @ snr=1: {eff_mean}')
     plt.gcf().set_size_inches(10, 7)
@@ -91,7 +89,7 @@ with PdfPages(str(f_out)) as pdf:
 f_out = folder_out / 'snr_dice.pdf'
 with PdfPages(str(f_out)) as pdf:
     fig, ax = plt.subplots(1, 1)
-    line_confidence(method_snr_dice_tree, xlabel='snr', ylabel='dice')
+    plot.line_confidence(method_snr_dice_tree, xlabel='snr', ylabel='dice')
     plt.gca().set_xscale('log')
     plt.suptitle(f'average eff @ snr=1: {eff_mean}')
     plt.gcf().set_size_inches(10, 7)

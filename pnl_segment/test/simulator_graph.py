@@ -12,12 +12,13 @@ from pnl_data.set.cidar_post import folder
 from pnl_segment.seg_graph import SegGraph
 from pnl_segment.space import Mask, get_ref
 
-spec = .05
+n_region_max = 15
+spec = .01
 folder_out = folder / '2018_Nov_16_12_34AM35'
 f_stat_template = 'wmaha_{method}.nii.gz'
 f_sg_template = 'sg_{method}.p.gz'
-method_set = {'vba', 'arba', 'rba', 'perf'}
-par_flag = True
+method_set = {'vba', 'arba', 'rba', 'tfce'}
+par_flag = False
 recompute_arba = True
 
 
@@ -28,28 +29,19 @@ class regMahaDm:
         self.pval = pval
 
 
-def arba_fnc(reg, sig=.05):
-    c = reg.pval
-    return c
-    # if c < sig:
-    #     return c
-    #
-    # # invalid
-    # return None
+def get_pval(reg):
+    return reg.pval
 
 
 def get_dice_auc(folder):
-    method_snr_auc_dict = defaultdict(list)
-    method_snr_dice_dict = defaultdict(list)
-    method_snr_sens_spec_dict = defaultdict(list)
-
     # load active mask (of experiment)
     mask_active = Mask.from_nii(folder / 'active_mask.nii.gz')
     f_eff = folder / 'effect.p.gz'
     eff = file.load(f_eff)
+    f_vba = folder / f_stat_template.format(method='vba')
+    ref = get_ref(f_vba)
 
     # build tfce img + compute auc
-    f_vba = folder / f_stat_template.format(method='vba')
     if 'tfce' in method_set:
         f_tfce = folder / f_stat_template.format(method='tfce')
         cmd = f'fslmaths {f_vba} -tfce 2 0.5 6 {f_tfce}'
@@ -71,9 +63,10 @@ def get_dice_auc(folder):
 
     if recompute_arba:
         sg_hist = file.load(folder / 'sg_hist.p.gz')
-        # sg_arba = sg_hist.get_spanning_region(arba_fnc, max=False)
-        # sg_arba = sg_hist.get_n(10)
-        sg_arba = sg_hist.get_sig_hierarchical()
+        # sg_hist.harmonize_via_add()
+        # sg_arba = sg_hist.cut_spanning_region(get_pval, max=False,
+        #                                       n_region_max=n_region_max)
+        sg_arba, _, _ = sg_hist.cut_hierarchical(spec=spec)
         print(f'snr: {eff.snr:.2e}, len(sg_arba): {len(sg_arba)}')
         file.save(sg_arba, folder / 'sg_arba.p.gz')
 
@@ -82,27 +75,24 @@ def get_dice_auc(folder):
         os.remove(str(f_detect_stat))
 
     # compute dice / auc
+    method_snr_auc_dict = defaultdict(list)
+    method_snr_dice_dict = defaultdict(list)
+    method_snr_sens_spec_dict = defaultdict(list)
     for method in sorted(method_set):
-        # compute dice
+        # load sg
         f_sg = folder / f_sg_template.format(method=method)
         sg = file.load(f_sg)
 
         # determines if significant
-        if method is 'arba':
-            def is_sig(*args, **kwargs):
-                return True
-        else:
-            pval_list = [reg.pval for reg in sg.nodes]
-            is_sig_vec = multipletests(pval_list, alpha=spec, method='hs')[0]
-            sig_reg_set = {r for r, is_sig in zip(sg.nodes, is_sig_vec) if
-                           is_sig}
-            sig_reg_pval_list = [r.pval for r in sig_reg_set]
-            thresh = max(sig_reg_pval_list, default=spec)
+        pval_list = [reg.pval for reg in sg.nodes]
+        is_sig_vec = multipletests(pval_list, alpha=spec, method='holm')[0]
+        sig_reg_set = {r for r, is_sig in zip(sg.nodes, is_sig_vec) if
+                       is_sig}
 
-            def is_sig(reg):
-                return reg in sig_reg_set
+        def is_sig(reg):
+            return reg in sig_reg_set
 
-        x = sg.to_array(fnc=is_sig)
+        x = sg.to_array(fnc=is_sig, shape=ref.shape)
 
         dice = eff.get_dice(x)
         ss = eff.get_sens_spec(x, mask_active)
@@ -114,23 +104,16 @@ def get_dice_auc(folder):
                       f'    sens: {ss[0]:.3f}',
                       f'    spec: {ss[1]:.3f}',
                       f'    num_reg: {len(sg)}']
-
-            if method != 'arba':
-                s_list += [f'    pval thresh: {thresh:.2e}',
-                           f'    pval_sig: {sorted(sig_reg_pval_list)}']
             f.write('\n'.join(s_list) + '\n\n')
 
         f_out = folder / f'detected_{method}.nii.gz'
-        img = nib.Nifti1Image(x, affine=get_ref(f_vba).affine)
+        img = nib.Nifti1Image(x, affine=ref.affine)
         img.to_filename(str(f_out))
 
         method_snr_dice_dict[method, eff.snr].append(dice)
 
         # compute auc
-        def get_pval(reg):
-            return reg.pval
-
-        x = sg.to_array(get_pval)
+        x = sg.to_array(fnc=get_pval)
         auc = eff.get_auc(x, mask=mask_active)
 
         method_snr_auc_dict[method, eff.snr].append(auc)
@@ -138,13 +121,14 @@ def get_dice_auc(folder):
     return method_snr_dice_dict, method_snr_auc_dict, method_snr_sens_spec_dict, eff
 
 
-# get mask of img
+# find relevant folders
 arg_list = list()
 for folder in folder_out.glob('*snr*'):
     if not folder.is_dir():
         continue
     arg_list.append({'folder': folder})
 
+# run fnc per folder
 method_snr_auc_dict = defaultdict(list)
 method_snr_dice_dict = defaultdict(list)
 method_snr_sens_spec_dict = defaultdict(list)
@@ -169,6 +153,7 @@ else:
 
 # save
 f_out = folder_out / 'snr_auc_dice.p.gz'
-file.save((
-    method_snr_auc_dict, method_snr_dice_dict, method_snr_sens_spec_dict,
-    eff_dict), f_out)
+file.save((method_snr_auc_dict,
+           method_snr_dice_dict,
+           method_snr_sens_spec_dict,
+           eff_dict), f_out)
