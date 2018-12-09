@@ -32,7 +32,7 @@ for grp in ['healthy', 'effect']:
             ijk_fs_dict[ijk] = color_fs_dict['green']
 
     image_gen = Model(ijk_fs_dict, shape=shape)
-    ft_dict[grp] = image_gen.get_file_tree(n=n)
+    ft_dict[grp] = image_gen.to_file_tree(n=n)
 
 sg_hist = seg_graph_factory(obj=obj, file_tree_dict=ft_dict, history=True)
 sg_hist.reduce_to(1)
