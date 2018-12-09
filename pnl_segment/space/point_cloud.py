@@ -116,10 +116,7 @@ class PointCloud(set):
         def wrap_method_closure(name):
             def inner(self, other):
                 result = getattr(super(cls, self), name)(other)
-                if isinstance(result, set) and not hasattr(result, 'ref'):
-                    assert self.ref == other.ref, 'unequal ref'
-                    result = cls(result, ref=self.ref)
-                return result
+                return cls(result, ref=self.ref)
 
             inner.fn_name = name
             setattr(cls, name, inner)
