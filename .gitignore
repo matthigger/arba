@@ -3,3 +3,4 @@
 /pnl_segment/__pycache__/
 *.pyc
 /.idea/
+/.coverage

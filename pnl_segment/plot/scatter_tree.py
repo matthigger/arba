@@ -13,7 +13,7 @@ def size_v_mu_diff(*args, **kwargs):
         fs0, fs1 = reg.feat_stat.values()
         return np.linalg.norm(fs0.mu - fs1.mu)
 
-    ylabel = '||\mu_0 - \mu_1||_2'
+    ylabel = r'||\mu_0 - \mu_1||_2'
     scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
 
 
