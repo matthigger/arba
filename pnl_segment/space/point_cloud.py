@@ -65,7 +65,7 @@ class PointCloud(set):
             self.dim = None
 
     def __str__(self):
-        return f'{type(self)} w/ {len(self)} pts'
+        return f'{type(self).__name__} w/ {len(self)} pts'
 
     def swap_ref(self, ref=None, round=False):
         """ swaps orientation to a new ref
@@ -89,15 +89,17 @@ class PointCloud(set):
         return np.vstack(self)
 
     def to_mask(self, ref=None, shape=None, ignore_out=False):
-        if (ref is None) == (shape is None):
-            raise AttributeError('either ref xor shape required')
-
         if ref is None:
             pc = self
         else:
             ref = get_ref(ref)
             shape = ref.shape
             pc = self.swap_ref(ref)
+
+        if shape is None:
+            if self.ref is None or self.ref.shape is None:
+                raise AttributeError('shape required')
+            shape = self.ref.shape
 
         mask = np.zeros(shape)
         for _x in pc:
