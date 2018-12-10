@@ -149,12 +149,6 @@ class FeatStat:
 
     __radd__ = __add__
 
-    def __mul__(self, other):
-        return FeatStat(self.n * other, self.mu, self.var)
-
-    def __truediv__(self, other):
-        return FeatStat(self.n / other, self.mu, self.var)
-
 
 class FeatStatSingle(FeatStat):
     """ minimizes storage if a FeatStat of a single observation is needed
@@ -186,21 +180,10 @@ class FeatStatSingle(FeatStat):
 
 
 class FeatStatEmpty(FeatStat):
-    @property
-    def n(self):
-        return 0
-
-    @property
-    def d(self):
-        return np.nan
-
-    @property
-    def mu(self):
-        return np.nan
-
-    @property
-    def cov(self):
-        return np.nan
+    n = 0
+    d = np.nan
+    mu = np.nan
+    cov = np.nan
 
     def __init__(self, *args, **kwargs):
         pass
