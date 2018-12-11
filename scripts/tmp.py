@@ -27,7 +27,8 @@ def make_plots(folder, spec, n_region_max):
     pval_thresh = (s / size) * spec
 
     # sg_span, _, _ = sg_hist.cut_hierarchical(spec)
-    sg_span = sg_hist.cut_n(5)
+    sg_span = sg_hist.cut_p_error_each_step(.2)
+    print(f'sg_span has {len(sg_span)} regions')
     reg_highlight = set(sg_span.nodes)
 
     if f_effect.exists():
@@ -43,63 +44,81 @@ def make_plots(folder, spec, n_region_max):
 
     f_out = folder / 'size_vs_error.pdf'
     with PdfPages(str(f_out)) as pdf:
-        plot.size_vs_error_normed(sg_hist=sg_hist)
+        plot.size_vs_error_normed(sg_hist=sg_hist, n_max=30)
 
         fig = plt.gcf()
         fig.set_size_inches(10, 7)
-        pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
+        pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
         plt.close()
 
-    f_out = folder / 'size_vs_maha.pdf'
-    with PdfPages(str(f_out)) as pdf:
-        plot.size_v_mahalanobis(sg=sg_hist.tree_history,
-                                reg_list=reg_list,
-                                mask=mask,
-                                reg_highlight=reg_highlight,
-                                dict_highlight={'linewidths': 3,
-                                                'edgecolors': 'k'},
-                                log_x=True,
-                                log_y=True)
+        _reg_list = set()
+        for sg in list(sg_hist)[-20:]:
+            _reg_list |= set(sg.nodes)
+
+        plot.size_v_error(sg=sg_hist.tree_history,
+                          mask=mask,
+                          reg_list=_reg_list,
+                          reg_highlight=reg_highlight,
+                          dict_highlight={'linewidths': 3,
+                                          'edgecolors': 'k'},
+                          log_x=True,
+                          log_y=True)
 
         fig = plt.gcf()
         fig.set_size_inches(10, 7)
-        pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
+        pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
         plt.close()
 
-    f_out = folder / 'size_vs_wmaha.pdf'
-    with PdfPages(str(f_out)) as pdf:
-        plot.size_v_wmahalanobis(sg=sg_hist.tree_history,
-                                 reg_list=reg_list,
-                                 mask=mask,
-                                 reg_highlight=reg_highlight,
-                                 dict_highlight={'linewidths': 3,
-                                                 'edgecolors': 'k'},
-                                 log_x=True,
-                                 log_y=True)
+    # f_out = folder / 'size_vs_maha.pdf'
+    # with PdfPages(str(f_out)) as pdf:
+    #     plot.size_v_mahalanobis(sg=sg_hist.tree_history,
+    #                             reg_list=reg_list,
+    #                             mask=mask,
+    #                             reg_highlight=reg_highlight,
+    #                             dict_highlight={'linewidths': 3,
+    #                                             'edgecolors': 'k'},
+    #                             log_x=True,
+    #                             log_y=True)
+    #
+    #     fig = plt.gcf()
+    #     fig.set_size_inches(10, 7)
+    #     pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
+    #     plt.close()
+    #
+    # f_out = folder / 'size_vs_wmaha.pdf'
+    # with PdfPages(str(f_out)) as pdf:
+    #     plot.size_v_wmahalanobis(sg=sg_hist.tree_history,
+    #                              reg_list=reg_list,
+    #                              mask=mask,
+    #                              reg_highlight=reg_highlight,
+    #                              dict_highlight={'linewidths': 3,
+    #                                              'edgecolors': 'k'},
+    #                              log_x=True,
+    #                              log_y=True)
+    #
+    #     fig = plt.gcf()
+    #     fig.set_size_inches(10, 7)
+    #     pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
+    #     plt.close()
 
-        fig = plt.gcf()
-        fig.set_size_inches(10, 7)
-        pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
-        plt.close()
-
-    f_out = folder / 'size_vs_pval_mono.pdf'
-    with PdfPages(str(f_out)) as pdf:
-        plt.plot(s, pval_thresh, color='g')
-        ax = plt.gca()
-        plot.size_v_pval(sg=sg_hist.tree_history,
-                         reg_list=reg_list,
-                         mask=mask,
-                         reg_highlight=reg_highlight,
-                         dict_highlight={'linewidths': 3,
-                                         'edgecolors': 'k'},
-                         log_x=True,
-                         log_y=True,
-                         ax=ax)
-
-        fig = plt.gcf()
-        fig.set_size_inches(10, 7)
-        pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
-        plt.close()
+    # f_out = folder / 'size_vs_pval_mono.pdf'
+    # with PdfPages(str(f_out)) as pdf:
+    #     plt.plot(s, pval_thresh, color='g')
+    #     ax = plt.gca()
+    #     plot.size_v_pval(sg=sg_hist.tree_history,
+    #                      reg_list=reg_list,
+    #                      mask=mask,
+    #                      reg_highlight=reg_highlight,
+    #                      dict_highlight={'linewidths': 3,
+    #                                      'edgecolors': 'k'},
+    #                      log_x=True,
+    #                      log_y=True,
+    #                      ax=ax)
+    #
+    #     fig = plt.gcf()
+    #     fig.set_size_inches(10, 7)
+    #     pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
+    #     plt.close()
 
     sg_hist = file.load(f_sg_hist)
     f_out = folder / 'size_vs_pval.pdf'
@@ -117,15 +136,15 @@ def make_plots(folder, spec, n_region_max):
 
         fig = plt.gcf()
         fig.set_size_inches(10, 7)
-        pdf.savefig(fig,  bbox_inches='tight', pad_inches=0)
+        pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
         plt.close()
 
 
-folder = folder / '2018_Nov_16_12_34AM35'
+folder = folder / 'synth_data'
 dict_highlight = {'linewidths': 2,
                   'edgecolors': 'k'}
 plot_all = True
-par_flag = False
+par_flag = True
 spec = .01
 n_region_max = 15
 

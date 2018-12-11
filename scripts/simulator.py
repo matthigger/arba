@@ -10,16 +10,16 @@ from pnl_data.set.cidar_post import get_name
 from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator
 
-num_locations = 1
-snr_vec = np.logspace(-1, 1, 3)
-snr_vec = [.2]
+num_locations = 10
+snr_vec = np.logspace(-1, 1, 5)
+# snr_vec = [.2]
 p_effect = .5
 effect_rad = 5
 active_rad = 5
 obj = 'maha'
 feat_list = ['fa', 'md']
 effect_u = np.array([-1, 0])
-resample = False
+resample = True
 harmonize = True
 par_flag = False
 f_rba = folder_data / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'

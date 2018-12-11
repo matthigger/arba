@@ -7,7 +7,7 @@ from mh_pytools import file
 from pnl_data.set.cidar_post import folder
 from pnl_segment import plot
 
-folder_out = folder / '2018_Nov_16_12_34AM35'
+folder_out = folder / 'synth_data'
 
 # load
 f_out = folder_out / 'snr_auc_dice.p.gz'
@@ -32,8 +32,8 @@ with PdfPages(f_out) as pdf:
 
             plt.scatter(spec, sens, label=method, alpha=.5,
                         color=color_dict[method])
-            plt.scatter(np.mean(spec), np.mean(sens), marker='s', color='w',
-                        edgecolors=color_dict[method], linewidths=2)
+            # plt.scatter(np.mean(spec), np.mean(sens), marker='s', color='w',
+            #             edgecolors=color_dict[method], linewidths=2)
 
         ax = plt.gca()
         box = ax.get_position()

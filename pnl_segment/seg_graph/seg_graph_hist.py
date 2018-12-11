@@ -219,25 +219,51 @@ class SegGraphHistory(SegGraph):
 
         return x
 
-    def cut_span_less_p_error(self, p=.9):
-        """ gets the smallest (from hist) with at most p perc of current error
+    def cut_less_p_error(self, p=.01):
+        """ gets most coarse segmentation with error <= p * current error
 
         Returns:
             seg_graph (SegGraph):
         """
+        if not 0 <= p <= 1:
+            raise AttributeError('p must be in [0, 1]')
 
-        # create a list of all seg_graph in history
-        sg_list = list(self)
-
-        # err_max is error if considering entire volume as 1 region
-        sg_smallest = sg_list[-1]
-        err_thresh = sg_smallest.error * p
+        err_thresh = self.error * p
 
         # search from smallest to largest
-        for sg in reversed(sg_list):
-            if sg.error <= err_thresh:
-                print(f'len of final sg: {len(sg)}')
+        sg_last = None
+        for sg in self:
+            if sg.error > err_thresh:
+                if sg_last is None:
+                    err_msg = f'no part_graph has < {p} of current error'
+                    raise AttributeError(err_msg)
+                break
+            sg_last = sg
+        return sg_last
+
+    def cut_p_error_each_step(self, p=.3):
+        """ 'splits' tree_history so long as error reduction is at least p
+
+        Returns:
+            seg_graph (SegGraph):
+        """
+        if not 0 < p < 1:
+            raise AttributeError('p must be in [0, 1]')
+
+        sg = self
+        error = sg.error
+        for sg_next in reversed(list(self)[:-1]):
+
+            error_next = sg_next.error
+
+            p_observed = (error - error_next) / error
+            if p_observed < p:
                 return sg
+
+            sg = sg_next
+            error = error_next
+        
+        raise RuntimeError
 
     def cut_min_error_span(self):
         """ returns the seg_graph which minimzes regularized error

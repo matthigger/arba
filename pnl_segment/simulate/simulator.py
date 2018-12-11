@@ -146,7 +146,7 @@ class Simulator:
                   ref=self.ref,
                   fnc=get_wmaha)
 
-    def run_effect(self, snr, obj, active_rad, **kwargs):
+    def run_effect(self, snr, obj, active_rad=None, **kwargs):
         # get folder
         folder = increment_to_unique(self.folder / f'snr_{snr:.3E}')
 

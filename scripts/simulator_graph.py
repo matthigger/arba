@@ -13,12 +13,12 @@ from pnl_segment.seg_graph import SegGraph
 from pnl_segment.space import Mask, get_ref
 
 n_region_max = 15
-spec = .01
-folder_out = folder / '2018_Nov_16_12_34AM35'
+spec = .05
+folder_out = folder / 'synth_data'
 f_stat_template = 'wmaha_{method}.nii.gz'
 f_sg_template = 'sg_{method}.p.gz'
-method_set = {'vba', 'arba', 'rba', 'tfce'}
-par_flag = False
+method_set = {'vba', 'arba', 'tfce'}
+par_flag = True
 recompute_arba = True
 
 
@@ -66,7 +66,8 @@ def get_dice_auc(folder):
         # sg_hist.harmonize_via_add()
         # sg_arba = sg_hist.cut_spanning_region(get_pval, max=False,
         #                                       n_region_max=n_region_max)
-        sg_arba, _, _ = sg_hist.cut_hierarchical(spec=spec)
+        # sg_arba, _, _ = sg_hist.cut_hierarchical(spec=spec)
+        sg_arba = sg_hist.cut_p_error_each_step(.4)
         print(f'snr: {eff.snr:.2e}, len(sg_arba): {len(sg_arba)}')
         file.save(sg_arba, folder / 'sg_arba.p.gz')
 

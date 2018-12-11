@@ -80,12 +80,12 @@ class Model:
 
         return f_out
 
-    def to_file_tree(self, n, folder=None):
+    def to_file_tree(self, n, folder=None, **kwargs):
         sbj_feat_file_tree = defaultdict(dict)
         for idx in range(n):
             if folder:
                 f_out = folder / f'{idx}.nii.gz'
             else:
                 f_out = None
-            sbj_feat_file_tree[f'sbj_{idx}']['dummy_feat'] = self.sample_nii(f_out=f_out)
+            sbj_feat_file_tree[f'sbj_{idx}']['dummy_feat'] = self.sample_nii(f_out=f_out, **kwargs)
         return FileTree(sbj_feat_file_tree)
