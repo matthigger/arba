@@ -5,16 +5,17 @@ import numpy as np
 from mh_pytools import parallel
 from pnl_data.set.cidar_post import folder as folder_data
 from pnl_segment.seg_graph import FeatStat
-from pnl_segment.space import RefSpace, Mask
 from pnl_segment.simulate import simulator, Model
+from pnl_segment.space import RefSpace, Mask
 
 par_flag = False
 
-sim_per_snr = 4
+sim_per_snr = 1
 n_img = 20
 snr_vec = np.logspace(-1, 1, 5)
+# snr_vec = [1]
 p_effect = .5
-effect_rad = 3
+effect_rad = 4
 shape = (9, 9, 9)
 obj = 'maha'
 effect_u = np.array([-1])
@@ -30,7 +31,7 @@ model = Model(ijk_fs_dict, shape=shape)
 
 # build file tree
 ref = RefSpace(affine=np.eye(4), shape=shape)
-file_tree = model.to_file_tree(n=n_img, folder=folder, ref=ref)
+file_tree = model.to_file_tree(n=n_img, folder=folder / 'data', ref=ref)
 
 # build sim object
 sim = simulator.Simulator(file_tree=file_tree, folder=folder, verbose=True,
