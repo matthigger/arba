@@ -16,7 +16,7 @@ from ..space import get_ref
 class SegGraph(nx.Graph):
     @property
     def error(self):
-        return sum(reg.error for reg in self)
+        return sum(reg.error for reg in self.nodes)
 
     def __init__(self):
         # see factory, use of __init__ directly is discouraged
