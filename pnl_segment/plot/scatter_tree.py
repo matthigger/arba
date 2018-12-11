@@ -53,6 +53,15 @@ def size_v_wmahalanobis(*args, **kwargs):
     scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
+def size_v_error(*args, **kwargs):
+    ylabel = 'MSE in maha from vox to cluster'
+
+    def get_error(reg):
+        return reg.error / len(reg)
+
+    scatter_tree(*args, fnc=get_error, ylabel=ylabel, **kwargs)
+
+
 def size_v_pval(*args, corrected=False, size=None, **kwargs):
     if corrected:
         ylabel = 'multi compare corrected pval'
@@ -71,7 +80,7 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
-                 log_x=True, log_y=True):
+                 log_x=True, log_y=True, txt_fnc=None):
     if cmap is None:
         cmap = matplotlib.cm.coolwarm
 
@@ -128,6 +137,12 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
         reg_set = set(reg_list)
         edgelist = [e for e in sg.edges if set(e).issubset(reg_set)]
         nx.draw_networkx_edges(sg, pos=node_pos, edgelist=edgelist)
+
+    # draw text over nodes
+    if txt_fnc is not None:
+        for reg in reg_list:
+            x, y = node_pos[reg]
+            plt.text(x, y, txt_fnc(reg), color='g')
 
     # set log scales
     if log_y:

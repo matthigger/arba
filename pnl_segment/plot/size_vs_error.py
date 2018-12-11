@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 
 
@@ -27,25 +28,36 @@ def size_vs_error(sg_hist):
     plt.ylabel('error (var added from voxel to region)')
 
 
-def size_vs_error_normed(sg_hist):
-    size = list()
-    error = list()
+def size_vs_error_normed(sg_hist, n_max=np.inf):
+    size_error_dict = {len(pg): pg.error for pg in sg_hist}
 
-    for pg in sg_hist:
-        size.append(len(pg))
-        error.append(sum(r.error for r in pg.nodes))
+    max_err = max(size_error_dict.values())
 
-    sns.set()
-    #plt.plot(size, error, label='error')
+    # normalize and select only appropriate sizes
+    size_error_dict = {s: e / max_err for s, e in size_error_dict.items()
+                       if s <= n_max}
 
-    max_err = max(error)
-    error_reg = [e / max_err for e in error]
-    error_reg_perc = [(e1 - e0) / e0 for e0, e1 in zip(error, error[1:])]
-    plt.plot(size, error_reg, label='normalized error')
-    plt.plot(range(len(error_reg), 1, -1), error_reg_perc, label='delta error %')
+    # sns.set()
+    size_error = sorted(size_error_dict.items())
+    size = [x[0] for x in size_error]
+    error = [x[1] for x in size_error]
+    error_diff = [(e0 - e1) for e0, e1 in zip(error, error[1:])]
+    error_diff_local = [(e0 - e1) / e1 for e0, e1 in zip(error, error[1:])]
+
+    sns.set(font_scale=1.2)
+    fig, ax = plt.subplots(1, 1)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+    plt.minorticks_on()
+    plt.grid(True)
+    plt.plot(size, error, label='error (normalized)')
+    plt.plot(size[:-1], error_diff, label='diff error (normalized)')
+    plt.plot(size[:-1], error_diff_local,
+             label='error increase % (local normalized)')
+
     plt.legend()
-    plt.gca().set_xscale('log')
-    # plt.gca().set_yscale('log')
+    ax.tick_params(axis='y', which='minor', bottom=True)
 
-    plt.xlabel('size (num regions in segmentation)')
-    plt.ylabel('normalized error (var added from voxel to region)')
+    plt.xlabel('size (num reg in segmentation)')
+    plt.ylabel('error')
