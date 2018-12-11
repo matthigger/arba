@@ -56,11 +56,3 @@ class Mask(np.ndarray):
     def dilate(self, r):
         x = binary_dilation(self, iterations=r)
         return Mask(x, ref=self.ref)
-
-    def __eq__(self, other):
-        # test for ref equality if either ref is not None
-        if self.ref is not None or other.ref is not None:
-            if self.ref != other.ref:
-                return False
-
-        return np.array_equal(self, other)

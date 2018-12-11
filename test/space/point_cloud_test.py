@@ -49,4 +49,4 @@ def test_from_tract():
     # read in trk, convert to mask
     mask = PointCloud.from_tract(f_trk).to_mask(ref=mask_expected.ref)
 
-    assert mask == mask_expected
+    assert np.array_equal(mask, mask_expected)

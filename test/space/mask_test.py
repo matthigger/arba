@@ -23,17 +23,13 @@ def f_nii(mask):
     os.remove(f_nii)
 
 
-def test_eq(mask):
-    assert mask == mask, '__eq__()'
-
-
 def test_dilate(mask):
     dilated_mask = mask.dilate(1)
     dilated_mask_expected = Mask([[1, 1, 0, 0],
                                   [1, 1, 1, 0],
                                   [0, 1, 1, 1],
                                   [0, 0, 1, 1]], ref=dilated_mask.ref)
-    assert dilated_mask == dilated_mask_expected, 'dilate()'
+    assert np.array_equal(dilated_mask, dilated_mask_expected), 'dilate()'
 
 
 def test_len(mask):
@@ -48,4 +44,4 @@ def test_to_nii_and_from_nii_and_from_img(mask, f_nii):
     mask.to_nii(f_nii)
     mask_too = Mask.from_nii(f_nii)
 
-    assert mask_too == mask, 'to_nii(), from_nii() or from_img()'
+    assert np.array_equal(mask_too, mask), 'to_nii(), from_nii() or from_img()'
