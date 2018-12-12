@@ -82,7 +82,7 @@ def get_perf(folder, method, alpha, f_detect_stat, effect):
     def is_sig(reg):
         return reg in sig_reg_set
 
-    x = sg.to_array(fnc=is_sig, shape=ref.shape)
+    x = sg.to_array(fnc=is_sig, shape=ref.shape, background=0)
 
     dice = effect.get_dice(x)
     sens, spec = effect.get_sens_spec(x, mask_active)
@@ -103,6 +103,23 @@ def get_perf(folder, method, alpha, f_detect_stat, effect):
     f_out = folder / f'detected_{method}.nii.gz'
     img = nib.Nifti1Image(x, affine=ref.affine)
     img.to_filename(str(f_out))
+
+    def get_pval(reg):
+        return reg.pval
+
+    x = sg.to_array(fnc=get_pval, shape=ref.shape, background=1)
+    f_out = folder / f'pval_{method}.nii.gz'
+    img = nib.Nifti1Image(x, affine=ref.affine)
+    img.to_filename(str(f_out))
+
+    if method not in ['tfce', 'vba']:
+        def get_wmaha(reg):
+            return reg.maha * len(reg)
+
+        x = sg.to_array(fnc=get_wmaha, shape=ref.shape, background=0)
+        f_out = folder / f'wmaha_{method}.nii.gz'
+        img = nib.Nifti1Image(x, affine=ref.affine)
+        img.to_filename(str(f_out))
 
     return performance(sens=sens, spec=spec, dice=dice, auc=auc)
 
@@ -143,8 +160,8 @@ if __name__ == '__main__':
 
     alpha = .05
     method_set = {'vba', 'arba', 'tfce'}
-    par_flag = True
-    recompute_arba = True
+    par_flag = False
+    recompute_arba = False
 
     f_stat_template = 'wmaha_{method}.nii.gz'
     f_sg_template = 'sg_{method}.p.gz'

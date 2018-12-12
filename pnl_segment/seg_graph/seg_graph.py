@@ -56,7 +56,7 @@ class SegGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, fnc=None, fnc_include=None, overlap=False, shape=None):
+    def to_array(self, fnc=None, fnc_include=None, shape=None, background=0):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
@@ -76,14 +76,15 @@ class SegGraph(nx.Graph):
         if shape is None:
             shape = reg_list[0].pc_ijk.ref.shape
 
+        if set().intersection(*[r.pc_ijk for r in self]):
+            raise AttributeError('non disjoint regions found')
+
         # build output array
-        x = np.zeros(shape)
+        x = np.zeros(shape) * background
         for reg in reg_list:
             val = fnc(reg)
-            for _x in reg.pc_ijk:
-                if not overlap and x[tuple(_x)] != 0:
-                    raise AttributeError('regions are not disjoint')
-                x[tuple(_x)] += val
+            for ijk in reg.pc_ijk:
+                x[tuple(ijk)] += val
 
         return x
 
