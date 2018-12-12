@@ -25,6 +25,22 @@ class SegGraph(nx.Graph):
         self.file_tree_dict = None
         self.obj_fnc_max = np.inf
 
+    def from_file_tree_dict(self, file_tree_dict):
+        # build map of old regions to new (those from new file_tree_dict)
+        reg_map = {reg: reg.from_file_tree_dict(file_tree_dict)
+                   for reg in self.nodes}
+
+        # init new sg_hist
+        sg = type(self)()
+        sg.file_tree_dict = file_tree_dict
+
+        # add edges which mirror original
+        new_edges = ((reg_map[r0], reg_map[r1]) for r0, r1 in self.edges)
+        sg.add_edges_from(new_edges)
+        sg.add_nodes_from(reg_map.values())
+
+        return sg
+
     def to_nii(self, f_out, ref, **kwargs):
         # load reference image
         ref = get_ref(ref)

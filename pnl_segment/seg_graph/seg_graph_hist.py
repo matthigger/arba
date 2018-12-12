@@ -57,6 +57,23 @@ class SegGraphHistory(SegGraph):
         self.tree_history = nx.DiGraph()
         self.reg_history_list = list()
 
+    def from_file_tree_dict(self, file_tree_dict):
+        sg_hist = super().from_file_tree_dict(file_tree_dict)
+
+        # build map of old regions to new (those from new file_tree_dict)
+        reg_map = {reg: reg.from_file_tree_dict(file_tree_dict)
+                   for reg in self.tree_history.nodes}
+
+        # add edges which mirror original
+        new_edges = ((reg_map[r0], reg_map[r1])
+                     for r0, r1 in self.tree_history.edges)
+        sg_hist.tree_history.add_edges_from(new_edges)
+
+        # map reg_history_list
+        sg_hist.reg_history_list = [reg_map[r] for r in self.reg_history_list]
+
+        return sg_hist
+
     def combine(self, reg_iter):
         reg_sum = super().combine(reg_iter)
 
@@ -125,6 +142,19 @@ class SegGraphHistory(SegGraph):
                 # (note: this pval can propagate to root given sort, fun!)
                 if reg_parent.pval > reg.pval:
                     reg_parent.pval = reg.pval
+
+    def cut_from_cut(self, sg_target):
+        """ builds seg graph which corresponds (in space) per reg in sg_target
+        """
+        sg = SegGraph()
+        sg.obj_fnc_max = self.obj_fnc_max
+
+        for reg in sg_target.nodes:
+            r = next(r for r in self.tree_history.nodes
+                     if r.pc_ijk == reg.pc_ijk)
+            sg.add_node(r)
+
+        return sg
 
     def cut_hierarchical(self, spec=.05):
         """ builds seg_graph of 'edge significant' reg
@@ -241,6 +271,27 @@ class SegGraphHistory(SegGraph):
             sg_last = sg
         return sg_last
 
+    def cut_greedy_pval(self, alpha=.20):
+        sg = SegGraph()
+        sg.file_tree_dict = self.file_tree_dict
+
+        reg_list = [r for r in self.tree_history.nodes if r.pval <= alpha]
+        reg_list = sorted(reg_list, key=lambda r: r.pval)
+        reg_covered = set()
+
+        while reg_list:
+            reg = reg_list.pop(0)
+            if reg in reg_covered:
+                continue
+            else:
+                sg.add_node(reg)
+
+                reg_covered |= {reg}
+                reg_covered |= nx.descendants(self.tree_history, reg)
+                reg_covered |= nx.ancestors(self.tree_history, reg)
+
+        return sg
+
     def cut_p_error_each_step(self, p=.3):
         """ 'splits' tree_history so long as error reduction is at least p
 
@@ -262,7 +313,7 @@ class SegGraphHistory(SegGraph):
 
             sg = sg_next
             error = error_next
-        
+
         raise RuntimeError
 
     def cut_min_error_span(self):

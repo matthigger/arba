@@ -16,6 +16,16 @@ class Region:
         self._pval = None
         self._pval_override = None
 
+    def from_file_tree_dict(self, file_tree_dict):
+        r_list = list()
+        for ijk in self.pc_ijk:
+            fs_dict = {grp: file_tree_dict[grp].ijk_fs_dict[ijk]
+                       for grp in self.fs_dict.keys()}
+            r = type(self)(pc_ijk={ijk}, fs_dict=fs_dict)
+            r_list.append(r)
+
+        return sum(r_list)
+
     def __str__(self):
         return f'{self.__class__} @ {self.pc_ijk} w/ {self.fs_dict}'
 
