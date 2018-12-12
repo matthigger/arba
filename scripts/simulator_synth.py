@@ -2,7 +2,6 @@ import random
 
 import numpy as np
 
-from mh_pytools import parallel
 from pnl_data.set.cidar_post import folder as folder_data
 from pnl_segment.seg_graph import FeatStat
 from pnl_segment.simulate import simulator, Model
@@ -11,11 +10,11 @@ from pnl_segment.space import RefSpace, Mask
 par_flag = False
 
 sim_per_snr = 1
-n_img = 20
+n_img = 40
 snr_vec = np.logspace(-1, 1, 5)
 # snr_vec = [1]
 p_effect = .5
-effect_rad = 4
+effect_rad = 3
 shape = (9, 9, 9)
 obj = 'maha'
 effect_u = np.array([-1])
@@ -52,10 +51,12 @@ for snr in snr_vec:
         d = {'snr': snr,
              'obj': obj,
              'effect_mask': effect_mask,
-             'u': effect_u}
+             'u': effect_u,
+             'cross_val_pval': True}
         arg_list.append(d)
         if not par_flag:
             sim.run_effect(verbose=True, **d)
 
 if par_flag:
+    raise NotImplementedError
     parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=sim)

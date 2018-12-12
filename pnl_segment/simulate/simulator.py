@@ -73,7 +73,8 @@ class Simulator:
         return effect
 
     def run(self, effect, obj, ft_dict, verbose=False, resample=False,
-            save=False, harmonize=False, **kwargs):
+            save=False, harmonize=False, cross_val_pval=True, folder=None,
+            **kwargs):
         """ runs experiment
         """
 
@@ -86,6 +87,17 @@ class Simulator:
         if harmonize:
             mu_offset = FileTree.harmonize_via_add(ft_dict.values(),
                                                    apply=True)
+
+        if cross_val_pval:
+            ft_dict_pval = dict()
+            for grp, ft in list(ft_dict.items()):
+                ft_segment, ft_pval = ft.split()
+                ft_dict[grp] = ft_segment
+                ft_dict_pval[grp] = ft_pval
+            # apply effect before saving
+            ft_dict_pval[self.grp_effect] = \
+                effect.apply_to_file_tree(ft_dict_pval[self.grp_effect])
+            file.save(ft_dict_pval, folder / 'ft_dict_pval.p.gz')
 
         # apply effect to effect group
         ft_effect = ft_dict[self.grp_effect]
@@ -101,7 +113,7 @@ class Simulator:
 
         # save
         if save:
-            self.save(sg_hist, ft_dict, effect, obj, **kwargs)
+            self.save(sg_hist, ft_dict, effect, obj, folder, **kwargs)
 
         return sg_hist
 
@@ -109,7 +121,7 @@ class Simulator:
              **kwargs):
 
         # save sg_hist
-        file.save(sg_hist, file=folder / 'sg_hist.p.gz')
+        file.save(sg_hist, file=folder / 'sg_hist_train.p.gz')
 
         # output mean images of each feature per grp
         for feat in self.feat_list:

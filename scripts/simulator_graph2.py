@@ -17,9 +17,9 @@ def save_fig(f_out):
     plt.close()
 
 
-def make_plots(folder):
-    f_sg_hist = folder / 'sg_hist.p.gz'
-    f_sg_arba = folder / 'sg_arba.p.gz'
+def make_plots(folder, label):
+    f_sg_hist = folder / f'sg_hist{label}.p.gz'
+    f_sg_arba = folder / f'sg_arba{label}.p.gz'
     f_effect = folder / 'effect_mask.nii.gz'
 
     if not f_sg_hist.exists():
@@ -39,7 +39,7 @@ def make_plots(folder):
 
     # size vs error
     plot.size_vs_error_normed(sg_hist=sg_hist, n_max=30)
-    save_fig(f_out=folder / 'size_vs_error.pdf')
+    save_fig(f_out=folder / f'size_vs_error{label}.pdf')
 
     # size vs error tree
     _reg_list = set()
@@ -53,7 +53,7 @@ def make_plots(folder):
                                       'edgecolors': 'k'},
                       log_x=True,
                       log_y=True)
-    save_fig(f_out=folder / 'size_vs_error_tree.pdf')
+    save_fig(f_out=folder / f'size_vs_error_tree{label}.pdf')
 
     # size v maha
     plot.size_v_mahalanobis(sg=sg_hist.tree_history,
@@ -64,7 +64,7 @@ def make_plots(folder):
                                             'edgecolors': 'k'},
                             log_x=True,
                             log_y=True)
-    save_fig(f_out=folder / 'size_vs_maha.pdf')
+    save_fig(f_out=folder / f'size_vs_maha{label}.pdf')
 
     # size v wmaha
     plot.size_v_wmahalanobis(sg=sg_hist.tree_history,
@@ -75,7 +75,7 @@ def make_plots(folder):
                                              'edgecolors': 'k'},
                              log_x=True,
                              log_y=True)
-    save_fig(f_out=folder / 'size_vs_wmaha.pdf')
+    save_fig(f_out=folder / f'size_vs_wmaha{label}.pdf')
 
     # size v pval
     sg_hist = file.load(f_sg_hist)
@@ -86,13 +86,14 @@ def make_plots(folder):
                                      'edgecolors': 'k'},
                      log_x=True,
                      log_y=True)
-    save_fig(f_out=folder / 'size_vs_pval.pdf')
+    save_fig(f_out=folder / f'size_vs_pval{label}.pdf')
 
 
 if __name__ == '__main__':
     from tqdm import tqdm
 
     folder = folder / 'synth_data'
+
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
     par_flag = True
@@ -100,7 +101,10 @@ if __name__ == '__main__':
     arg_list = []
     s_folder_glob = '*snr*run*'
     for _folder in tqdm(folder.glob(s_folder_glob)):
-        arg_list.append({'folder': _folder})
+        arg_list.append({'folder': _folder,
+                         'label': ''})
+        arg_list.append({'folder': _folder,
+                         'label': '_train'})
 
     if par_flag:
         run_par_fnc(make_plots, arg_list)

@@ -20,10 +20,19 @@ class RegMahaDm:
         self.pval = pval
 
 
-def compute_arba(folder):
-    sg_hist = file.load(folder / 'sg_hist.p.gz')
-    sg_arba = sg_hist.cut_p_error_each_step(.2)
+def compute_arba(folder, alpha):
+    sg_hist_train = file.load(folder / 'sg_hist_train.p.gz')
+    sg_arba_train = sg_hist_train.cut_greedy_pval(alpha)
+
+    # reload sg_arba with separate data (not used to build segmentation)
+    ft_dict_pval = file.load(folder / 'ft_dict_pval.p.gz')
+
+    sg_hist = sg_hist_train.from_file_tree_dict(ft_dict_pval)
+    sg_arba = sg_hist.cut_from_cut(sg_arba_train)
+
+    file.save(sg_arba_train, folder / 'sg_arba_train.p.gz')
     file.save(sg_arba, folder / 'sg_arba.p.gz')
+    file.save(sg_hist, folder / 'sg_hist.p.gz')
 
 
 def compute_tfce(folder):
@@ -65,6 +74,8 @@ def get_perf(folder, method, alpha, f_detect_stat, effect):
 
     # determines if significant
     pval_list = [reg.pval for reg in sg.nodes]
+    if not pval_list:
+        pval_list = [1]
     is_sig_vec = multipletests(pval_list, alpha=alpha, method='holm')[0]
     sig_reg_set = {r for r, is_sig in zip(sg.nodes, is_sig_vec) if is_sig}
 
@@ -77,7 +88,7 @@ def get_perf(folder, method, alpha, f_detect_stat, effect):
     sens, spec = effect.get_sens_spec(x, mask_active)
 
     # compute auc
-    x = sg.to_array(fnc=lambda x: x.pval)
+    x = sg.to_array(fnc=lambda x: x.pval, shape=ref.shape)
     auc = effect.get_auc(x, mask=mask_active)
 
     # output stats to file
@@ -96,13 +107,13 @@ def get_perf(folder, method, alpha, f_detect_stat, effect):
     return performance(sens=sens, spec=spec, dice=dice, auc=auc)
 
 
-def run(folder, method_set, compute_arba_flag=False, alpha=.05):
+def run(folder, method_set, compute_arba_flag=False, alpha=.05, **kwargs):
     # load effect
     f_eff = folder / 'effect.p.gz'
     effect = file.load(f_eff)
 
     if compute_arba_flag:
-        compute_arba(folder)
+        compute_arba(folder, alpha=alpha)
 
     if 'tfce' in method_set:
         compute_tfce(folder)
@@ -128,11 +139,11 @@ if __name__ == '__main__':
     from pnl_data.set.cidar_post import folder
     from mh_pytools import parallel
 
-    folder_out = folder / '2018_Dec_11_03_30PM19'
+    folder_out = folder / 'synth_data'
 
     alpha = .05
-    method_set = {'vba', 'arba', 'tfce', 'rba'}
-    par_flag = False
+    method_set = {'vba', 'arba', 'tfce'}
+    par_flag = True
     recompute_arba = True
 
     f_stat_template = 'wmaha_{method}.nii.gz'
@@ -147,7 +158,8 @@ if __name__ == '__main__':
             continue
         arg_list.append({'folder': folder,
                          'method_set': method_set,
-                         'compute_arba_flag': recompute_arba})
+                         'compute_arba_flag': recompute_arba,
+                         'alpha': alpha})
 
     # run per folder
     if par_flag:
