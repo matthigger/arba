@@ -10,6 +10,9 @@ from .ref_space import get_ref
 
 class Mask(np.ndarray):
     """ array
+
+    todo: can't be pickled, see:
+    https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
     """
 
     @staticmethod
