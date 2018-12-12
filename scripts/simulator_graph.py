@@ -4,7 +4,6 @@ import subprocess
 from collections import namedtuple, defaultdict
 
 import nibabel as nib
-from scipy.stats import chi2
 from statsmodels.stats.multitest import multipletests
 
 from mh_pytools import file
@@ -41,9 +40,12 @@ def compute_tfce(folder):
     maha_tfce = nib.load(str(f_tfce)).get_data()
     sg_tfce = SegGraph()
     for reg in sg_vba.nodes:
-        ijk = next(iter(reg.pc_ijk))
-        maha = maha_tfce[tuple(ijk)]
-        pval = chi2.sf(maha, df=2)
+        # get pval from reg using modified mahalanobis
+        ijk = tuple(next(iter(reg.pc_ijk)))
+        maha = maha_tfce[ijk]
+        pval = reg.get_pval(maha=maha)
+
+        # build dummy region, add to tfce segmentation graph
         reg_dm = RegMahaDm(pc_ijk=reg.pc_ijk, maha=maha, pval=pval)
         sg_tfce.add_node(reg_dm)
     file.save(sg_tfce, folder / 'sg_tfce.p.gz')
@@ -126,10 +128,10 @@ if __name__ == '__main__':
     from pnl_data.set.cidar_post import folder
     from mh_pytools import parallel
 
-    folder_out = folder / 'synth_data'
+    folder_out = folder / '2018_Dec_11_03_30PM19'
 
     alpha = .05
-    method_set = {'vba', 'arba', 'tfce'}
+    method_set = {'vba', 'arba', 'tfce', 'rba'}
     par_flag = False
     recompute_arba = True
 
