@@ -31,16 +31,11 @@ class PointCloud(set):
             return PointCloud(np.zeros((0, 3)), ref)
 
     @staticmethod
-    def from_mask(x, **kwargs):
-        if isinstance(x, Mask):
-            if 'ref' in kwargs.keys() and x.ref != kwargs['ref']:
-                raise AttributeError('ref overspecified')
-            kwargs['ref'] = x.ref
-
+    def from_mask(m):
         # convert to array of 3-tuple
-        x = np.vstack(np.where(x)).T
+        x = np.vstack(np.where(m)).T
 
-        return PointCloud.from_array(x, **kwargs)
+        return PointCloud.from_array(x, ref=m.ref)
 
     @staticmethod
     def from_nii(f_nii):
@@ -90,6 +85,7 @@ class PointCloud(set):
 
     def to_mask(self, ref=None, shape=None, ignore_out=False):
         if ref is None:
+            ref = self.ref
             pc = self
         else:
             ref = get_ref(ref)
