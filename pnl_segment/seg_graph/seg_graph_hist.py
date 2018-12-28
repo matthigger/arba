@@ -271,7 +271,7 @@ class SegGraphHistory(SegGraph):
             sg_last = sg
         return sg_last
 
-    def cut_greedy_pval(self, alpha=.20):
+    def cut_greedy_pval(self, alpha=.05):
         sg = SegGraph()
         sg.file_tree_dict = self.file_tree_dict
 
@@ -279,16 +279,33 @@ class SegGraphHistory(SegGraph):
         reg_list = sorted(reg_list, key=lambda r: r.pval)
         reg_covered = set()
 
+        reg_sig_list = list()
+
         while reg_list:
             reg = reg_list.pop(0)
             if reg in reg_covered:
                 continue
             else:
-                sg.add_node(reg)
+                reg_sig_list.append(reg)
 
                 reg_covered |= {reg}
                 reg_covered |= nx.descendants(self.tree_history, reg)
                 reg_covered |= nx.ancestors(self.tree_history, reg)
+
+        # m is max num of regions tested for which all are still significant
+        # under holm-bonferonni.  using this requires re-testing on separate
+        # fold
+        m_max = np.inf
+        for idx, reg in enumerate(reg_sig_list):
+            if idx == m_max:
+                break
+            m_current = np.floor(alpha / reg.pval).astype(int) + idx
+            m_max = min(m_current, m_max)
+
+        sg.add_nodes_from(reg_sig_list[:m_max])
+
+        if len(sg.is_sig(alpha=alpha, method='holm')) != len(sg):
+            raise RuntimeError('not all regions are significant')
 
         return sg
 
