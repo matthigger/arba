@@ -6,10 +6,11 @@ import networkx as nx
 import nibabel as nib
 import numpy as np
 from sortedcontainers import SortedList
+from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
 import mh_pytools.parallel
-from ..region import Region
+from ..region import Region, FeatStatEmpty
 from ..space import get_ref
 
 
@@ -48,7 +49,7 @@ class SegGraph(nx.Graph):
             raise AttributeError('ref must have shape')
 
         # build array
-        x = self.to_array(**kwargs)
+        x = self.to_array(shape=ref.shape, **kwargs)
 
         # save
         img_out = nib.Nifti1Image(x, ref.affine)
@@ -326,7 +327,10 @@ class SegGraph(nx.Graph):
         """
 
         # add together root nodes
-        fs_dict = sum(self.nodes).fs_dict
+        fs_dict = defaultdict(FeatStatEmpty)
+        for reg in self.nodes:
+            for grp, fs in reg.fs_dict.items():
+                fs_dict[grp] += fs
 
         # sum different groups
         fs_all = sum(fs_dict.values())
@@ -343,3 +347,29 @@ class SegGraph(nx.Graph):
                 r.reset()
 
         return mu_offset_dict
+
+    def is_sig(self, alpha=.05, method='holm'):
+        """ returns a SegGraph containing only significant regions in self
+
+        Args:
+            alpha (float): significance level
+            method (str): see multipletests, defaults to Holm's
+
+        Returns:
+            sg (SegGraph): contains only significant regions
+        """
+
+        reg_list = list(self.nodes)
+        pval_list = [reg.pval for reg in reg_list]
+        is_sig_vec = multipletests(pval_list, alpha=alpha, method=method)[0]
+        reg_sig_list = [r for r, is_sig in zip(reg_list, is_sig_vec) if is_sig]
+
+        # init seg graph
+        sg = SegGraph()
+        sg.file_tree_dict = self.file_tree_dict
+        sg.obj_fnc_max = self.obj_fnc_max
+
+        # add sig regions
+        sg.add_nodes_from(reg_sig_list)
+
+        return sg
