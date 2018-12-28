@@ -53,11 +53,11 @@ class FileTree:
         return mu_offset_dict
 
     @property
-    def point_cloud(self):
-        if self._point_cloud is None:
-            self._point_cloud = self.get_point_cloud()
+    def mask(self):
+        if self._mask is None:
+            self._mask = self.get_mask()
 
-        return self._point_cloud
+        return self._mask
 
     @property
     def sbj_iter(self):
@@ -95,12 +95,14 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree):
+    def __init__(self, sbj_feat_file_tree, mask=None):
         # todo: all attributes should be internal
         # init
         self.sbj_feat_file_tree = sbj_feat_file_tree
-        self.ijk_fs_dict = defaultdict(FeatStatEmpty)
-        self._point_cloud = None
+        self.ijk_fs_dict = dict()
+        self._mask = mask
+        if isinstance(self._mask, Mask):
+            self._mask = PointCloud.from_mask(self._mask)
 
         # assign and validate feat_list
         self.feat_list = None
@@ -120,59 +122,30 @@ class FileTree:
                 elif self.ref != get_ref(f_nii):
                     raise AttributeError('space mismatch')
 
-    def load(self, ijk_set=None, verbose=False):
+    def load(self, mask=None, verbose=False, **kwargs):
         """ loads files, adds data to statistics per voxel
 
         Args:
-            ijk_set (Set): ijk tuples to load
+            mask (Mask): ijk tuples to load
             verbose (bool): toggles command line output
         """
+        # get mask_ijk
+        if mask is None:
+            mask = self.get_mask(**kwargs)
 
-        if ijk_set is None:
-            ijk_set = self.point_cloud
+        # load all data
+        data = self.get_array(verbose=verbose)
 
-        # store files
+        # compute feat stat
         tqdm_dict = {'disable': not verbose,
-                     'desc': 'load sbj'}
-        for sbj, f_nii_dict in tqdm(self.sbj_feat_file_tree.items(),
-                                    **tqdm_dict):
-            # get data
-            ijk_data_dict = self.get_ijk_fs_dict(sbj, ijk_set=ijk_set)
-
-            # update stats per sbj
-            for ijk, fs in ijk_data_dict.items():
-                # store aggregate stats
-                self.ijk_fs_dict[ijk] += fs
-
-        # we 'fix' the dict (not defaultdict) prevent errors once loaded
-        self.ijk_fs_dict = dict(self.ijk_fs_dict)
-
-    def get_ijk_fs_dict(self, sbj, ijk_set):
-        """ returns data per ijk, loads from original files
-
-        Args:
-            sbj: sbj to load
-            ijk_set (set): restrict ijk values in return dict
-
-        Returns:
-            ijk_fs_dict (dict): keys are ijk tuple, values are array of data
-                                  with shape (n, len(self.feat_list))
-        """
-
-        # load data
-        f_nii_list = [self.sbj_feat_file_tree[sbj][feat]
-                      for feat in self.feat_list]
-        data_list = [nib.load(str(f)).get_data() for f in f_nii_list]
-
-        # store data
-        ijk_fs_dict = dict()
-        for ijk in ijk_set:
-            x = np.array([data[ijk] for data in data_list])
-            if not x.all():
+                     'desc': 'compute feat stat'}
+        self.ijk_fs_dict = dict()
+        for ijk in tqdm(np.ndindex(mask.shape), **tqdm_dict):
+            if not mask[ijk]:
                 continue
-            ijk_fs_dict[ijk] = FeatStat.from_array(x, obs_greater_dim=False)
 
-        return ijk_fs_dict
+            x = data[ijk[0], ijk[1], ijk[2], :, :]
+            self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
     def apply_mask(self, mask):
         ft = FileTree(self.sbj_feat_file_tree)
@@ -185,7 +158,26 @@ class FileTree:
 
         return ft
 
-    def to_array(self, fnc=None, feat=None):
+    def get_array(self, verbose=False):
+        """ returns an array of all data
+
+        Returns:
+            data (np.array): shape=(space0, space1, space2, num_feat, num_sbj)
+        """
+        sbj_data_dict = dict()
+        tqdm_dict = {'disable': not verbose,
+                     'desc': 'load data'}
+        for sbj, f_nii_dict in tqdm(self.sbj_feat_file_tree.items(),
+                                    **tqdm_dict):
+            data_list = list()
+            for feat in self.feat_list:
+                img = nib.load(str(f_nii_dict[feat]))
+                data_list.append(img.get_data())
+            sbj_data_dict[sbj] = np.stack(data_list, axis=3)
+        data = np.stack(sbj_data_dict.values(), axis=4)
+        return data
+
+    def get_mean_array(self, fnc=None, feat=None):
         """ returns array built from feat stat at each ijk
 
         either fnc xor feat, if fnc passed it is applied to each feat_stat, if
@@ -215,37 +207,40 @@ class FileTree:
         return x
 
     def to_nii(self, f_out, **kwargs):
-        x = self.to_array(**kwargs)
+        x = self.get_mean_array(**kwargs)
         img = nib.Nifti1Image(x, self.ref.affine)
         img.to_filename(str(f_out))
 
-    def get_point_cloud(self):
-        """ returns a point_cloud which has all voxels with complete data
+    def get_mask(self, p=1):
+        """ returns a mask which has all voxels with complete data
         """
+        # require at least 1 observation per ijk
+        p = max(p, np.nextafter(0, 1))
+
         # get set of all voxels present in all data file
         f_nii_list = list()
         for sbj in self.sbj_iter:
             f_nii_list += list(self.sbj_feat_file_tree[sbj].values())
-        pc_list = [PointCloud.from_nii(f_nii) for f_nii in f_nii_list]
-        pc = PointCloud(set.intersection(*pc_list), ref=self.ref)
 
-        return pc
+        # build mask
+        mask = np.stack(Mask.from_nii(f_nii) for f_nii in f_nii_list)
+        mask = np.mean(mask.astype(bool), axis=0) >= p
 
-    def get_subset(self, sbj_list, **kwargs):
+        return Mask(mask, ref=get_ref(f_nii_list[0]))
+
+    def get_subset(self, sbj_list):
         # init new file tree obj from only sbj in sbj_list
         sbj_feat_file_tree = {sbj: self.sbj_feat_file_tree[sbj]
                               for sbj in sbj_list}
         ft = FileTree(sbj_feat_file_tree)
-        ft.load(**kwargs)
         return ft
 
-    def split(self, p=.5, verbose=False, **kwargs):
+    def split(self, p=.5, seed=None):
         """ splits data into two groups
 
         Args:
             p (float): in (0, 1), splits data to have at least p percent of sbj
                        in the first grp
-            verbose (bool): toggles command line output
 
         Returns:
             file_tree_list (list): FileTree for each grp
@@ -256,24 +251,17 @@ class FileTree:
 
         # split sbj into health and effect groups
         sbj_set = set(self.sbj_iter)
-        random.seed(1)
+        if seed is not None:
+            random.seed(seed)
         sbj_grp0 = set(random.sample(sbj_set, k=n_grp0))
         sbj_grp1 = sbj_set - sbj_grp0
 
         # build file_tree of each group
         file_tree_list = list()
-        tqdm_dict = {'total': 2,
-                     'desc': 'aggregate stats per subgroup',
-                     'disable': not verbose}
-
-        # todo: clumsy, maybe load after split?
-        ijk_set = set(self.ijk_fs_dict.keys())
-        if not ijk_set:
-            ijk_set = None
-
-        for sbj_grp in tqdm((sbj_grp0, sbj_grp1), **tqdm_dict):
-            ft = self.get_subset(sbj_grp, ijk_set=ijk_set, **kwargs,
-                                 verbose=verbose)
+        for sbj_grp in (sbj_grp0, sbj_grp1):
+            sbj_feat_file_tree = {sbj: self.sbj_feat_file_tree[sbj]
+                                  for sbj in sbj_grp}
+            ft = FileTree(sbj_feat_file_tree)
             file_tree_list.append(ft)
 
         return file_tree_list
