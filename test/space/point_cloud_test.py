@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from pnl_segment.space import *
@@ -50,3 +52,10 @@ def test_from_tract():
     mask = PointCloud.from_tract(f_trk).to_mask(ref=mask_expected.ref)
 
     assert np.array_equal(mask, mask_expected)
+
+
+def test_pickle(point_cloud):
+    pc_pickled = pickle.dumps(point_cloud)
+    pc_copy = pickle.loads(pc_pickled)
+
+    assert point_cloud.ref == pc_copy.ref, 'pickle error'
