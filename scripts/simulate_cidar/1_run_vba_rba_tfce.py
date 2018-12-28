@@ -57,9 +57,6 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True):
     mask = Mask.from_nii(folder / 'mask.nii.gz')
     effect = file.load(folder / 'effect.p.gz')
 
-    # todo: Mask doesn't save ref (numpy subclass issue)
-    effect.mask = Mask.from_nii(folder / 'mask_effect.nii.gz')
-
     for ft in ft_dict.values():
         ft.load(mask=mask)
 

@@ -1,3 +1,5 @@
+import pickle
+
 import pytest
 
 from pnl_segment.space import *
@@ -45,3 +47,10 @@ def test_to_nii_and_from_nii_and_from_img(mask, f_nii):
     mask_too = Mask.from_nii(f_nii)
 
     assert np.array_equal(mask_too, mask), 'to_nii(), from_nii() or from_img()'
+
+
+def test_pickle(mask):
+    mask_pickled = pickle.dumps(mask)
+    mask_copy = pickle.loads(mask_pickled)
+
+    assert mask.ref == mask_copy.ref, 'pickle: see __reduce__() __setstate__()'

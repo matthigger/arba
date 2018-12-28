@@ -9,10 +9,7 @@ from .ref_space import get_ref
 
 
 class Mask(np.ndarray):
-    """ array
-
-    todo: can't be pickled, see:
-    https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
+    """ boolean array which preserves reference spacing
     """
 
     @staticmethod
@@ -59,3 +56,13 @@ class Mask(np.ndarray):
     def dilate(self, r):
         x = binary_dilation(self, iterations=r)
         return Mask(x, ref=self.ref)
+
+    # https://stackoverflow.com/questions/26598109/preserve-custom-attributes-when-pickling-subclass-of-numpy-array
+    def __reduce__(self):
+        pickled_state = super(Mask, self).__reduce__()
+        new_state = pickled_state[2] + (self.ref,)
+        return pickled_state[0], pickled_state[1], new_state
+
+    def __setstate__(self, state):
+        self.ref = state[-1]
+        super(Mask, self).__setstate__(state[0:-1])
