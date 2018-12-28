@@ -7,7 +7,7 @@ import numpy as np
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.seg_graph import SegGraph
+from pnl_segment.seg_graph import SegGraph, FileTree
 from pnl_segment.space import Mask
 
 
@@ -49,7 +49,7 @@ def compute_sg_tfce(sg_vba, mask, folder=None):
     return sg
 
 
-def run_vba_rba_tfce(folder, alpha, write_outfile=True):
+def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     s_mask_sig = 'mask_sig_{method}.nii.gz'
 
     ft_dict = file.load(folder / 'ft_dict.p.gz')
@@ -59,6 +59,9 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True):
 
     for ft in ft_dict.values():
         ft.load(mask=mask)
+
+    if harmonize:
+        FileTree.harmonize_via_add(ft_dict.values(), apply=True)
 
     effect.apply_to_file_tree(ft_dict['grp_effect'])
 
@@ -99,10 +102,11 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True):
 if __name__ == '__main__':
     from collections import defaultdict
 
+    harmonize = True
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2018_Dec_27_07_40AM00'
+    folder = folder / '2018_Dec_28_12_58PM37'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()
@@ -111,7 +115,8 @@ if __name__ == '__main__':
         if not folder.is_dir():
             continue
         arg_list.append({'folder': folder,
-                         'alpha': alpha})
+                         'alpha': alpha,
+                         'harmonize': harmonize})
 
     # run per folder
     fnc = lambda: defaultdict(list)
