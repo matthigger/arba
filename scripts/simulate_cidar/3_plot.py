@@ -20,7 +20,7 @@ def save_fig(f_out):
 def make_plots(folder, label):
     f_sg_hist = folder / f'sg_hist{label}.p.gz'
     f_sg_arba = folder / f'sg_arba{label}.p.gz'
-    f_effect = folder / 'effect_mask.nii.gz'
+    f_effect = folder / 'mask_effect.nii.gz'
 
     if not f_sg_hist.exists():
         return
@@ -92,7 +92,7 @@ def make_plots(folder, label):
 if __name__ == '__main__':
     from tqdm import tqdm
 
-    folder = folder / 'synth_data'
+    folder = folder / '2018_Dec_27_07_40AM00'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         arg_list.append({'folder': _folder,
                          'label': ''})
         arg_list.append({'folder': _folder,
-                         'label': '_train'})
+                         'label': '_test'})
 
     if par_flag:
         run_par_fnc(make_plots, arg_list)

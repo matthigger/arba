@@ -1,12 +1,14 @@
+from collections import namedtuple
+
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
 from mh_pytools import file
 from pnl_data.set.cidar_post import folder
-from collections import namedtuple
 
-folder_out = folder / 'synth_data'
+folder_out = folder / '2018_Dec_27_07_40AM00'
 
 # load
 performance = namedtuple('performance', ('sens', 'spec', 'dice', 'auc'))
@@ -26,13 +28,20 @@ with PdfPages(f_out) as pdf:
         for method in method_list:
             perf_list = snr_method_perf_tree[snr][method]
 
-            sens = [x.sens for x in perf_list]
-            spec = [x.spec for x in perf_list]
+            sens = [x[0] for x in perf_list]
+            spec = [x[1] for x in perf_list]
 
             plt.scatter(spec, sens, label=method, alpha=.3,
                         color=color_dict[method])
-            # plt.scatter(np.mean(spec), np.mean(sens), marker='s', color='w',
-            #             edgecolors=color_dict[method], linewidths=2)
+
+        for method in method_list:
+            perf_list = snr_method_perf_tree[snr][method]
+
+            sens = [x[0] for x in perf_list]
+            spec = [x[1] for x in perf_list]
+
+            plt.scatter(np.mean(spec), np.mean(sens), marker='s', color='w',
+                        edgecolors=color_dict[method], linewidths=2)
 
         ax = plt.gca()
         box = ax.get_position()
