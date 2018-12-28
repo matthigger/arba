@@ -147,15 +147,21 @@ class Effect:
             # no area detected
             return 0
 
-    def get_sens_spec(self, mask, mask_active):
+    def get_sens_spec(self, estimate, mask):
         """ returns sens + spec
+
+        Args:
+            estimate (np.array): boolean array, estimate of effect location
+            mask (np.array): boolean array, voxels outside of mask are not
+                             counted for or against accuracy
 
         Returns:
             sens (float): percentage of affected voxels detected
             spec (float): percentage of unaffected voxels undetected
         """
-        signal = self.mask[mask_active].astype(bool)
-        estimate = mask[mask_active].astype(bool)
+        mask = mask.astype(bool)
+        signal = self.mask[mask].astype(bool)
+        estimate = estimate[mask].astype(bool)
 
         true_pos = np.count_nonzero(signal & estimate)
         true = np.count_nonzero(signal)
@@ -177,44 +183,16 @@ class Effect:
 
         return sens, spec
 
-    def apply(self, x):
-        """ applies effect to array x
-
-        Args:
-            x (np.array): img to apply effect to
-        """
-
-        # sample effect
-        effect = np.random.multivariate_normal(mean=self.mean,
-                                               cov=self.cov,
-                                               size=len(self))
-
-        # add effect
-        raise NotImplementedError
-        x = self.mask.insert(x, effect, add=True)
-
-        return x
-
-    def apply_to_file_tree(self, file_tree, copy=True):
+    def apply_to_file_tree(self, file_tree):
         if any(self.cov.flatten()):
             raise AttributeError('effect cov must be 0')
 
-        if copy:
-            file_tree = deepcopy(file_tree)
-
         ijk_set = PointCloud.from_mask(self.mask)
-        ijk_set &= {x for x in file_tree.ijk_fs_dict.keys()}
         for ijk in ijk_set:
-            fs = file_tree.ijk_fs_dict[ijk]
-
-            file_tree.ijk_fs_dict[ijk] = FeatStat(n=fs.n,
-                                                  mu=fs.mu + self.mean,
-                                                  cov=fs.cov)
-
-        return file_tree
+            file_tree.ijk_fs_dict[ijk].mu += self.mean
 
     @staticmethod
-    def sample_mask(prior_array, radius, n=1, seg_array=None):
+    def sample_mask(prior_array, radius, n=1, seg_array=None, ref=None):
         """n effect centers chosen and dilated to build mask of affected volume
 
         Args:
@@ -310,4 +288,4 @@ class Effect:
             eff_mask = np.logical_and(eff_mask, prior_array)
         else:
             raise AttributeError(r'invalid radius given: {radius}')
-        return Mask(eff_mask)
+        return Mask(eff_mask, ref=ref)
