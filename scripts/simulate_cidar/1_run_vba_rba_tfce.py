@@ -106,7 +106,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2018_Dec_28_12_58PM37'
+    folder = folder / '2018_Dec_28_18_44'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()

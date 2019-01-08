@@ -92,7 +92,7 @@ def make_plots(folder, label):
 if __name__ == '__main__':
     from tqdm import tqdm
 
-    folder = folder / '2018_Dec_27_07_40AM00'
+    folder = folder / '2018_Dec_28_12_58PM37'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
