@@ -1,4 +1,5 @@
 import os
+import pathlib
 import tempfile
 from collections import defaultdict
 
@@ -80,12 +81,16 @@ class Model:
 
         return f_out
 
-    def to_file_tree(self, n, folder=None, **kwargs):
+    def to_file_tree(self, n, folder=None, label='', **kwargs):
         sbj_feat_file_tree = defaultdict(dict)
+        folder = pathlib.Path(folder)
+        folder.mkdir(exist_ok=True, parents=True)
+
         for idx in range(n):
             if folder:
-                f_out = folder / f'{idx}.nii.gz'
+                f_out = folder / f'{label}{idx}.nii.gz'
             else:
                 f_out = None
-            sbj_feat_file_tree[f'sbj_{idx}']['dummy_feat'] = self.sample_nii(f_out=f_out, **kwargs)
+            sbj_feat_file_tree[f'sbj_{idx}']['dummy_feat'] = self.sample_nii(
+                f_out=f_out, **kwargs)
         return FileTree(sbj_feat_file_tree)
