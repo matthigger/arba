@@ -14,7 +14,7 @@ def size_v_mu_diff(*args, **kwargs):
         return np.linalg.norm(fs0.mu - fs1.mu)
 
     ylabel = r'||\mu_0 - \mu_1||_2'
-    scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
 
 
 def size_v_cov_det(*args, **kwargs):
@@ -23,7 +23,7 @@ def size_v_cov_det(*args, **kwargs):
         return np.linalg.det(fs.cov)
 
     ylabel = 'det cov'
-    scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
 
 
 def size_v_cov_tr(*args, **kwargs):
@@ -32,7 +32,7 @@ def size_v_cov_tr(*args, **kwargs):
         return np.trace(fs.cov)
 
     ylabel = 'trace cov'
-    scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
 
 
 def size_v_mahalanobis(*args, **kwargs):
@@ -41,7 +41,7 @@ def size_v_mahalanobis(*args, **kwargs):
     def get_maha(reg):
         return RegionMaha.get_obj(reg)
 
-    scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
 def size_v_wmahalanobis(*args, **kwargs):
@@ -50,7 +50,7 @@ def size_v_wmahalanobis(*args, **kwargs):
     def get_maha(reg):
         return RegionMaha.get_obj(reg) * len(reg)
 
-    scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
 
 def size_v_error(*args, **kwargs):
@@ -59,7 +59,7 @@ def size_v_error(*args, **kwargs):
     def get_error(reg):
         return reg.error / len(reg)
 
-    scatter_tree(*args, fnc=get_error, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_error, ylabel=ylabel, **kwargs)
 
 
 def size_v_pval(*args, corrected=False, size=None, **kwargs):
@@ -74,7 +74,7 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
         def get_pval(reg):
             return reg.pval
 
-    scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
 
 
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
@@ -161,9 +161,12 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
     plt.gca().set_ybound(y_lim)
 
     # label
-    plt.xlabel('size (vox)')
+    plt.xlabel('Region Size (voxels)')
     plt.ylabel(ylabel)
+    plt.grid(True)
+
     if mask is not None:
         cb1 = plt.colorbar(sc, orientation='vertical')
         cb1.set_label(mask_label)
-    plt.grid(True)
+        # todo: kludge
+        return cb1
