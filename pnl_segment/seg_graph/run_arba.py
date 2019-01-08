@@ -8,7 +8,8 @@ from .factory import seg_graph_factory
 
 
 def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
-             grp_effect=None, harmonize=True, verbose=True, alpha=.05):
+             grp_effect=None, harmonize=True, verbose=False, alpha=.05,
+             **kwargs):
     """ runs entire arba process, optionally saves outputs
 
     Args:
@@ -48,12 +49,13 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         FileTree.harmonize_via_add(ft_dict_test.values(), apply=True)
 
     # apply effects
-    effect.apply_to_file_tree(ft_dict_seg[grp_effect])
-    effect.apply_to_file_tree(ft_dict_test[grp_effect])
+    if effect is not None:
+        effect.apply_to_file_tree(ft_dict_seg[grp_effect])
+        effect.apply_to_file_tree(ft_dict_test[grp_effect])
 
     # build sg_hist
     sg_hist = seg_graph_factory(obj='maha', file_tree_dict=ft_dict_seg,
-                                history=True)
+                                history=True, **kwargs)
     sg_hist.reduce_to(1, verbose=True)
 
     # determine candidate regions
@@ -70,6 +72,8 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     if folder_save is not None:
         folder_save = pathlib.Path(folder_save)
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
+        file.save(ft_dict_seg, folder_save / 'ft_dict_seg.p.gz')
+        file.save(ft_dict_test, folder_save / 'ft_dict_test.p.gz')
         file.save(sg_hist, folder_save / 'sg_hist.p.gz')
         file.save(sg_arba, folder_save / 'sg_arba.p.gz')
         file.save(sg_arba_test, folder_save / 'sg_arba_test.p.gz')
@@ -91,7 +95,8 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
                 ft.to_nii(f_out, feat=feat)
 
         # save effect
-        effect.mask.to_nii(folder_save / f'mask_effect.nii.gz')
-        file.save(effect, folder_save / f'effect.p.gz')
+        if effect is not None:
+            effect.mask.to_nii(folder_save / f'mask_effect.nii.gz')
+            file.save(effect, folder_save / f'effect.p.gz')
 
     return sg_arba_test
