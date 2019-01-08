@@ -25,6 +25,7 @@ class SegGraph(nx.Graph):
         self._obj_edge_list = None
         self.file_tree_dict = None
         self.obj_fnc_max = np.inf
+        self.max_size_rat = np.inf
 
     def from_file_tree_dict(self, file_tree_dict):
         # build map of old regions to new (those from new file_tree_dict)
@@ -187,7 +188,7 @@ class SegGraph(nx.Graph):
 
         # init edges if need be
         if self._obj_edge_list is None:
-            self._add_obj_edge_list(verbose=verbose)
+            self._add_obj_edge_list(verbose=verbose, max_size_rat=np.inf)
 
         # init progress stats
         n_neigh_list = list()
@@ -284,7 +285,10 @@ class SegGraph(nx.Graph):
         return edge_list_disjoint, obj_list
 
     def _add_obj_edge_list(self, edge_list=None, paralell=False,
-                           verbose=False):
+                           verbose=False, max_size_rat=None):
+        if max_size_rat is None:
+            max_size_rat = self.max_size_rat
+
         if edge_list is None:
             self._obj_edge_list = SortedList()
             edge_list = self.edges
@@ -292,6 +296,16 @@ class SegGraph(nx.Graph):
         if not isinstance(paralell, bool):
             # a threshhold, not bool, was passed
             paralell = len(edge_list) > paralell
+
+        if np.isinf(max_size_rat):
+            def has_valid_size(*args, **kwargs):
+                return True
+        else:
+            def has_valid_size(edge):
+                n0, n1 = sorted(len(r) for r in edge)
+                return n0 / n1 <= max_size_rat
+
+        edge_list = list(filter(has_valid_size, edge_list))
 
         if paralell:
             # compute (paralell) objective per edge
@@ -361,8 +375,13 @@ class SegGraph(nx.Graph):
 
         reg_list = list(self.nodes)
         pval_list = [reg.pval for reg in reg_list]
-        is_sig_vec = multipletests(pval_list, alpha=alpha, method=method)[0]
-        reg_sig_list = [r for r, is_sig in zip(reg_list, is_sig_vec) if is_sig]
+        if pval_list:
+            is_sig_vec = multipletests(pval_list, alpha=alpha, method=method)[
+                0]
+            reg_sig_list = [r for r, is_sig in zip(reg_list, is_sig_vec) if
+                            is_sig]
+        else:
+            reg_sig_list = list()
 
         # init seg graph
         sg = SegGraph()
