@@ -302,10 +302,11 @@ class SegGraphHistory(SegGraph):
             m_current = np.floor(alpha / reg.pval).astype(int) + idx
             m_max = min(m_current, m_max)
 
-        sg.add_nodes_from(reg_sig_list[:m_max])
+        if m_max < np.inf:
+            sg.add_nodes_from(reg_sig_list[:m_max])
 
-        if len(sg.is_sig(alpha=alpha, method='holm')) != len(sg):
-            raise RuntimeError('not all regions are significant')
+            if len(sg.is_sig(alpha=alpha, method='holm')) != len(sg):
+                raise RuntimeError('not all regions are significant')
 
         return sg
 
