@@ -138,7 +138,8 @@ class FileTree:
 
         # compute feat stat
         tqdm_dict = {'disable': not verbose,
-                     'desc': 'compute feat stat'}
+                     'desc': 'compute feat stat',
+                     'total': np.prod(mask.shape)}
         self.ijk_fs_dict = dict()
         for ijk in tqdm(np.ndindex(mask.shape), **tqdm_dict):
             if not mask[ijk]:
@@ -164,17 +165,23 @@ class FileTree:
         Returns:
             data (np.array): shape=(space0, space1, space2, num_feat, num_sbj)
         """
-        sbj_data_dict = dict()
+
+        # preallocate
+        num_feat = len(self.feat_list)
+        num_sbj = len(self.sbj_feat_file_tree.items())
+        f_any = next(iter(self.sbj_feat_file_tree.values()))[self.feat_list[0]]
+        shape = nib.load(str(f_any)).shape
+        data = np.empty((shape[0], shape[1], shape[2], num_feat, num_sbj))
+
         tqdm_dict = {'disable': not verbose,
-                     'desc': 'load data'}
-        for sbj, f_nii_dict in tqdm(self.sbj_feat_file_tree.items(),
-                                    **tqdm_dict):
-            data_list = list()
-            for feat in self.feat_list:
+                     'desc': 'load data',
+                     'total': num_sbj}
+
+        idx_sbj_dict_iter = enumerate(self.sbj_feat_file_tree.items())
+        for sbj_idx, (sbj, f_nii_dict) in tqdm(idx_sbj_dict_iter, **tqdm_dict):
+            for feat_idx, feat in enumerate(self.feat_list):
                 img = nib.load(str(f_nii_dict[feat]))
-                data_list.append(img.get_data())
-            sbj_data_dict[sbj] = np.stack(data_list, axis=3)
-        data = np.stack(sbj_data_dict.values(), axis=4)
+                data[:, :, :, feat_idx, sbj_idx] = img.get_data()
         return data
 
     def get_mean_array(self, fnc=None, feat=None):
