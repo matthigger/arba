@@ -2,20 +2,17 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from .seg_graph import SegGraph
 from .seg_graph_hist import SegGraphHistory
 from ..region import RegionMinVar, RegionKL, RegionMaha
 from ..space import PointCloud
 
 
-def seg_graph_factory(obj, file_tree_dict, history=False, max_size_rat=np.inf):
+def seg_graph_factory(obj, file_tree_dict, max_size_rat=np.inf):
     """ init PartGraph via img
 
     Args:
         obj (str): either 'min_var', 'kl' or 'maha'
         file_tree_dict (dict): keys are grp, values are FileTree
-        history (bool): toggles whether seg_graph keeps history (see
-                        PartGraphHistory)
 
     Returns:
         seg_graph (PartGraph)
@@ -27,10 +24,7 @@ def seg_graph_factory(obj, file_tree_dict, history=False, max_size_rat=np.inf):
     reg_type = obj_dict[obj.lower()]
 
     # init empty seg_graph
-    if history:
-        sg = SegGraphHistory()
-    else:
-        sg = SegGraph()
+    sg = SegGraphHistory()
 
     # store
     sg.file_tree_dict = file_tree_dict

@@ -57,7 +57,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
 
     # build sg_hist
     sg_hist = seg_graph_factory(obj='maha', file_tree_dict=ft_dict_seg,
-                                history=True, **kwargs)
+                                **kwargs)
     sg_hist.reduce_to(1, verbose=True)
 
     # determine candidate regions
