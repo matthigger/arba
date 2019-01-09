@@ -13,7 +13,7 @@ folder = pnl_data.folder_data / 'arba_toy_ex'
 
 # load
 sg_hist = file.load(folder / 'sg_hist.p.gz')
-sg_arba = sg_hist.cut_greedy_pval(alpha=alpha)
+sg_arba = sg_hist.cut_greedy_sig(alpha=alpha)
 mask = Mask.from_nii(folder / 'mask_effect.nii.gz')
 
 # print graphs

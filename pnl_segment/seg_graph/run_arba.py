@@ -61,7 +61,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     sg_hist.reduce_to(1, verbose=True)
 
     # determine candidate regions
-    sg_arba = sg_hist.cut_greedy_pval(alpha=alpha)
+    sg_arba = sg_hist.cut_greedy_sig(alpha=alpha)
 
     # swap data source for test data
     sg_arba_test = sg_arba.from_file_tree_dict(ft_dict_test)
