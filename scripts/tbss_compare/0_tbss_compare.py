@@ -51,5 +51,4 @@ os.symlink(str(f_mask), f_mask_sym)
 mask = Mask.from_nii(f_mask_sym)
 
 # run arba
-run_arba(ft_dict, mask, folder_save=folder_out, verbose=True, alpha=alpha,
-         max_size_rat=10)
+run_arba(ft_dict, mask, folder_save=folder_out, verbose=True, alpha=alpha)
