@@ -192,7 +192,7 @@ class SegGraph(nx.Graph):
 
         # init progress stats
         n_neigh_list = list()
-        obj_list = []
+        obj_list = list()
 
         # init
         pbar = tqdm(total=len(self) - num_reg_stop,
@@ -237,7 +237,6 @@ class SegGraph(nx.Graph):
             if verbose and time.time() - last_update > update_period:
                 obj = np.mean(obj_list[-n:])
                 print(', '.join([f'n_edge: {len(self._obj_edge_list):1.2e}',
-                                 f'time: {time.time() - last_update:.2f} sec',
                                  f'n_neighbors: {np.mean(n_neigh_list):1.2e}',
                                  f'obj: {obj:1.2e}']))
                 last_update = time.time()
@@ -297,6 +296,7 @@ class SegGraph(nx.Graph):
             # a threshhold, not bool, was passed
             paralell = len(edge_list) > paralell
 
+        # discard edges between large / small regions
         if np.isinf(max_size_rat):
             def has_valid_size(*args, **kwargs):
                 return True
