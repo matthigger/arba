@@ -68,7 +68,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     sg_hist_test = sg_hist.from_file_tree_dict(ft_dict_test)
 
     #
-    sg_arba_test_sig = sg_arba_test.is_sig(alpha=alpha)
+    sg_arba_test_sig = sg_arba_test.get_sig(alpha=alpha)
 
     # save
     if folder_save is not None:

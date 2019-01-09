@@ -1,7 +1,14 @@
+import multiprocessing
+import time
+
 import networkx as nx
 import numpy as np
+from sortedcontainers import SortedList
+from tqdm import tqdm
 
+import mh_pytools.parallel
 from .seg_graph import SegGraph
+from ..region import Region
 
 
 class SegGraphHistory(SegGraph):
@@ -137,7 +144,7 @@ class SegGraphHistory(SegGraph):
             sg.add_nodes_from(reg_sig_list[:m_max])
 
             # validate all are sig
-            if len(sg.is_sig(alpha=alpha, method='holm')) != len(sg):
+            if len(sg.get_sig(alpha=alpha, method='holm')) != len(sg):
                 raise RuntimeError('not all regions are significant')
 
         return sg
@@ -162,3 +169,172 @@ class SegGraphHistory(SegGraph):
                 r.reset()
 
         return mu_offset_dict
+
+    def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
+                  par_thresh=False, update_period=10):
+        """ combines neighbor nodes until only num_reg_stop remain
+
+        Args:
+            num_reg_stop (int): number of unique regions @ stop
+            edge_per_step (float): (0, 1) how many edges (of those remaining)
+                                   to combine in each step.  if not passed 1
+                                   edge is combined at all steps.
+            verbose (bool): toggles cmd line output
+            par_thresh (int): min threshold for paralell computation of edge
+                              weights
+            update_period (float): how often command line updates are given
+
+        Returns:
+            obj_list (list): objective fnc at each combine
+        """
+
+        if len(self) < num_reg_stop:
+            print(f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
+
+        if edge_per_step is not None and not (0 < edge_per_step < 1):
+            raise AttributeError(
+                'edge_per_step not in (0, 1): {edge_per_step}')
+
+        # init edges if need be
+        if self._obj_edge_list is None:
+            self._add_obj_edge_list(verbose=verbose, max_size_rat=np.inf)
+
+        # init progress stats
+        n_neigh_list = list()
+        obj_list = list()
+
+        # init
+        pbar = tqdm(total=len(self) - num_reg_stop,
+                    desc='combining edges',
+                    disable=not verbose)
+
+        # combine edges until only n regions left
+        len_init = len(self)
+        last_update = time.time()
+        n = 1
+        while len(self) > num_reg_stop:
+            # break early if no more valid edges available
+            if not self._obj_edge_list or \
+                    self._obj_edge_list[0][0] > self.obj_fnc_max:
+                print(f'stop: no valid edges {len(self)} (obj:{num_reg_stop})')
+                break
+
+            # find n edges with min obj
+            if edge_per_step is not None:
+                n = np.ceil(len(self) * edge_per_step).astype(int)
+            edge_list, _obj_list = self._get_min_n_edges(n)
+            obj_list += _obj_list
+
+            # combine them
+            reg_list = list()
+            for reg_set in edge_list:
+                reg_list.append(self.combine(reg_set))
+
+            # recompute obj of new edges to all neighbors of newly combined reg
+            edge_list = list()
+            for reg in reg_list:
+                neighbor_list = list(self.neighbors(reg))
+                n_neigh_list.append(len(neighbor_list))
+                for reg_neighbor in neighbor_list:
+                    edge_list.append((reg, reg_neighbor))
+            self._add_obj_edge_list(edge_list, paralell=par_thresh)
+
+            # command line update
+            pbar.update((len_init - len(self)) - pbar.n)
+
+            # output to command line(timing + debug)
+            if verbose and time.time() - last_update > update_period:
+                obj = np.mean(obj_list[-n:])
+                print(', '.join([f'n_edge: {len(self._obj_edge_list):1.2e}',
+                                 f'n_neighbors: {np.mean(n_neigh_list):1.2e}',
+                                 f'obj: {obj:1.2e}']))
+                last_update = time.time()
+                n_neigh_list = list()
+
+        return obj_list
+
+    def _get_min_n_edges(self, n):
+        # get edge_per_step edges with minimum objective
+        edge_list = list()
+        obj_list = list()
+        while len(edge_list) < n:
+            if not self._obj_edge_list or \
+                    self._obj_edge_list[0][0] > self.obj_fnc_max:
+                # no more edges
+                break
+
+            obj, (r1, r2) = self._obj_edge_list.pop(0)
+
+            if r1 in self.nodes and r2 in self.nodes:
+                obj_list.append(obj)
+                edge_list.append(set((r1, r2)))
+
+        if not edge_list:
+            # no edges found at all
+            return edge_list, obj_list
+
+        # some edges may intersect each other, join these region sets
+        edge_list_disjoint = []
+        while edge_list:
+            # get first reg_set
+            reg_set = edge_list.pop(0)
+
+            # find first intersection
+            reg_set_int = next((r_set for r_set in edge_list if
+                                r_set.intersection(reg_set)), None)
+
+            if reg_set_int:
+                # if it exists, add reg_set into the intersecting set
+                reg_set_int |= reg_set
+            else:
+                # disjoint, add to disjoint list
+                edge_list_disjoint.append(reg_set)
+
+        return edge_list_disjoint, obj_list
+
+    def _add_obj_edge_list(self, edge_list=None, paralell=False,
+                           verbose=False, max_size_rat=None):
+        if max_size_rat is None:
+            max_size_rat = self.max_size_rat
+
+        if edge_list is None:
+            self._obj_edge_list = SortedList()
+            edge_list = self.edges
+
+        if not isinstance(paralell, bool):
+            # a threshhold, not bool, was passed
+            paralell = len(edge_list) > paralell
+
+        # discard edges between large / small regions
+        if np.isinf(max_size_rat):
+            def has_valid_size(*args, **kwargs):
+                return True
+        else:
+            def has_valid_size(edge):
+                n0, n1 = sorted(len(r) for r in edge)
+                return n0 / n1 <= max_size_rat
+
+        edge_list = list(filter(has_valid_size, edge_list))
+
+        if paralell:
+            # compute (paralell) objective per edge
+            raise NotImplementedError
+            pool = multiprocessing.Pool()
+            res = pool.starmap_async(self.obj_fnc, edge_list)
+            obj_list = mh_pytools.parallel.join(pool, res,
+                                                desc='compute obj per edge (par)',
+                                                verbose=verbose)
+
+            # add to obj_edge_list
+            for obj, reg_pair in zip(obj_list, edge_list):
+                if obj < self.obj_fnc_max:
+                    self._obj_edge_list.add((obj, reg_pair))
+
+        else:
+            # compute objective per edge
+            tqdm_dict = {'desc': 'compute obj per edge',
+                         'disable': not verbose}
+            for reg_pair in tqdm(edge_list, **tqdm_dict):
+                obj = Region.get_error_delta(*reg_pair)
+                if obj < self.obj_fnc_max:
+                    self._obj_edge_list.add((obj, reg_pair))

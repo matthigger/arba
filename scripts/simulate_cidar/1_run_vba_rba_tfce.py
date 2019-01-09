@@ -77,7 +77,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
 
     # output masks of detected volumes
     for method, sg in sg_dict.items():
-        sg_sig = sg.is_sig(alpha=alpha)
+        sg_sig = sg.get_sig(alpha=alpha)
         sg_sig.to_nii(f_out=folder / s_mask_sig.format(method=method),
                       ref=mask.ref,
                       fnc=lambda r: np.uint8(1),
