@@ -139,7 +139,7 @@ class FileTree:
         # compute feat stat
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute feat stat',
-                     'total': np.prod(mask.shape)}
+                     'total': mask.sum()}
         self.ijk_fs_dict = dict()
         for ijk in tqdm(np.ndindex(mask.shape), **tqdm_dict):
             if not mask[ijk]:
