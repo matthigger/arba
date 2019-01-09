@@ -7,7 +7,7 @@ from ..region import RegionMinVar, RegionKL, RegionMaha
 from ..space import PointCloud
 
 
-def seg_graph_factory(obj, file_tree_dict, max_size_rat=np.inf):
+def seg_graph_factory(obj, file_tree_dict):
     """ init PartGraph via img
 
     Args:
@@ -28,7 +28,6 @@ def seg_graph_factory(obj, file_tree_dict, max_size_rat=np.inf):
 
     # store
     sg.file_tree_dict = file_tree_dict
-    sg.max_size_rat = max_size_rat
 
     # check that all file trees have same ref
     ref_list = [ft.ref for ft in file_tree_dict.values()]

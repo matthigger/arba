@@ -249,7 +249,7 @@ class SegGraphHistory(SegGraph):
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_obj_edge_list(edge_list, parallel=par_thresh)
+            self._add_obj_edge_list(edge_list, par_flag=par_thresh)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
@@ -307,31 +307,18 @@ class SegGraphHistory(SegGraph):
 
         return edge_list_disjoint, obj_list
 
-    def _add_obj_edge_list(self, edge_list=None, parallel=False,
-                           verbose=False, max_size_rat=None):
-        if max_size_rat is None:
-            max_size_rat = self.max_size_rat
+    def _add_obj_edge_list(self, edge_list=None, par_flag=False,
+                           verbose=False):
 
         if edge_list is None:
             self._obj_edge_list = SortedList()
             edge_list = self.edges
 
-        if not isinstance(parallel, bool):
+        if not isinstance(par_flag, bool):
             # a threshhold, not bool, was passed
-            parallel = len(edge_list) > parallel
+            par_flag = len(edge_list) > par_flag
 
-        # discard edges between large / small regions
-        if np.isinf(max_size_rat):
-            def has_valid_size(*args, **kwargs):
-                return True
-        else:
-            def has_valid_size(edge):
-                n0, n1 = sorted(len(r) for r in edge)
-                return n0 / n1 <= max_size_rat
-
-        edge_list = list(filter(has_valid_size, edge_list))
-
-        if parallel:
+        if par_flag:
             # compute (parallel) objective per edge
             raise NotImplementedError
             pool = multiprocessing.Pool()

@@ -21,7 +21,6 @@ class SegGraph(nx.Graph):
         self._obj_edge_list = None
         self.file_tree_dict = None
         self.obj_fnc_max = np.inf
-        self.max_size_rat = np.inf
 
     def from_file_tree_dict(self, file_tree_dict):
         # build map of old regions to new (those from new file_tree_dict)
