@@ -1,16 +1,26 @@
-import os
-import tempfile
-from copy import deepcopy
 from functools import reduce
 
-import nibabel as nib
 import numpy as np
 from scipy.ndimage import binary_dilation
 from scipy.spatial.distance import dice
-from scipy.stats import mannwhitneyu
+from scipy.stats import mannwhitneyu, multivariate_normal
 
 from ..region import FeatStat
 from ..space import Mask, PointCloud
+
+
+def draw_random_u(d):
+    """ Draws random vector in d dimensional unit sphere
+
+    Args:
+        d (int): dimensionality of vector
+    Returns:
+        u (np.array): random vector in d dim unit sphere
+    """
+    mu = np.zeros(d)
+    cov = np.eye(d)
+    u = multivariate_normal.rvs(mean=mu, cov=cov)
+    return u / np.linalg.norm(u)
 
 
 class Effect:
@@ -20,88 +30,66 @@ class Effect:
 
     Attributes:
         mean (np.array): average offset of effect on a voxel
-        cov (np.array): square matrix, noise power
         mask (Mask): effect location
+        fs (FeatStat): FeatStat of unaffected area
+
+        maha (float): mahalanobis
+        u (np.array): effect direction
     """
 
     @staticmethod
-    def from_data(fs, mask, snr, cov_ratio=0, u=None, **kwargs):
+    def from_fs_maha(fs, maha, mask, u=None):
         """ scales effect with observations
 
         Args:
             fs (FeatStat): stats of affected area
+            maha (float): ratio of effect to population variance
             mask (Mask): effect location
-            snr (float): ratio of effect to population variance
-            cov_ratio (float): ratio of effect cov to population cov
             u (array): direction of offset
         """
 
-        if snr < 0:
-            raise AttributeError('snr must be positive')
+        if maha < 0:
+            raise AttributeError('maha must be positive')
 
         # get direction u
         if u is None:
-            u = np.diag(fs.cov)
+            u = draw_random_u(d=fs.d)
         elif len(u) != fs.d:
             raise AttributeError('direction offset must have same len as fs.d')
 
-        # compute mean offset which yields snr
-        c = u @ fs.cov_inv @ u
-        mean = u * np.sqrt(snr / c)
+        # build effect with proper direction, scale to proper maha
+        eff = Effect(mask=mask, mean=u, fs=fs)
+        eff.maha = maha
 
-        cov = fs.cov * cov_ratio
+        assert np.isclose(eff.u, u), 'direction error'
+        assert np.isclose(eff.maha, maha), 'maha scale error'
 
-        return Effect(mask, mean=mean, cov=cov, snr=snr)
+        return eff
 
-    def __init__(self, mask, mean, cov=None, snr=None):
-        if not isinstance(mask, Mask):
-            raise TypeError(f'mask: {mask} must be of type Mask')
+    @property
+    def maha(self):
+        return self.mean @ self.fs.cov_inv @ self.mean
+
+    @maha.setter
+    def maha(self, val):
+        self.mean *= np.sqrt(val / self.maha)
+
+    @property
+    def u(self):
+        return self.mean / np.linalg.norm(self.mean)
+
+    @u.setter
+    def u(self, val):
+        c = val @ self.fs.cov_inv @ val
+        self.mean = np.array(val) * np.sqrt(self.maha / c)
+
+    def __init__(self, mask, mean, fs):
         self.mask = mask
         self.mean = np.reshape(mean, len(mean))
-        if len(self.mean) ** 2 != len(cov.flatten()):
-            raise AttributeError('mean / cov mismatch')
-        self.cov = np.atleast_2d(cov)
-        self.snr = snr
-
-    def make_dm_effect(self):
-        mask = Mask(np.zeros(self.mask.shape))
-        return Effect(mask=mask, mean=self.mean, cov=self.cov, snr=self.snr)
+        self.fs = fs
 
     def __len__(self):
         return len(self.mask)
-
-    def apply_from_to_nii(self, f_nii_dict, f_nii_dict_out=None):
-        def load(f_nii):
-            """ loads f_nii, ensures proper space
-            """
-            img = nib.load(str(f_nii))
-            if self.mask.ref is not None and \
-                    not np.array_equal(img.affine, self.mask.ref.affine):
-                raise AttributeError('space mismatch')
-            return img.get_data()
-
-        # init to tempfile
-        if f_nii_dict_out is None:
-            f_nii_dict_out = dict()
-            for feat in f_nii_dict.keys():
-                f, f_nii_dict_out[feat] = tempfile.mkstemp(suffix='.nii.gz')
-                os.close(f)
-
-        # load and stack data
-        x_list = [load(f_nii_dict[label]) for label in self.feat_label]
-        x = np.stack(x_list, axis=len(x_list[0].shape))
-
-        # apply effect
-        x = self.apply(x)
-
-        # output img to nii
-        for feat_idx in range(x.shape[-1]):
-            feat = self.feat_label[feat_idx]
-            affine = nib.load(str(f_nii_dict[feat])).affine
-            img = nib.Nifti1Image(x[..., feat_idx], affine)
-            img.to_filename(str(f_nii_dict_out[feat]))
-
-        return f_nii_dict_out
 
     def get_auc(self, x, mask):
         """ computes auc of statistic given by array x
@@ -184,9 +172,6 @@ class Effect:
         return sens, spec
 
     def apply_to_file_tree(self, file_tree):
-        if any(self.cov.flatten()):
-            raise AttributeError('effect cov must be 0')
-
         ijk_set = PointCloud.from_mask(self.mask)
         for ijk in ijk_set:
             file_tree.ijk_fs_dict[ijk].mu += self.mean
