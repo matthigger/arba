@@ -19,6 +19,11 @@ class SegGraphHistory(SegGraph):
                                    sum.  "root" of tree is child, "leafs" are
                                    its farthest ancestors
         reg_history_list (list): stores ordering of calls to combine()
+        leaf_pc_dict (dict): keys are leafs (of tree_history), values are the
+                             point_clouds which describe their location. by
+                             storing location for only the leafs we avoid doing
+                             so for all their descendents, see space_drop() and
+                             space_resolve() methods.
     """
 
     def __iter__(self):
@@ -61,6 +66,7 @@ class SegGraphHistory(SegGraph):
         super().__init__()
         self.tree_history = nx.DiGraph()
         self.reg_history_list = list()
+        self.leaf_pc_dict = dict()
 
     def from_file_tree_dict(self, file_tree_dict):
         sg_hist = super().from_file_tree_dict(file_tree_dict)
@@ -147,6 +153,9 @@ class SegGraphHistory(SegGraph):
             if len(sg.get_sig(alpha=alpha, method='holm')) != len(sg):
                 raise RuntimeError('not all regions are significant')
 
+        # resolve space of nodes
+        self.space_resolve(sg.nodes)
+
         return sg
 
     def harmonize_via_add(self, apply=True):
@@ -192,8 +201,11 @@ class SegGraphHistory(SegGraph):
             print(f'{len(self)} reg exist, cant reduce to {num_reg_stop}')
 
         if edge_per_step is not None and not (0 < edge_per_step < 1):
-            raise AttributeError(
-                'edge_per_step not in (0, 1): {edge_per_step}')
+            err_msg = 'edge_per_step not in (0, 1): {edge_per_step}'
+            raise AttributeError(err_msg)
+
+        # drop space in regions (see space_drop())
+        self.space_drop()
 
         # init edges if need be
         if self._obj_edge_list is None:
@@ -237,7 +249,7 @@ class SegGraphHistory(SegGraph):
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_obj_edge_list(edge_list, paralell=par_thresh)
+            self._add_obj_edge_list(edge_list, parallel=par_thresh)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
@@ -250,6 +262,9 @@ class SegGraphHistory(SegGraph):
                                  f'obj: {obj:1.2e}']))
                 last_update = time.time()
                 n_neigh_list = list()
+
+        # add space of regions
+        self.space_resolve()
 
         return obj_list
 
@@ -292,7 +307,7 @@ class SegGraphHistory(SegGraph):
 
         return edge_list_disjoint, obj_list
 
-    def _add_obj_edge_list(self, edge_list=None, paralell=False,
+    def _add_obj_edge_list(self, edge_list=None, parallel=False,
                            verbose=False, max_size_rat=None):
         if max_size_rat is None:
             max_size_rat = self.max_size_rat
@@ -301,9 +316,9 @@ class SegGraphHistory(SegGraph):
             self._obj_edge_list = SortedList()
             edge_list = self.edges
 
-        if not isinstance(paralell, bool):
+        if not isinstance(parallel, bool):
             # a threshhold, not bool, was passed
-            paralell = len(edge_list) > paralell
+            parallel = len(edge_list) > parallel
 
         # discard edges between large / small regions
         if np.isinf(max_size_rat):
@@ -316,8 +331,8 @@ class SegGraphHistory(SegGraph):
 
         edge_list = list(filter(has_valid_size, edge_list))
 
-        if paralell:
-            # compute (paralell) objective per edge
+        if parallel:
+            # compute (parallel) objective per edge
             raise NotImplementedError
             pool = multiprocessing.Pool()
             res = pool.starmap_async(self.obj_fnc, edge_list)
@@ -338,3 +353,45 @@ class SegGraphHistory(SegGraph):
                 obj = Region.get_error_delta(*reg_pair)
                 if obj < self.obj_fnc_max:
                     self._obj_edge_list.add((obj, reg_pair))
+
+    def space_drop(self):
+        if not self.leaf_pc_dict:
+            # get set of all leafs (including leafs to be)
+            leaf_set = set(self.leaf_iter)
+            leaf_set |= (set(self.nodes) - set(self.tree_history.nodes))
+
+            # record space of all leafs
+            self.leaf_pc_dict = {reg: reg.pc_ijk for reg in leaf_set}
+
+        # remove space of each region
+        for reg in self.nodes:
+            reg.pc_ijk = set()
+
+    def space_resolve(self, reg_list=None):
+        if reg_list is None:
+            reg_list = list(self.nodes)
+
+        for reg in reg_list:
+            # reg_constit_set is a set of regions contained in reg
+            reg_constit_set = {reg}
+            if reg in self.tree_history.nodes:
+                reg_constit_set |= set(nx.ancestors(self.tree_history, reg))
+
+            # collect point_clouds of all constituent regions
+            pc_list = list()
+            for r in reg_constit_set:
+                try:
+                    pc_list.append(self.leaf_pc_dict[r])
+                except KeyError:
+                    # not a leaf, its point cloud is redundant
+                    continue
+
+            if not pc_list:
+                raise RuntimeError('space_resolve failure')
+
+            # build point_cloud as union of all leafs.  we can't just use
+            # set.union as reg.pc_ijk is of type PointCloud (which preserves
+            # reference space)
+            reg.pc_ijk = pc_list[0]
+            if len(pc_list) > 1:
+                reg.pc_ijk |= set.union(*pc_list[1:])

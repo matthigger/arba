@@ -71,8 +71,6 @@ class RegionKL(Region):
         reg_out = super().__add__(other)
         reg_out.constit_obj = np.hstack((self.constit_obj, other.constit_obj))
 
-        if reg_out.constit_obj.size != len(reg_out):
-            raise AttributeError('size mismatch')
         if len(self.constit_obj.shape) > 1:
             raise AttributeError('constit_obj shape isnt 1d')
 
