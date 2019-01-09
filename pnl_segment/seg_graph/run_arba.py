@@ -1,5 +1,6 @@
 import pathlib
 
+import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import file
@@ -32,7 +33,8 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     """
     # get mask
     if mask is None:
-        raise NotImplementedError
+        m0, m1 = tuple(ft.get_mask() for ft in ft_dict.values())
+        mask = np.logical_and(m0, m1)
 
     # split into segmentation + test data, load it
     ft_dict_seg = dict()
