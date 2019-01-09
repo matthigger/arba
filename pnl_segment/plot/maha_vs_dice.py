@@ -20,7 +20,7 @@ def line_confidence(label_x_y_dict, shade_width=.95, ylabel='y', xlabel='x'):
     cm = plt.get_cmap('Set1')
     color_dict = {label: cm(idx) for idx, label in enumerate(sorted(label_set))}
 
-    # build snr_dict_list, keys are labels, values are lists of tuples of
+    # build label_data_dict, keys are labels, values are lists of tuples of
     # percentile data
     label_data_dict = defaultdict(list)
     for (label, x), y_list in label_x_y_dict.items():

@@ -96,7 +96,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
             for method, (sens, spec) in sorted(method_ss_dict.items()):
                 print(f'{method}: sens {sens:.2f} spec {spec:.2f}', file=f)
 
-    return effect.snr, method_ss_dict
+    return effect.maha, method_ss_dict
 
 
 if __name__ == '__main__':
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 
     # find relevant folders, build inputs to run()
     arg_list = list()
-    for folder in folder.glob('*snr*'):
+    for folder in folder.glob('*maha*'):
         if not folder.is_dir():
             continue
         arg_list.append({'folder': folder,
@@ -120,17 +120,17 @@ if __name__ == '__main__':
 
     # run per folder
     fnc = lambda: defaultdict(list)
-    snr_method_perf_tree = defaultdict(fnc)
+    maha_method_perf_tree = defaultdict(fnc)
     if par_flag:
         res = parallel.run_par_fnc(run_vba_rba_tfce, arg_list)
-        for snr, method_ss_dict in res:
+        for maha, method_ss_dict in res:
             for method, ss in method_ss_dict.items():
-                snr_method_perf_tree[snr][method].append(ss)
+                maha_method_perf_tree[maha][method].append(ss)
 
     else:
         for d in arg_list:
-            snr, method_ss_dict = run_vba_rba_tfce(**d)
+            maha, method_ss_dict = run_vba_rba_tfce(**d)
             for method, ss in method_ss_dict.items():
-                snr_method_perf_tree[snr][method].append(ss)
+                maha_method_perf_tree[maha][method].append(ss)
     # save
-    file.save(dict(snr_method_perf_tree), f_out)
+    file.save(dict(maha_method_perf_tree), f_out)

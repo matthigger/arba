@@ -42,10 +42,10 @@ class Simulator:
         self.ft_dict = {self.grp_effect: ft_eff,
                         self.grp_null: ft_null}
 
-    def run_effect(self, snr, active_rad=None, effect_mask=None,
+    def run_effect(self, maha, active_rad=None, effect_mask=None,
                    harmonize=True, **kwargs):
         # get folder
-        folder = increment_to_unique(self.folder / f'snr_{snr:.3E}')
+        folder = increment_to_unique(self.folder / f'maha{maha:.3E}')
 
         # sample effect
         if effect_mask is None:
@@ -72,7 +72,7 @@ class Simulator:
                 fs += ft.ijk_fs_dict[ijk]
 
         # build effect
-        effect = Effect.from_data(fs=fs, snr=snr, mask=effect_mask, **kwargs)
+        effect = Effect.from_data(fs=fs, maha=maha, mask=effect_mask, **kwargs)
 
         # run effect
         run_arba(ft_dict=ft_dict,

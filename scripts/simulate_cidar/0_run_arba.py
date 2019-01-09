@@ -11,8 +11,8 @@ from pnl_segment.seg_graph.data import FileTree
 from pnl_segment.simulate import simulator, Effect
 
 num_locations = 10
-# snr_vec = np.logspace(-1, 1, 9)
-snr_vec = [0]
+# maha_vec = np.logspace(-1, 1, 9)
+maha_vec = [0]
 p_effect = .5
 effect_rad = 5
 active_rad = 5
@@ -42,7 +42,7 @@ file.save(sim, folder_out / 'sim.p.gz')
 np.random.seed(1)
 random.seed(1)
 
-# sample effect locations (constant across snr)
+# sample effect locations (constant across maha)
 effect_mask_list = list()
 for _ in tqdm(range(num_locations), desc='sample effect mask'):
     mask = Effect.sample_mask(prior_array=file_tree.mask,
@@ -52,9 +52,9 @@ for _ in tqdm(range(num_locations), desc='sample effect mask'):
 
 # build arg_list
 arg_list = list()
-for snr in snr_vec:
+for maha in maha_vec:
     for effect_mask in effect_mask_list:
-        d = {'snr': snr,
+        d = {'maha': maha,
              'active_rad': active_rad,
              'effect_mask': effect_mask,
              'harmonize': harmonize,

@@ -3,7 +3,7 @@ from pnl_data.set.cidar_post import folder
 import numpy as np
 
 folder = folder / '2019_Jan_02_14_54_46'
-s_folder_glob = '*snr*run*'
+s_folder_glob = '*maha*run*'
 arg_list = [{'folder': f} for f in folder.glob(s_folder_glob)]
 
 

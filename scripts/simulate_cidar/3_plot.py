@@ -99,7 +99,7 @@ if __name__ == '__main__':
     par_flag = True
 
     arg_list = []
-    s_folder_glob = '*snr*run*'
+    s_folder_glob = '*maha*run*'
     for _folder in tqdm(folder.glob(s_folder_glob)):
         arg_list.append({'folder': _folder,
                          'label': ''})
