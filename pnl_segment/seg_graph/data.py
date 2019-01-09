@@ -138,13 +138,10 @@ class FileTree:
 
         # compute feat stat
         tqdm_dict = {'disable': not verbose,
-                     'desc': 'compute feat stat',
-                     'total': mask.sum()}
+                     'desc': 'compute feat stat'}
         self.ijk_fs_dict = dict()
-        for ijk in tqdm(np.ndindex(mask.shape), **tqdm_dict):
-            if not mask[ijk]:
-                continue
 
+        for ijk in tqdm(PointCloud.from_mask(mask), **tqdm_dict):
             x = data[ijk[0], ijk[1], ijk[2], :, :]
             self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
