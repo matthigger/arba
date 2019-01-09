@@ -25,7 +25,7 @@ class RegionMaha(RegionKL):
 
         mu_diff = fs0.mu - fs1.mu
         cov = (fs0.n * fs0.cov + fs1.n * fs1.cov) / (fs0.n + fs1.n - 2)
-        return mu_diff @ np.linalg.pinv(cov) @ mu_diff
+        return mu_diff @ np.linalg.inv(cov) @ mu_diff
 
     def get_pval(self, maha=None):
         if maha is None:
