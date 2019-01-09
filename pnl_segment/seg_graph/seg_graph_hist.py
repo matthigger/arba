@@ -180,7 +180,7 @@ class SegGraphHistory(SegGraph):
         return mu_offset_dict
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
-                  par_thresh=False, update_period=10):
+                  par_thresh=False, update_period=10, **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:

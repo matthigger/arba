@@ -5,6 +5,7 @@ from pnl_segment.seg_graph import FileTree, run_arba
 
 # params
 alpha = .05
+edge_per_step = .001
 active_feat = ['FW', 'FAt']
 
 # output folder
@@ -35,4 +36,5 @@ ft_dict = {grp: FileTree(sbj_feat_file_tree)
            for grp, sbj_feat_file_tree in grp_sbj_feat_file_tree.items()}
 
 # run arba
-run_arba(ft_dict, folder_save=folder_out, verbose=True, alpha=alpha)
+run_arba(ft_dict, folder_save=folder_out, verbose=True, alpha=alpha,
+         edge_per_step=edge_per_step)
