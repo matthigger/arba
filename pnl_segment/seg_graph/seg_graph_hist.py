@@ -209,7 +209,7 @@ class SegGraphHistory(SegGraph):
 
         # init edges if need be
         if self._obj_edge_list is None:
-            self._add_obj_edge_list(verbose=verbose, max_size_rat=np.inf)
+            self._add_obj_edge_list(verbose=verbose)
 
         # init progress stats
         n_neigh_list = list()
