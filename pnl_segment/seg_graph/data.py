@@ -63,35 +63,6 @@ class FileTree:
     def sbj_iter(self):
         return iter(self.sbj_feat_file_tree.keys())
 
-    def resample_iid(self, mask):
-        """ resamples values in self.ijk_fs_dict to be iid
-
-        samples are drawn from normal(mu, cov) where mu, cov are the mean and
-        sample variance of all voxels in mask from self.ijk_fs_dict
-
-        Args:
-            mask (Mask): defines values to resample
-
-        Returns:
-            file_tree (FileTree): copy of file tree with ONLY these voxels,
-                                  which have been resampled
-        """
-        # build normal distribution with same 1st, 2nd moments as vox in mask
-        pc = PointCloud.from_mask(mask)
-        pc &= set(self.ijk_fs_dict.keys())
-        fs = sum(self.ijk_fs_dict[ijk] for ijk in pc)
-        fs_normal = fs.to_normal()
-
-        # resample
-        for ijk in pc:
-            # sample same number of values
-            n = self.ijk_fs_dict[ijk].n
-            x = np.atleast_2d(fs_normal.rvs(n)).T
-
-            # build new feat_stat and store
-            fs = FeatStat.from_array(x)
-            self.ijk_fs_dict[ijk] = fs
-
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
@@ -144,6 +115,9 @@ class FileTree:
         for ijk in tqdm(PointCloud.from_mask(mask), **tqdm_dict):
             x = data[ijk[0], ijk[1], ijk[2], :, :]
             self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
+
+    def unload(self):
+        self.ijk_fs_dict = dict()
 
     def apply_mask(self, mask):
         ft = FileTree(self.sbj_feat_file_tree)
