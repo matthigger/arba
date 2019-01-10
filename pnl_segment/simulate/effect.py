@@ -1,3 +1,4 @@
+from copy import copy
 from functools import reduce
 
 import numpy as np
@@ -58,11 +59,12 @@ class Effect:
             raise AttributeError('direction offset must have same len as fs.d')
 
         # build effect with proper direction, scale to proper maha
-        eff = Effect(mask=mask, mean=u, fs=fs)
+        # (ensure u is copied so we have a spare to validate against)
+        eff = Effect(mask=mask, mean=copy(u), fs=fs)
         eff.maha = maha
 
-        assert np.isclose(eff.u, u), 'direction error'
-        assert np.isclose(eff.maha, maha), 'maha scale error'
+        assert np.allclose(eff.u, u), 'direction error'
+        assert np.allclose(eff.maha, maha), 'maha scale error'
 
         return eff
 
