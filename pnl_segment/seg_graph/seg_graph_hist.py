@@ -9,6 +9,7 @@ from tqdm import tqdm
 import mh_pytools.parallel
 from .seg_graph import SegGraph
 from ..region import Region
+from ..space import PointCloud
 
 
 class SegGraphHistory(SegGraph):
@@ -19,8 +20,8 @@ class SegGraphHistory(SegGraph):
                                    sum.  "root" of tree is child, "leafs" are
                                    its farthest ancestors
         reg_history_list (list): stores ordering of calls to combine()
-        leaf_pc_dict (dict): keys are leafs (of tree_history), values are the
-                             point_clouds which describe their location. by
+        leaf_ijk_dict (dict): keys are leafs (of tree_history), values are the
+                             ijk tuples which describe their location. by
                              storing location for only the leafs we avoid doing
                              so for all their descendents, see space_drop() and
                              space_resolve() methods.
@@ -66,22 +67,51 @@ class SegGraphHistory(SegGraph):
         super().__init__()
         self.tree_history = nx.DiGraph()
         self.reg_history_list = list()
-        self.leaf_pc_dict = dict()
+        self.leaf_ijk_dict = dict()
 
     def from_file_tree_dict(self, file_tree_dict):
+        """ returns copy with swapped file_tree_dict
+        """
+        # init
         sg_hist = super().from_file_tree_dict(file_tree_dict)
+        sg_hist.tree_history = nx.DiGraph()
+        sg_hist.reg_history_list = list()
+        sg_hist.leaf_ijk_dict = dict()
 
-        # build map of old regions to new (those from new file_tree_dict)
-        reg_map = {reg: reg.from_file_tree_dict(file_tree_dict)
-                   for reg in self.tree_history.nodes}
+        # reg_map has keys of regions from self, values to equivilent (space)
+        # region in new sg_hist
+        reg_map = dict()
 
-        # add edges which mirror original
-        new_edges = ((reg_map[r0], reg_map[r1])
-                     for r0, r1 in self.tree_history.edges)
-        sg_hist.tree_history.add_edges_from(new_edges)
+        # leafs: build new regions corresponding to old ones (same space)
+        for reg in self.leaf_iter:
+            # lookup new feature stats by position ijk
+            ijk = self.leaf_ijk_dict[reg]
+            reg_new = reg.from_file_tree_dict(file_tree_dict, pc_ijk={ijk})
+            reg_new.pc_ijk = set()
 
-        # map reg_history_list
-        sg_hist.reg_history_list = [reg_map[r] for r in self.reg_history_list]
+            # store in new sg_hist
+            sg_hist.tree_history.add_node(reg_new)
+            sg_hist.leaf_ijk_dict[reg_new] = ijk
+
+            # store in map
+            reg_map[reg] = reg_new
+
+        # non-leaf: build from predecessors
+        for reg in self.reg_history_list:
+
+                # get list of predecessors in new tree_history
+                reg_list = list()
+                for r_pred_old in self.tree_history.predecessors(reg):
+                    reg_list.append(reg_map[r_pred_old])
+
+                # add reg_new new sg_hist.tree_history
+                reg_new = sum(reg_list)
+                sg_hist.reg_history_list.append(reg_new)
+                for r in reg_list:
+                    sg_hist.tree_history.add_edge(r, reg_new)
+
+                # store in map
+                reg_map[reg] = reg_new
 
         return sg_hist
 
@@ -136,7 +166,7 @@ class SegGraphHistory(SegGraph):
 
         # get m_max: max num regions for which all are still `significant'
         # under holm-bonferonni.
-        # note: it is expected these regions are retested on seperate fold
+        # note: it is expected these regions are retested on separate fold
         m_max = np.inf
         for idx, reg in enumerate(reg_sig_list):
             if idx == m_max:
@@ -342,13 +372,17 @@ class SegGraphHistory(SegGraph):
                     self._obj_edge_list.add((obj, reg_pair))
 
     def space_drop(self):
-        if not self.leaf_pc_dict:
+        if not self.leaf_ijk_dict:
             # get set of all leafs (including leafs to be)
             leaf_set = set(self.leaf_iter)
             leaf_set |= (set(self.nodes) - set(self.tree_history.nodes))
 
             # record space of all leafs
-            self.leaf_pc_dict = {reg: reg.pc_ijk for reg in leaf_set}
+            self.leaf_ijk_dict = dict()
+            for reg in leaf_set:
+                if len(reg.pc_ijk) != 1:
+                    raise AttributeError('leafs should be single voxel')
+                self.leaf_ijk_dict[reg] = next(iter(reg.pc_ijk))
 
         # remove space of each region
         for reg in self.nodes:
@@ -358,6 +392,9 @@ class SegGraphHistory(SegGraph):
         if reg_list is None:
             reg_list = list(self.nodes)
 
+        # get ref
+        ref = next(iter(self.file_tree_dict.values())).ref
+
         for reg in reg_list:
             # reg_constit_set is a set of regions contained in reg
             reg_constit_set = {reg}
@@ -365,20 +402,13 @@ class SegGraphHistory(SegGraph):
                 reg_constit_set |= set(nx.ancestors(self.tree_history, reg))
 
             # collect point_clouds of all constituent regions
-            pc_list = list()
+            reg.pc_ijk = PointCloud({}, ref=ref)
             for r in reg_constit_set:
                 try:
-                    pc_list.append(self.leaf_pc_dict[r])
+                    reg.pc_ijk.add(self.leaf_ijk_dict[r])
                 except KeyError:
                     # not a leaf, its point cloud is redundant
                     continue
 
-            if not pc_list:
+            if not reg.pc_ijk:
                 raise RuntimeError('space_resolve failure')
-
-            # build point_cloud as union of all leafs.  we can't just use
-            # set.union as reg.pc_ijk is of type PointCloud (which preserves
-            # reference space)
-            reg.pc_ijk = pc_list[0]
-            if len(pc_list) > 1:
-                reg.pc_ijk |= set.union(*pc_list[1:])
