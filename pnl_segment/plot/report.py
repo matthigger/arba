@@ -81,13 +81,14 @@ def ordinal(n):
 
 
 def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
-                f_back=None, verbose=True, ):
+                f_back=None, verbose=True, label_dict=None):
     # load data
     grp_data_dict = {grp: ft.get_array(verbose=verbose)
                      for grp, ft in ft_dict.items()}
 
     tqdm_dict = {'disable': not verbose,
-                 'desc': 'print graph per region'}
+                 'desc': 'print graph per region',
+                 'total': len(reg_list)}
 
     sns.set(font_scale=1.2)
     with PdfPages(f_out) as pdf:
@@ -105,9 +106,13 @@ def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
             plot_reg(reg, f_back, f_mask, ax=ax[0])
 
             fig.set_size_inches(14, 5)
-            label = f'{ordinal(idx + 1)} Abnormal Region: ' + \
-                    f'pval: {reg.pval:.3e}, ' \
-                        f'size: {len(reg):.0f} vox'
+            if label_dict is None:
+                label = ''
+            else:
+                label = label_dict[reg]
+            label += f'{ordinal(idx + 1)} Abnormal Region: ' + \
+                     f'pval: {reg.pval:.3e}, ' + \
+                     f'size: {len(reg):.0f} vox'
             plt.suptitle(label)
 
             pdf.savefig(fig)
