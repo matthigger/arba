@@ -7,7 +7,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from mh_pytools import file
 from pnl_data.set.cidar_post import folder
 
-folder_out = folder / '2018_Dec_28_18_44'
+folder_out = folder / '2019_Jan_10_16_05_01'
 
 # load
 f_in = folder_out / 'performance_stats.p.gz'

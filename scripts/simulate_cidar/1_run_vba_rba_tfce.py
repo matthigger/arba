@@ -69,6 +69,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     sg_vba_test = next(iter(sg_hist_test))
 
     # build sg_vba and sg_rba
+    sg_hist_test.space_resolve(sg_vba_test.nodes)
     sg_vba = sg_vba_test.from_file_tree_dict(ft_dict)
     sg_dict = {'vba': sg_vba, 'rba': copy.deepcopy(sg_vba)}
     sg_dict['rba'].combine_by_reg(f_rba)
@@ -96,17 +97,18 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
             for method, (sens, spec) in sorted(method_ss_dict.items()):
                 print(f'{method}: sens {sens:.2f} spec {spec:.2f}', file=f)
 
-    return effect.maha, method_ss_dict
+    return round(effect.maha, 4), method_ss_dict
 
 
 if __name__ == '__main__':
     from collections import defaultdict
+    from tqdm import tqdm
 
     harmonize = True
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2018_Dec_28_18_44'
+    folder = folder / '2019_Jan_10_16_05_01'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()
@@ -121,14 +123,15 @@ if __name__ == '__main__':
     # run per folder
     fnc = lambda: defaultdict(list)
     maha_method_perf_tree = defaultdict(fnc)
+    desc = 'compute rba, vba, tfce per experiment'
     if par_flag:
-        res = parallel.run_par_fnc(run_vba_rba_tfce, arg_list)
+        res = parallel.run_par_fnc(run_vba_rba_tfce, arg_list, desc=desc)
         for maha, method_ss_dict in res:
             for method, ss in method_ss_dict.items():
                 maha_method_perf_tree[maha][method].append(ss)
 
     else:
-        for d in arg_list:
+        for d in tqdm(arg_list, desc=desc):
             maha, method_ss_dict = run_vba_rba_tfce(**d)
             for method, ss in method_ss_dict.items():
                 maha_method_perf_tree[maha][method].append(ss)
