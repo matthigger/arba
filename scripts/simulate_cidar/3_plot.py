@@ -28,7 +28,13 @@ def make_plots(folder, label):
     sg_hist = file.load(f_sg_hist)
     sg_arba = file.load(f_sg_arba)
 
-    reg_highlight = set(sg_arba.nodes)
+    # resolve space
+    sg_hist.space_resolve(sg_hist.tree_history.nodes)
+    # todo: load / save sg_hist + sg_arba as same file ...
+    # sg_hist.space_resolve(sg_arba.nodes)
+
+    # reg_highlight = set(sg_arba.nodes)
+    reg_highlight = set()
 
     reg_list = None
 
@@ -78,7 +84,6 @@ def make_plots(folder, label):
     save_fig(f_out=folder / f'size_vs_wmaha{label}.pdf')
 
     # size v pval
-    sg_hist = file.load(f_sg_hist)
     plot.size_v_pval(sg=sg_hist.tree_history,
                      mask=mask,
                      reg_highlight=reg_highlight,
@@ -92,7 +97,7 @@ def make_plots(folder, label):
 if __name__ == '__main__':
     from tqdm import tqdm
 
-    folder = folder / '2018_Dec_28_12_58PM37'
+    folder = folder / '2019_Jan_14_09_02_41'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}

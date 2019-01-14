@@ -3,16 +3,18 @@ import numpy as np
 from tqdm import tqdm
 
 from .seg_graph_hist import SegGraphHistory
+from .seg_graph_hist_light import SegGraphHistoryLight
 from ..region import RegionMinVar, RegionKL, RegionMaha
 from ..space import PointCloud
 
 
-def seg_graph_factory(obj, file_tree_dict):
+def seg_graph_factory(obj, file_tree_dict, light_memory=False, **kwargs):
     """ init PartGraph via img
 
     Args:
         obj (str): either 'min_var', 'kl' or 'maha'
         file_tree_dict (dict): keys are grp, values are FileTree
+        light_memory (bool): toggles `light' memory, see SegGraphHistoryLight
 
     Returns:
         seg_graph (PartGraph)
@@ -24,7 +26,10 @@ def seg_graph_factory(obj, file_tree_dict):
     reg_type = obj_dict[obj.lower()]
 
     # init empty seg_graph
-    sg = SegGraphHistory()
+    if light_memory:
+        sg = SegGraphHistoryLight()
+    else:
+        sg = SegGraphHistory()
 
     # store
     sg.file_tree_dict = file_tree_dict
