@@ -253,7 +253,7 @@ class SegGraphHistory(SegGraph):
         return x
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
-                  update_period=10, **kwargs):
+                  update_period=10, verbose_dbg=False, **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
@@ -323,7 +323,7 @@ class SegGraphHistory(SegGraph):
             pbar.update((len_init - len(self)) - pbar.n)
 
             # output to command line(timing + debug)
-            if verbose and time.time() - last_update > update_period:
+            if verbose_dbg and time.time() - last_update > update_period:
                 obj = np.mean(obj_list[-n:])
                 print(', '.join([f'n_edge: {len(self._obj_edge_list):1.2e}',
                                  f'n_neighbors: {np.mean(n_neigh_list):1.2e}',

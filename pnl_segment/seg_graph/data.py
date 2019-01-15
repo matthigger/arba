@@ -25,7 +25,7 @@ class FileTree:
     """
 
     @staticmethod
-    def harmonize_via_add(ft_list, apply=True):
+    def harmonize_via_add(ft_list, apply=True, verbose=False):
         """ ensures that each file tree has same mean (over all ijk)
 
         average is determined by summing across all file tree and ijk
@@ -33,14 +33,28 @@ class FileTree:
         Args:
             ft_list (list): list of file trees
             apply (bool): toggles whether to apply offset
+            verbose (bool): toggles command line output
 
         Returns:
             mu_offset_dict (dict): keys are file tree, values are offset needed
         """
 
-        # find average
-        ft_fs_dict = {ft: sum(ft.ijk_fs_dict.values()) for ft in ft_list}
+        # find average per file tree
+        ft_fs_dict = defaultdict(FeatStatEmpty)
+        tqdm_dict0 = {'disable': not verbose,
+                     'desc': 'compute fs sum per group',
+                     'total': len(ft_list)}
+        for ft in tqdm(ft_list, **tqdm_dict0):
+            tqdm_dict1 = {'disable': not verbose,
+                          'desc': 'summing fs per voxel',
+                          'total': len(ft.ijk_fs_dict)}
+            for fs in tqdm(ft.ijk_fs_dict.values(), **tqdm_dict1):
+                ft_fs_dict[ft] += fs
+
+        # find average (over all file trees)
         fs_average = sum(ft_fs_dict.values())
+
+        # compute mu_offset per ft
         mu_offset_dict = {ft: fs_average.mu - fs.mu
                           for ft, fs in ft_fs_dict.items()}
 

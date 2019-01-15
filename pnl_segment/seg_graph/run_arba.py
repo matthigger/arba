@@ -31,24 +31,35 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     Returns:
         sg_arba_test (SegGraph): candidate regions (test data)
     """
+    if verbose:
+        print('---begin seg graph init---')
+
     # get mask
     if mask is None:
         m0, m1 = tuple(ft.get_mask() for ft in ft_dict.values())
         mask = np.logical_and(m0, m1)
 
-    # split into segmentation + test data, load it
+    # split into segmentation + test data
     ft_dict_seg = dict()
     ft_dict_test = dict()
-    tqdm_dict = {'disable': not verbose, 'desc': 'loading data per grp'}
-    for grp, ft in tqdm(ft_dict.items(), **tqdm_dict):
+    for grp, ft in ft_dict.items():
         ft_dict_seg[grp], ft_dict_test[grp] = ft.split()
-        ft_dict_seg[grp].load(mask=mask, verbose=verbose)
-        ft_dict_test[grp].load(mask=mask, verbose=verbose)
+
+    # load data
+    ft_list = list(ft_dict_seg.values()) + list(ft_dict_test.values())
+    tqdm_dict = {'disable': not verbose,
+                 'desc': 'load data, compute stats per voxel'}
+    for ft in tqdm(ft_list, **tqdm_dict):
+        ft.load(mask=mask, verbose=verbose)
 
     # harmonize
     if harmonize:
-        FileTree.harmonize_via_add(ft_dict_seg.values(), apply=True)
-        FileTree.harmonize_via_add(ft_dict_test.values(), apply=True)
+        tqdm_dict = {'disable': not verbose,
+                     'desc': 'harmonizing per fold (segmentation + testing)'}
+        ft_tuple_list = [tuple(ft_dict_test.values()),
+                         tuple(ft_dict_seg.values())]
+        for ft_tuple in tqdm(ft_tuple_list, **tqdm_dict):
+            FileTree.harmonize_via_add(ft_tuple, apply=True, verbose=verbose)
 
     # apply effects
     if effect is not None:
@@ -57,7 +68,14 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
 
     # build sg_hist
     sg_hist = seg_graph_factory(obj='maha', file_tree_dict=ft_dict_seg)
-    sg_hist.reduce_to(1, verbose=True, **kwargs)
+    if verbose:
+        print('\n' * 3 + '---begin graph reduce---')
+
+    # reduce
+    sg_hist.reduce_to(1, verbose=verbose, **kwargs)
+
+    if verbose:
+        print('\n' * 3 + '---begin saving output---')
 
     # save
     if folder_save is not None:
