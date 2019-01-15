@@ -36,6 +36,7 @@ class SegGraphHistory(SegGraph):
         self._err_edge_list = SortedList()
         self.reg_node_dict = dict()
         self.node_pval_dict = dict()
+        self.err_max = np.inf
 
     def resolve_space(self, node):
         if isinstance(node, tuple):

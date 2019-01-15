@@ -23,8 +23,6 @@ class SegGraph(nx.Graph):
         # see factory, use of __init__ directly is discouraged
         super().__init__()
         self.file_tree_dict = None
-        # todo: mv to sg_hist
-        self.err_max = np.inf
 
     def from_file_tree_dict(self, file_tree_dict):
         # build map of old regions to new (those from new file_tree_dict)
@@ -218,7 +216,6 @@ class SegGraph(nx.Graph):
         # init seg graph
         sg = SegGraph()
         sg.file_tree_dict = self.file_tree_dict
-        sg.err_max = self.err_max
 
         # add sig regions
         sg.add_nodes_from(reg_sig_list)
