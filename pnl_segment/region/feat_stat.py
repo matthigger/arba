@@ -149,6 +149,14 @@ class FeatStat:
 
     __radd__ = __add__
 
+    def __reduce_ex__(self, *args, **kwargs):
+        self.reset()
+        return super().__reduce_ex__(*args, **kwargs)
+
+    def reset(self):
+        self.__cov_det = None
+        self.__cov_inv = None
+
 
 class FeatStatSingle(FeatStat):
     """ minimizes storage if a FeatStat of a single observation is needed
