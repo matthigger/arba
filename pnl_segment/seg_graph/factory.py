@@ -58,6 +58,15 @@ def seg_graph_factory(obj, file_tree_dict):
     reg_by_ijk = {next(iter(r.pc_ijk)): r for r in sg.nodes}
     add_edges(sg, reg_by_ijk)
 
+    # init leaf_ijk_dict
+    for reg in sg.nodes:
+        sg.leaf_ijk_dict[sg.compress(reg, make_unique=True)] = next(iter(reg.pc_ijk))
+    assert len(sg.nodes) == len(sg.leaf_ijk_dict), \
+        'compress doesnt preserve uniqueness, are each ijk unique?'
+
+    # add nodes to tree_history
+    sg.tree_history.add_nodes_from(sg.leaf_ijk_dict.keys())
+
     return sg
 
 

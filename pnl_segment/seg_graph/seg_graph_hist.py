@@ -1,128 +1,182 @@
-import multiprocessing
 import time
+from collections import namedtuple
+from copy import deepcopy
 
 import networkx as nx
 import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
-import mh_pytools.parallel
 from .seg_graph import SegGraph
-from ..region import Region
+from ..region import Region, RegionMaha
 from ..space import PointCloud
+
+# a stand in for RegionMaha in tree_history, lighter memory footprint (lossy).
+# see the compress() and extract() methods of SegGraphHistory
+RegMahaLight = namedtuple('RegMahaLight', ('size', 'maha', 'pval'))
 
 
 class SegGraphHistory(SegGraph):
-    """ has a history of which regions were combined
+    """ has a history of how regions were combined from voxel
 
     Attributes:
-        tree_history (nx.Digraph): directed seg_graph, from component reg to
-                                   sum.  "root" of tree is child, "leafs" are
-                                   its farthest ancestors
-        reg_history_list (list): stores ordering of calls to combine()
+        tree_history (nx.Digraph): directed graph, each node is a RegMahaLight,
+                                   all nodes directed into another had
+                                   combine() called on them.  leafs (nodes
+                                   with no inward edge) are regions of single
+                                   voxels
+        reg_history_list (list): list of RegMahaLight, ordered as they were
+                                 created
         leaf_ijk_dict (dict): keys are leafs (of tree_history), values are the
-                             ijk tuples which describe their location. by
-                             storing location for only the leafs we avoid doing
-                             so for all their descendents, see space_drop() and
-                             space_resolve() methods.
+                             ijk tuples which describe their location
     """
+
+    @property
+    def ref(self):
+        return next(iter(self.file_tree_dict.values())).ref
 
     def __iter__(self):
         """ iterates through all version of seg_graph through its history
 
+        NOTE: every call to next() returns a copy of same object, they share
+        memory!
+
         NOTE: these part_graphs are not connected, neighboring regions do not
-        have edges between them.
+        have edges between them (todo: they could be connected)
         """
 
-        def build_part_graph(reg_set):
-            # build seg_graph
-            seg_graph = SegGraph()
-            seg_graph.obj_fnc_max = np.inf
-            seg_graph.add_nodes_from(reg_set)
-            return seg_graph
+        # extract_map is a dict.  keys are RegMahaLight, values are their
+        # extracted forms.  we initialize it below to include only leafs
+        extract_map = {l: self.extract(l) for l in self.leaf_ijk_dict.keys()}
 
-        # get all leaf nodes (reg without ancestors in tree_history)
-        reg_set = set(self.leaf_iter)
+        # build seg_graph, yield it
+        sg = SegGraph()
+        sg.add_nodes_from(extract_map.values())
+        yield sg, None
 
-        yield build_part_graph(reg_set)
+        for reg_l in self.reg_history_list:
+            # get parents of reg_l from tree_history
+            reg_parent_l = tuple(self.tree_history.predecessors(reg_l))
 
-        for reg_next in self.reg_history_list:
-            # subtract the kids, add the next node
-            reg_kids = set(self.tree_history.predecessors(reg_next))
-            reg_set = (reg_set - reg_kids) | {reg_next}
+            # get extracted versions of parents from extract_map
+            reg_parent = tuple(extract_map.pop(_reg_l)
+                               for _reg_l in reg_parent_l)
 
-            yield build_part_graph(reg_set)
+            # combine parents
+            reg = sg.combine(reg_parent)
 
-    @property
-    def leaf_iter(self):
-        return (r for r in self.tree_history.nodes
-                if not nx.ancestors(self.tree_history, r))
+            # update extract_map
+            extract_map[reg_l] = reg
 
-    @property
-    def root_iter(self):
-        return (r for r in self.tree_history
-                if not nx.descendants(self.tree_history, r))
+            yield sg, reg
 
     def __init__(self):
         super().__init__()
         self.tree_history = nx.DiGraph()
         self.reg_history_list = list()
+        self._obj_edge_list = SortedList()
         self.leaf_ijk_dict = dict()
 
-    def from_file_tree_dict(self, file_tree_dict):
+    def from_file_tree_dict(self, file_tree_dict, copy=True):
         """ returns copy with swapped file_tree_dict
+
+        Args:
+            file_tree_dict (dict): keys are groups, values are file_tree
+            copy (bool): toggles if output has memory intersection with self
+
+        Returns:
+            sg_hist (SegGraphHist):
         """
-        # init
-        sg_hist = super().from_file_tree_dict(file_tree_dict)
-        sg_hist.tree_history = nx.DiGraph()
-        sg_hist.reg_history_list = list()
-        sg_hist.leaf_ijk_dict = dict()
 
-        # reg_map has keys of regions from self, values to equivilent (space)
-        # region in new sg_hist
-        reg_map = dict()
+        # copy as needed
+        if copy:
+            sg_hist = deepcopy(self)
+        else:
+            sg_hist = self
 
-        # leafs: build new regions corresponding to old ones (same space)
-        for reg in self.leaf_iter:
-            # lookup new feature stats by position ijk
-            ijk = self.leaf_ijk_dict[reg]
-            reg_new = reg.from_file_tree_dict(file_tree_dict, pc_ijk={ijk})
-            reg_new.pc_ijk = set()
+        # set new file_tree_dict (used in sg_hist.resolve())
+        ref_list = [ft.ref for ft in file_tree_dict.values()]
+        if any(ref != self.ref for ref in ref_list):
+            raise AttributeError('ref space mismatch')
+        sg_hist.file_tree_dict = file_tree_dict
 
-            # store in new sg_hist
-            sg_hist.tree_history.add_node(reg_new)
-            sg_hist.leaf_ijk_dict[reg_new] = ijk
+        # reg_map is a dict.  keys are RegMahaLight in old file_tree_dict,
+        # values are their corresponding form in new file_tree_dict.  we init
+        # on leafs
+        reg_map = {leaf: sg_hist.compress(sg_hist.extract(leaf))
+                   for leaf, ijk in sg_hist.leaf_ijk_dict.items()}
 
-            # store in map
-            reg_map[reg] = reg_new
+        # add non leafs to reg_map via sg_hist.__iter__()
+        for reg_old, (_, reg_new) in zip(sg_hist.reg_history_list, sg_hist):
+            reg_map[reg_old] = reg_new
 
-        # non-leaf: build from predecessors
-        for reg in self.reg_history_list:
+        if len(reg_map) != len(set(reg_map.values())):
+            raise RuntimeError('non unique RegMahaLight via new file_tree')
 
-                # get list of predecessors in new tree_history
-                reg_list = list()
-                for r_pred_old in self.tree_history.predecessors(reg):
-                    reg_list.append(reg_map[r_pred_old])
-
-                # add reg_new new sg_hist.tree_history
-                reg_new = sum(reg_list)
-                sg_hist.reg_history_list.append(reg_new)
-                for r in reg_list:
-                    sg_hist.tree_history.add_edge(r, reg_new)
-
-                # store in map
-                reg_map[reg] = reg_new
+        # apply reg_map
+        nx.relabel_nodes(sg_hist.tree_history, mapping=reg_map)
+        sg_hist.reg_history_list = [reg_map[r]
+                                    for r in sg_hist.reg_history_list]
+        sg_hist._obj_edge_list = SortedList()
 
         return sg_hist
 
-    def combine(self, reg_iter):
+    def extract(self, reg_light):
+        # leaf_set is a set of leafs which are ancestors of reg_light
+        ancestors = nx.ancestors(self.tree_history, reg_light) | {reg_light}
+        leaf_set = set(self.leaf_ijk_dict.keys()) & ancestors
+
+        if sum(l.size for l in leaf_set) != reg_light.size:
+            raise RuntimeError('extract failure: space mismatch')
+
+        # aggregate region per leaf
+        reg = 0
+        for leaf in leaf_set:
+            # build initial space
+            ijk = self.leaf_ijk_dict[leaf]
+            pc_ijk = PointCloud({ijk}, ref=self.ref)
+
+            # build dictionary of feature statistics per group
+            fs_dict = {grp: self.file_tree_dict[grp].ijk_fs_dict[ijk]
+                       for grp in self.file_tree_dict.keys()}
+
+            # aggregate
+            reg += RegionMaha(pc_ijk=pc_ijk, fs_dict=fs_dict)
+
+        return reg
+
+    def compress(self, reg, make_unique=False):
+        # saves bare bone stats for plotting hierarchical tree
+        maha = float(reg.maha)
+        reg_light = RegMahaLight(size=len(reg), maha=maha, pval=reg.pval)
+
+        if make_unique:
+            while reg_light in self.tree_history.nodes:
+                # change maha by smallest amount until it is unique ... kludgey
+                reg_light = RegMahaLight(size=len(reg),
+                                         maha=np.nextafter(maha, 1),
+                                         pval=reg.pval)
+
+            # add node
+            self.tree_history.add_node(reg_light)
+
+        return reg_light
+
+    def combine(self, reg_tuple):
         """ record combination in tree_history """
-        reg_sum = super().combine(reg_iter)
+        reg_sum = super().combine(reg_tuple)
 
-        for reg in reg_iter:
-            self.tree_history.add_edge(reg, reg_sum)
+        # compress (and ensure sum is unique)
+        reg_tuple_light = tuple(self.compress(r) for r in reg_tuple)
+        reg_sum_light = self.compress(reg_sum, make_unique=True)
 
-        self.reg_history_list.append(reg_sum)
+        # add edges in tree_history
+        for reg_light in reg_tuple_light:
+            self.tree_history.add_edge(reg_light, reg_sum_light)
+
+        # record order of calls to combine()
+        self.reg_history_list.append(reg_sum_light)
+
         return reg_sum
 
     def cut_greedy_sig(self, alpha=.05):
@@ -175,42 +229,31 @@ class SegGraphHistory(SegGraph):
             m_max = min(m_current, m_max)
 
         if m_max < np.inf:
+            # resolves nodes
+            reg_list = (self.extract(r) for r in reg_sig_list[:m_max])
+
             # add these regions to output seg_graph
             # note: reg_sig_list is sorted in increasing p value
-            sg.add_nodes_from(reg_sig_list[:m_max])
+            sg.add_nodes_from(reg_list)
 
             # validate all are sig
             if len(sg.get_sig(alpha=alpha, method='holm')) != len(sg):
                 raise RuntimeError('not all regions are significant')
 
-        # resolve space of nodes
-        self.space_resolve(sg.nodes)
-
         return sg
 
-    def harmonize_via_add(self, apply=True):
-        """ adds, uniformly, to each grp to ensure same average over whole reg
-
-        note: the means meet at the weighted average of their means (more
-        observations => smaller movement)
-
-        Returns:
-            mu_offset_dict (dict): keys are grp, values are offsets of average
+    def harmonize_via_add(self, *args, **kwargs):
+        """ ensure harmonization done before combine() has been called
         """
-        mu_offset_dict = super().harmonize_via_add(apply=False)
+        x = super().harmonize_via_add(apply=False)
 
-        # add to all regions
-        if apply:
-            node_set = set(self.tree_history.nodes) | set(self.nodes)
-            for r in node_set:
-                for grp, mu in mu_offset_dict.items():
-                    r.fs_dict[grp].mu += mu
-                r.reset()
+        if self.reg_history_list:
+            raise RuntimeError('harmonize_via_add() called after combine()')
 
-        return mu_offset_dict
+        return x
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
-                  par_thresh=False, update_period=10, **kwargs):
+                  update_period=10, **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
@@ -219,8 +262,6 @@ class SegGraphHistory(SegGraph):
                                    to combine in each step.  if not passed 1
                                    edge is combined at all steps.
             verbose (bool): toggles cmd line output
-            par_thresh (int): min threshold for paralell computation of edge
-                              weights
             update_period (float): how often command line updates are given
 
         Returns:
@@ -234,11 +275,8 @@ class SegGraphHistory(SegGraph):
             err_msg = 'edge_per_step not in (0, 1): {edge_per_step}'
             raise AttributeError(err_msg)
 
-        # drop space in regions (see space_drop())
-        self.space_drop()
-
         # init edges if need be
-        if self._obj_edge_list is None:
+        if not self._obj_edge_list:
             self._add_obj_edge_list(verbose=verbose)
 
         # init progress stats
@@ -258,7 +296,7 @@ class SegGraphHistory(SegGraph):
             # break early if no more valid edges available
             if not self._obj_edge_list or \
                     self._obj_edge_list[0][0] > self.obj_fnc_max:
-                print(f'stop: no valid edges {len(self)} (obj:{num_reg_stop})')
+                print(f'stop @ {len(self)} nodes: wanted {num_reg_stop}')
                 break
 
             # find n edges with min obj
@@ -279,7 +317,7 @@ class SegGraphHistory(SegGraph):
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_obj_edge_list(edge_list, par_flag=par_thresh)
+            self._add_obj_edge_list(edge_list)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
@@ -292,9 +330,6 @@ class SegGraphHistory(SegGraph):
                                  f'obj: {obj:1.2e}']))
                 last_update = time.time()
                 n_neigh_list = list()
-
-        # add space of regions
-        self.space_resolve()
 
         return obj_list
 
@@ -337,78 +372,17 @@ class SegGraphHistory(SegGraph):
 
         return edge_list_disjoint, obj_list
 
-    def _add_obj_edge_list(self, edge_list=None, par_flag=False,
-                           verbose=False):
+    def _add_obj_edge_list(self, edge_list=None, verbose=False):
 
+        # get list of edges to add (default to
         if edge_list is None:
             self._obj_edge_list = SortedList()
             edge_list = self.edges
 
-        if not isinstance(par_flag, bool):
-            # a threshhold, not bool, was passed
-            par_flag = len(edge_list) > par_flag
-
-        if par_flag:
-            # compute (parallel) objective per edge
-            raise NotImplementedError
-            pool = multiprocessing.Pool()
-            res = pool.starmap_async(self.obj_fnc, edge_list)
-            obj_list = mh_pytools.parallel.join(pool, res,
-                                                desc='compute obj per edge (par)',
-                                                verbose=verbose)
-
-            # add to obj_edge_list
-            for obj, reg_pair in zip(obj_list, edge_list):
-                if obj < self.obj_fnc_max:
-                    self._obj_edge_list.add((obj, reg_pair))
-
-        else:
-            # compute objective per edge
-            tqdm_dict = {'desc': 'compute obj per edge',
-                         'disable': not verbose}
-            for reg_pair in tqdm(edge_list, **tqdm_dict):
-                obj = Region.get_error_delta(*reg_pair)
-                if obj < self.obj_fnc_max:
-                    self._obj_edge_list.add((obj, reg_pair))
-
-    def space_drop(self):
-        if not self.leaf_ijk_dict:
-            # get set of all leafs (including leafs to be)
-            leaf_set = set(self.leaf_iter)
-            leaf_set |= (set(self.nodes) - set(self.tree_history.nodes))
-
-            # record space of all leafs
-            self.leaf_ijk_dict = dict()
-            for reg in leaf_set:
-                if len(reg.pc_ijk) != 1:
-                    raise AttributeError('leafs should be single voxel')
-                self.leaf_ijk_dict[reg] = next(iter(reg.pc_ijk))
-
-        # remove space of each region
-        for reg in self.nodes:
-            reg.pc_ijk = set()
-
-    def space_resolve(self, reg_list=None):
-        if reg_list is None:
-            reg_list = list(self.nodes)
-
-        # get ref
-        ref = next(iter(self.file_tree_dict.values())).ref
-
-        for reg in reg_list:
-            # reg_constit_set is a set of regions contained in reg
-            reg_constit_set = {reg}
-            if reg in self.tree_history.nodes:
-                reg_constit_set |= set(nx.ancestors(self.tree_history, reg))
-
-            # collect point_clouds of all constituent regions
-            reg.pc_ijk = PointCloud({}, ref=ref)
-            for r in reg_constit_set:
-                try:
-                    reg.pc_ijk.add(self.leaf_ijk_dict[r])
-                except KeyError:
-                    # not a leaf, its point cloud is redundant
-                    continue
-
-            if not reg.pc_ijk:
-                raise RuntimeError('space_resolve failure')
+        # compute objective per edge
+        tqdm_dict = {'desc': 'compute obj per edge',
+                     'disable': not verbose}
+        for reg_pair in tqdm(edge_list, **tqdm_dict):
+            obj = Region.get_error_delta(*reg_pair)
+            if obj < self.obj_fnc_max:
+                self._obj_edge_list.add((obj, reg_pair))

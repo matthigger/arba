@@ -18,8 +18,8 @@ class SegGraph(nx.Graph):
     def __init__(self):
         # see factory, use of __init__ directly is discouraged
         super().__init__()
-        self._obj_edge_list = None
         self.file_tree_dict = None
+        # todo: mv to sg_hist
         self.obj_fnc_max = np.inf
 
     def from_file_tree_dict(self, file_tree_dict):
@@ -85,21 +85,22 @@ class SegGraph(nx.Graph):
 
         return x
 
-    def combine(self, reg_iter):
+    def combine(self, reg_tuple):
         """ combines multiple regions into one
 
         Args:
-            reg_iter (iter): iterator of regions to be combined
+            reg_tuple (iter): iterator of regions to be combined
         """
         # create rew region
-        reg_sum = sum(reg_iter)
+        reg_sum = sum(reg_tuple)
 
         # get neighbor list (before removing any nodes)
-        neighbr_set = frozenset().union(*[self.neighbors(r) for r in reg_iter])
-        neighbr_set -= set(reg_iter)
+        neighbr_set = frozenset().union(
+            *[self.neighbors(r) for r in reg_tuple])
+        neighbr_set -= set(reg_tuple)
 
         # rm old regions from seg_graph
-        for r in reg_iter:
+        for r in reg_tuple:
             self.remove_node(r)
 
         # add new region to seg_graph

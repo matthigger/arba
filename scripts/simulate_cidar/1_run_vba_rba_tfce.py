@@ -66,10 +66,9 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     effect.apply_to_file_tree(ft_dict['grp_effect'])
 
     # initial element in __iter__ has one voxel per region (vba)
-    sg_vba_test = next(iter(sg_hist_test))
+    sg_vba_test, _ = next(iter(sg_hist_test))
 
     # build sg_vba and sg_rba
-    sg_hist_test.space_resolve(sg_vba_test.nodes)
     sg_vba = sg_vba_test.from_file_tree_dict(ft_dict)
     sg_dict = {'vba': sg_vba, 'rba': copy.deepcopy(sg_vba)}
     sg_dict['rba'].combine_by_reg(f_rba)
@@ -108,7 +107,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_10_16_05_01'
+    folder = folder / '2019_Jan_14_13_52_27'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()

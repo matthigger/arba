@@ -43,7 +43,7 @@ def make_plots(folder, label):
 
     # size vs error tree
     _reg_list = set()
-    for sg in list(sg_hist)[-20:]:
+    for sg, _ in list(sg_hist)[-20:]:
         _reg_list |= set(sg.nodes)
     plot.size_v_error(sg=sg_hist.tree_history,
                       mask=mask,
@@ -92,11 +92,11 @@ def make_plots(folder, label):
 if __name__ == '__main__':
     from tqdm import tqdm
 
-    folder = folder / '2018_Dec_28_12_58PM37'
+    folder = folder / '2019_Jan_14_13_52_27'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
-    par_flag = True
+    par_flag = False
 
     arg_list = []
     s_folder_glob = '*maha*run*'
