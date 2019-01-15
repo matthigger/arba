@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .seg_graph_hist import SegGraphHistory
-from ..region import RegionMinVar, RegionKL, RegionMaha
+from ..region import RegionWard, RegionMaha
 from ..space import PointCloud
 
 
@@ -18,8 +18,7 @@ def seg_graph_factory(obj, file_tree_dict):
         seg_graph (PartGraph)
     """
     # get appropriate region constructor
-    obj_dict = {'min_var': RegionMinVar,
-                'kl': RegionKL,
+    obj_dict = {'ward': RegionWard,
                 'maha': RegionMaha}
     reg_type = obj_dict[obj.lower()]
 

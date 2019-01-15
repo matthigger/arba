@@ -262,7 +262,9 @@ class SegGraphHistory(SegGraph):
                                    to combine in each step.  if not passed 1
                                    edge is combined at all steps.
             verbose (bool): toggles cmd line output
-            update_period (float): how often command line updates are given
+            update_period (float): how often command line updates are given in
+                                   verbose_dbg
+            verbose_dbg (bool): toggles debug command line output (timing)
 
         Returns:
             obj_list (list): objective fnc at each combine
@@ -383,6 +385,6 @@ class SegGraphHistory(SegGraph):
         tqdm_dict = {'desc': 'compute obj per edge',
                      'disable': not verbose}
         for reg_pair in tqdm(edge_list, **tqdm_dict):
-            obj = Region.get_error_delta(*reg_pair)
+            obj = reg_pair[0].get_error(*reg_pair)
             if obj < self.obj_fnc_max:
                 self._obj_edge_list.add((obj, reg_pair))

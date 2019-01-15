@@ -12,9 +12,6 @@ class Region:
     def __init__(self, pc_ijk, fs_dict):
         self.pc_ijk = pc_ijk
         self.fs_dict = fs_dict
-        self.__obj = None
-        self._pval = None
-        self._pval_override = None
 
     def from_file_tree_dict(self, file_tree_dict, pc_ijk=None):
         if pc_ijk is None:
@@ -54,43 +51,6 @@ class Region:
     def __lt__(self, other):
         return len(self) < len(other)
 
-    @property
-    def error(self):
-        raise NotImplementedError
-
-    @property
-    def pval(self):
-        if self._pval_override is not None:
-            return self._pval_override
-
-        if self._pval is None:
-            self._pval = self.get_pval()
-        return self._pval
-
-    @pval.setter
-    def pval(self, pval):
-        # if pval is set, it is set permanently
-        self._pval_override = pval
-
     @staticmethod
-    def get_error_delta(reg_1, reg_2, reg_union=None):
-        if reg_union is None:
-            reg_union = reg_1 + reg_2
-        return reg_union.error - reg_1.error - reg_2.error
-
-    @property
-    def _obj(self):
-        # memoize
-        if self.__obj is None:
-            self.__obj = self.get_obj()
-        return self.__obj
-
-    def get_pval(self):
+    def get_error(reg_1, reg_2, reg_u=None):
         raise NotImplementedError
-
-    def get_obj(self):
-        raise NotImplementedError
-
-    def reset(self):
-        self.__obj = None
-        self._pval = None
