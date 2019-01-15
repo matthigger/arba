@@ -1,5 +1,4 @@
 import time
-from collections import namedtuple
 from copy import deepcopy
 
 import networkx as nx
@@ -8,12 +7,8 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import Region, RegionMaha
+from ..region import RegionMaha
 from ..space import PointCloud
-
-# a stand in for RegionMaha in tree_history, lighter memory footprint (lossy).
-# see the compress() and extract() methods of SegGraphHistory
-RegMahaLight = namedtuple('RegMahaLight', ('size', 'maha', 'pval'))
 
 
 class SegGraphHistory(SegGraph):
@@ -103,7 +98,7 @@ class SegGraphHistory(SegGraph):
         # reg_map is a dict.  keys are RegMahaLight in old file_tree_dict,
         # values are their corresponding form in new file_tree_dict.  we init
         # on leafs
-        reg_map = {leaf: sg_hist.compress(sg_hist.extract(leaf))
+        reg_map = {leaf: sg_hist.extract(leaf).get_memento()
                    for leaf, ijk in sg_hist.leaf_ijk_dict.items()}
 
         # add non leafs to reg_map via sg_hist.__iter__()
@@ -145,30 +140,13 @@ class SegGraphHistory(SegGraph):
 
         return reg
 
-    def compress(self, reg, make_unique=False):
-        # saves bare bone stats for plotting hierarchical tree
-        maha = float(reg.maha)
-        reg_light = RegMahaLight(size=len(reg), maha=maha, pval=reg.pval)
-
-        if make_unique:
-            while reg_light in self.tree_history.nodes:
-                # change maha by smallest amount until it is unique ... kludgey
-                reg_light = RegMahaLight(size=len(reg),
-                                         maha=np.nextafter(maha, 1),
-                                         pval=reg.pval)
-
-            # add node
-            self.tree_history.add_node(reg_light)
-
-        return reg_light
-
     def combine(self, reg_tuple):
         """ record combination in tree_history """
         reg_sum = super().combine(reg_tuple)
 
         # compress (and ensure sum is unique)
-        reg_tuple_light = tuple(self.compress(r) for r in reg_tuple)
-        reg_sum_light = self.compress(reg_sum, make_unique=True)
+        reg_tuple_light = tuple(r.get_memento() for r in reg_tuple)
+        reg_sum_light = reg_sum.get_memento()
 
         # add edges in tree_history
         for reg_light in reg_tuple_light:

@@ -1,7 +1,12 @@
+from collections import namedtuple
+
 import numpy as np
 from scipy.stats import f
 
 from .reg import Region
+
+# save a few essential stats
+MementoMaha = namedtuple('MementoMaha', ('hash', 'size', 'maha', 'pval'))
 
 
 class RegionMaha(Region):
@@ -10,6 +15,13 @@ class RegionMaha(Region):
     Attributes:
         maha_per_vox (np.array): objective function per each voxel
     """
+
+    def get_memento(self):
+        # todo: this whole thing should be replaced with a simple hash ...
+        return MementoMaha(hash=hash(self),
+                           size=len(self),
+                           maha=self.maha,
+                           pval=self.pval)
 
     def __init__(self, *args, maha_per_vox=None, **kwargs):
         super().__init__(*args, **kwargs)

@@ -59,7 +59,7 @@ def seg_graph_factory(obj, file_tree_dict):
 
     # init leaf_ijk_dict
     for reg in sg.nodes:
-        sg.leaf_ijk_dict[sg.compress(reg, make_unique=True)] = next(iter(reg.pc_ijk))
+        sg.leaf_ijk_dict[reg.get_memento()] = next(iter(reg.pc_ijk))
     assert len(sg.nodes) == len(sg.leaf_ijk_dict), \
         'compress doesnt preserve uniqueness, are each ijk unique?'
 
