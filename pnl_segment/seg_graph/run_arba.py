@@ -59,6 +59,10 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     sg_hist = seg_graph_factory(obj='maha', file_tree_dict=ft_dict_seg)
     sg_hist.reduce_to(1, verbose=True, **kwargs)
 
+    # save
+    if folder_save is not None:
+        file.save(sg_hist, folder_save / 'sg_hist.p.gz')
+
     # determine candidate regions
     sg_arba = sg_hist.cut_greedy_sig(alpha=alpha)
 
@@ -75,7 +79,6 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
         file.save(ft_dict_seg, folder_save / 'ft_dict_seg.p.gz')
         file.save(ft_dict_test, folder_save / 'ft_dict_test.p.gz')
-        file.save(sg_hist, folder_save / 'sg_hist.p.gz')
         file.save(sg_arba, folder_save / 'sg_arba.p.gz')
         file.save(sg_arba_test, folder_save / 'sg_arba_test.p.gz')
         file.save(sg_hist_test, folder_save / 'sg_hist_test.p.gz')
