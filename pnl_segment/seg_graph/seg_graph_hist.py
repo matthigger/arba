@@ -1,5 +1,4 @@
 import time
-from copy import deepcopy
 
 import networkx as nx
 import numpy as np
@@ -15,145 +14,75 @@ class SegGraphHistory(SegGraph):
     """ has a history of how regions were combined from voxel
 
     Attributes:
-        tree_history (nx.Digraph): directed graph, each node is a RegMahaLight,
-                                   all nodes directed into another had
-                                   combine() called on them.  leafs (nodes
-                                   with no inward edge) are regions of single
-                                   voxels
-        reg_history_list (list): list of RegMahaLight, ordered as they were
-                                 created
-        leaf_ijk_dict (dict): keys are leafs (of tree_history), values are the
-                             ijk tuples which describe their location
+        tree_hist (nx.Digraph): directed graph. edges point from child regions
+                                (smaller) to parents. leafs are ijk tuples.
+                                other nodes are int which describe order they
+                                were created (e.g. tree_history[0] is the first
+                                node to be created)
+        n_combine (int): number of regions which have been combined
+        _err_edge_list (SortedList): tuples of (error, (reg0, reg1)) associated
+                                     with joining reg0, reg1
+        reg_node_dict (dict): keys are regions in self.nodes (from SegGraph,
+                              note this is not the full history) values are
+                              nodes in tree_hist
+        node_pval_dict (dict): keys are nodes, values are pval.  contains full
+                               history
     """
-
-    @property
-    def ref(self):
-        return next(iter(self.file_tree_dict.values())).ref
-
-    def __iter__(self):
-        """ iterates through all version of seg_graph through its history
-
-        NOTE: every call to next() returns a copy of same object, they share
-        memory!
-
-        NOTE: these part_graphs are not connected, neighboring regions do not
-        have edges between them (todo: they could be connected)
-        """
-
-        # extract_map is a dict.  keys are RegMahaLight, values are their
-        # extracted forms.  we initialize it below to include only leafs
-        extract_map = {l: self.extract(l) for l in self.leaf_ijk_dict.keys()}
-
-        # build seg_graph, yield it
-        sg = SegGraph()
-        sg.add_nodes_from(extract_map.values())
-        yield sg, None
-
-        for reg_l in self.reg_history_list:
-            # get parents of reg_l from tree_history
-            reg_parent_l = tuple(self.tree_history.predecessors(reg_l))
-
-            # get extracted versions of parents from extract_map
-            reg_parent = tuple(extract_map.pop(_reg_l)
-                               for _reg_l in reg_parent_l)
-
-            # combine parents
-            reg = sg.combine(reg_parent)
-
-            # update extract_map
-            extract_map[reg_l] = reg
-
-            yield sg, reg
 
     def __init__(self):
         super().__init__()
-        self.tree_history = nx.DiGraph()
-        self.reg_history_list = list()
-        self._obj_edge_list = SortedList()
-        self.leaf_ijk_dict = dict()
+        self.n_combine = 0
+        self.tree_hist = nx.DiGraph()
+        self._err_edge_list = SortedList()
+        self.reg_node_dict = dict()
+        self.node_pval_dict = dict()
 
-    def from_file_tree_dict(self, file_tree_dict, copy=True):
-        """ returns copy with swapped file_tree_dict
-
-        Args:
-            file_tree_dict (dict): keys are groups, values are file_tree
-            copy (bool): toggles if output has memory intersection with self
-
-        Returns:
-            sg_hist (SegGraphHist):
-        """
-
-        # copy as needed
-        if copy:
-            sg_hist = deepcopy(self)
+    def resolve_space(self, node):
+        if isinstance(node, tuple):
+            ijk_set = {node}
         else:
-            sg_hist = self
+            ijk_set = {n for n in nx.ancestors(self.tree_hist, node)
+                       if not nx.ancestors(self.tree_hist, n)}
+        return PointCloud(ijk_set, ref=self.ref)
 
-        # set new file_tree_dict (used in sg_hist.resolve())
-        ref_list = [ft.ref for ft in file_tree_dict.values()]
-        if any(ref != self.ref for ref in ref_list):
-            raise AttributeError('ref space mismatch')
-        sg_hist.file_tree_dict = file_tree_dict
-
-        # reg_map is a dict.  keys are RegMahaLight in old file_tree_dict,
-        # values are their corresponding form in new file_tree_dict.  we init
-        # on leafs
-        reg_map = {leaf: sg_hist.extract(leaf).get_memento()
-                   for leaf, ijk in sg_hist.leaf_ijk_dict.items()}
-
-        # add non leafs to reg_map via sg_hist.__iter__()
-        for reg_old, (_, reg_new) in zip(sg_hist.reg_history_list, sg_hist):
-            reg_map[reg_old] = reg_new
-
-        if len(reg_map) != len(set(reg_map.values())):
-            raise RuntimeError('non unique RegMahaLight via new file_tree')
-
-        # apply reg_map
-        nx.relabel_nodes(sg_hist.tree_history, mapping=reg_map)
-        sg_hist.reg_history_list = [reg_map[r]
-                                    for r in sg_hist.reg_history_list]
-        sg_hist._obj_edge_list = SortedList()
-
-        return sg_hist
-
-    def extract(self, reg_light):
-        # leaf_set is a set of leafs which are ancestors of reg_light
-        ancestors = nx.ancestors(self.tree_history, reg_light) | {reg_light}
-        leaf_set = set(self.leaf_ijk_dict.keys()) & ancestors
-
-        if sum(l.size for l in leaf_set) != reg_light.size:
-            raise RuntimeError('extract failure: space mismatch')
-
-        # aggregate region per leaf
-        reg = 0
-        for leaf in leaf_set:
-            # build initial space
-            ijk = self.leaf_ijk_dict[leaf]
-            pc_ijk = PointCloud({ijk}, ref=self.ref)
-
+    def resolve_reg_iter(self, node):
+        pc = self.resolve_space(node)
+        for ijk in pc:
             # build dictionary of feature statistics per group
             fs_dict = {grp: self.file_tree_dict[grp].ijk_fs_dict[ijk]
                        for grp in self.file_tree_dict.keys()}
 
-            # aggregate
-            reg += RegionMaha(pc_ijk=pc_ijk, fs_dict=fs_dict)
+            # build pc
+            pc = PointCloud({ijk}, ref=self.ref)
 
-        return reg
+            yield RegionMaha(pc_ijk=pc, fs_dict=fs_dict)
+
+    def resolve_reg(self, node):
+        return sum(self.resolve_reg_iter(node))
 
     def combine(self, reg_tuple):
-        """ record combination in tree_history """
+        """ record combination in tree_hist """
         reg_sum = super().combine(reg_tuple)
 
-        # compress (and ensure sum is unique)
-        reg_tuple_light = tuple(r.get_memento() for r in reg_tuple)
-        reg_sum_light = reg_sum.get_memento()
+        # get new node
+        reg_sum_node = self.n_combine
+        self.n_combine += 1
 
-        # add edges in tree_history
-        for reg_light in reg_tuple_light:
-            self.tree_history.add_edge(reg_light, reg_sum_light)
+        # store new pval
+        self.node_pval_dict[reg_sum_node] = reg_sum.pval
 
-        # record order of calls to combine()
-        self.reg_history_list.append(reg_sum_light)
+        # add new edges in tree_hist
+        for reg in reg_tuple:
+            reg_node = self.reg_node_dict[reg]
+            self.tree_hist.add_edge(reg_node, reg_sum_node)
+
+            # rm reference to reg in reg_node_dict, its no longer in self.nodes
+            del self.reg_node_dict[reg]
+
+        # add reference to reg_sum in reg_node_dict
+        self.reg_node_dict[reg_sum] = reg_sum_node
+
+        assert len(self.nodes) == len(self.reg_node_dict), 'reg_node_dict err'
 
         return reg_sum
 
@@ -177,58 +106,50 @@ class SegGraphHistory(SegGraph):
         sg.file_tree_dict = self.file_tree_dict
 
         # init search space of region to those which have pval <= alpha
-        reg_list = [r for r in self.tree_history.nodes if r.pval <= alpha]
-        reg_list = sorted(reg_list, key=lambda r: r.pval)
-        reg_covered = set()
+        pval_node_list = [(p, n) for (n, p) in self.node_pval_dict.items()
+                          if p <= alpha]
+        pval_node_list = sorted(pval_node_list)
+        node_covered = set()
 
-        reg_sig_list = list()
+        node_pval_sig_list = list()
 
-        while reg_list:
-            reg = reg_list.pop(0)
-            if reg in reg_covered:
+        while pval_node_list:
+            p, n = pval_node_list.pop(0)
+            if n in node_covered:
                 continue
             else:
                 # add reg to significant regions
-                reg_sig_list.append(reg)
+                node_pval_sig_list.append((n, p))
 
                 # add all intersecting regions to reg_covered
-                reg_covered |= {reg}
-                reg_covered |= nx.descendants(self.tree_history, reg)
-                reg_covered |= nx.ancestors(self.tree_history, reg)
+                node_covered |= {n}
+                node_covered |= nx.descendants(self.tree_hist, n)
+                node_covered |= nx.ancestors(self.tree_hist, n)
 
         # get m_max: max num regions for which all are still `significant'
         # under holm-bonferonni.
         # note: it is expected these regions are retested on separate fold
         m_max = np.inf
-        for idx, reg in enumerate(reg_sig_list):
+        for idx, (_, pval) in enumerate(node_pval_sig_list):
             if idx == m_max:
                 break
-            m_current = np.floor(alpha / reg.pval).astype(int) + idx
+            m_current = np.floor(alpha / pval).astype(int) + idx
             m_max = min(m_current, m_max)
 
         if m_max < np.inf:
             # resolves nodes
-            reg_list = (self.extract(r) for r in reg_sig_list[:m_max])
+            reg_list = (self.resolve_reg(node)
+                        for node, _ in node_pval_sig_list[:m_max])
 
             # add these regions to output seg_graph
             # note: reg_sig_list is sorted in increasing p value
             sg.add_nodes_from(reg_list)
 
             # validate all are sig
-            if len(sg.get_sig(alpha=alpha, method='holm')) != len(sg):
-                raise RuntimeError('not all regions are significant')
+            assert len(sg.get_sig(alpha=alpha, method='holm')) == len(sg), \
+                'not all regions are significant'
 
         return sg
-
-    def harmonize_via_add(self, *args, **kwargs):
-        """ ensure harmonization done before combine() has been called
-        """
-        x = super().harmonize_via_add(apply=False)
-
-        if self.reg_history_list:
-            raise RuntimeError('harmonize_via_add() called after combine()')
-
-        return x
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
                   update_period=10, verbose_dbg=False, **kwargs):
@@ -245,7 +166,7 @@ class SegGraphHistory(SegGraph):
             verbose_dbg (bool): toggles debug command line output (timing)
 
         Returns:
-            obj_list (list): objective fnc at each combine
+            err_list (list): error associated with each step
         """
 
         if len(self) < num_reg_stop:
@@ -256,12 +177,12 @@ class SegGraphHistory(SegGraph):
             raise AttributeError(err_msg)
 
         # init edges if need be
-        if not self._obj_edge_list:
-            self._add_obj_edge_list(verbose=verbose)
+        if not self._err_edge_list:
+            self._add_err_edge_list(verbose=verbose)
 
         # init progress stats
         n_neigh_list = list()
-        obj_list = list()
+        err_list = list()
 
         # init
         pbar = tqdm(total=len(self) - num_reg_stop,
@@ -274,64 +195,64 @@ class SegGraphHistory(SegGraph):
         n = 1
         while len(self) > num_reg_stop:
             # break early if no more valid edges available
-            if not self._obj_edge_list or \
-                    self._obj_edge_list[0][0] > self.obj_fnc_max:
+            if not self._err_edge_list or \
+                    self._err_edge_list[0][0] > self.err_max:
                 print(f'stop @ {len(self)} nodes: wanted {num_reg_stop}')
                 break
 
-            # find n edges with min obj
+            # find n edges with min err
             if edge_per_step is not None:
                 n = np.ceil(len(self) * edge_per_step).astype(int)
-            edge_list, _obj_list = self._get_min_n_edges(n)
-            obj_list += _obj_list
+            edge_list, _err_list = self._get_min_n_edges(n)
+            err_list += _err_list
 
             # combine them
             reg_list = list()
             for reg_set in edge_list:
                 reg_list.append(self.combine(reg_set))
 
-            # recompute obj of new edges to all neighbors of newly combined reg
+            # recompute err of new edges to all neighbors of newly combined reg
             edge_list = list()
             for reg in reg_list:
                 neighbor_list = list(self.neighbors(reg))
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_obj_edge_list(edge_list)
+            self._add_err_edge_list(edge_list)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
 
             # output to command line(timing + debug)
             if verbose_dbg and time.time() - last_update > update_period:
-                obj = np.mean(obj_list[-n:])
-                print(', '.join([f'n_edge: {len(self._obj_edge_list):1.2e}',
+                err = np.mean(err_list[-n:])
+                print(', '.join([f'n_edge: {len(self._err_edge_list):1.2e}',
                                  f'n_neighbors: {np.mean(n_neigh_list):1.2e}',
-                                 f'obj: {obj:1.2e}']))
+                                 f'err: {err:1.2e}']))
                 last_update = time.time()
                 n_neigh_list = list()
 
-        return obj_list
+        return err_list
 
     def _get_min_n_edges(self, n):
-        # get edge_per_step edges with minimum objective
+        # get edge_per_step edges with minimum error
         edge_list = list()
-        obj_list = list()
+        err_list = list()
         while len(edge_list) < n:
-            if not self._obj_edge_list or \
-                    self._obj_edge_list[0][0] > self.obj_fnc_max:
+            if not self._err_edge_list or \
+                    self._err_edge_list[0][0] > self.err_max:
                 # no more edges
                 break
 
-            obj, (r1, r2) = self._obj_edge_list.pop(0)
+            err, (r1, r2) = self._err_edge_list.pop(0)
 
             if r1 in self.nodes and r2 in self.nodes:
-                obj_list.append(obj)
+                err_list.append(err)
                 edge_list.append(set((r1, r2)))
 
         if not edge_list:
             # no edges found at all
-            return edge_list, obj_list
+            return edge_list, err_list
 
         # some edges may intersect each other, join these region sets
         edge_list_disjoint = []
@@ -350,19 +271,19 @@ class SegGraphHistory(SegGraph):
                 # disjoint, add to disjoint list
                 edge_list_disjoint.append(reg_set)
 
-        return edge_list_disjoint, obj_list
+        return edge_list_disjoint, err_list
 
-    def _add_obj_edge_list(self, edge_list=None, verbose=False):
+    def _add_err_edge_list(self, edge_list=None, verbose=False):
 
         # get list of edges to add (default to
         if edge_list is None:
-            self._obj_edge_list = SortedList()
+            self._err_edge_list = SortedList()
             edge_list = self.edges
 
-        # compute objective per edge
-        tqdm_dict = {'desc': 'compute obj per edge',
+        # compute error per edge
+        tqdm_dict = {'desc': 'compute error per edge',
                      'disable': not verbose}
         for reg_pair in tqdm(edge_list, **tqdm_dict):
-            obj = reg_pair[0].get_error(*reg_pair)
-            if obj < self.obj_fnc_max:
-                self._obj_edge_list.add((obj, reg_pair))
+            error = reg_pair[0].get_error(*reg_pair)
+            if error < self.err_max:
+                self._err_edge_list.add((error, reg_pair))

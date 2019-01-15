@@ -12,6 +12,10 @@ from ..space import get_ref
 
 class SegGraph(nx.Graph):
     @property
+    def ref(self):
+        return next(iter(self.file_tree_dict.values())).ref
+
+    @property
     def error(self):
         return sum(reg.sq_error for reg in self.nodes)
 
@@ -20,7 +24,7 @@ class SegGraph(nx.Graph):
         super().__init__()
         self.file_tree_dict = None
         # todo: mv to sg_hist
-        self.obj_fnc_max = np.inf
+        self.err_max = np.inf
 
     def from_file_tree_dict(self, file_tree_dict):
         # build map of old regions to new (those from new file_tree_dict)
@@ -91,6 +95,7 @@ class SegGraph(nx.Graph):
         Args:
             reg_tuple (iter): iterator of regions to be combined
         """
+
         # create rew region
         reg_sum = sum(reg_tuple)
 
@@ -213,7 +218,7 @@ class SegGraph(nx.Graph):
         # init seg graph
         sg = SegGraph()
         sg.file_tree_dict = self.file_tree_dict
-        sg.obj_fnc_max = self.obj_fnc_max
+        sg.err_max = self.err_max
 
         # add sig regions
         sg.add_nodes_from(reg_sig_list)
