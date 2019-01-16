@@ -23,13 +23,17 @@ class SegGraph(nx.Graph):
     def reg_type(self):
         return type(next(iter(self.nodes)))
 
-    def __init__(self, obj, file_tree_dict, **kwargs):
+    def __init__(self, obj, file_tree_dict, ijk_set=None, _add_nodes=True,
+                 **kwargs):
         """
 
         Args:
             obj (str): either 'ward' or 'maha' (can also pass class, useful if
                        being called programatically)
             file_tree_dict (dict): keys are grp, values are FileTree
+            ijk_set (set): restricts construction of nodes to this set of ijk
+            _add_nodes (bool): toggles whether nodes are added, useful
+                               internally if empty SegGraph needed
         """
         super().__init__()
 
@@ -54,10 +58,14 @@ class SegGraph(nx.Graph):
             if not ft.ijk_fs_dict.keys():
                 ft.load()
 
+        if not _add_nodes:
+            return
+
         # get ijk_set, intersection of all ijk in ft
-        ijk_set = (set(ft.ijk_fs_dict.keys()) for ft in
-                   file_tree_dict.values())
-        ijk_set = set.intersection(*ijk_set)
+        if ijk_set is None:
+            ijk_set = (set(ft.ijk_fs_dict.keys()) for ft in
+                       file_tree_dict.values())
+            ijk_set = set.intersection(*ijk_set)
 
         # build regions
         for ijk in ijk_set:
@@ -97,9 +105,9 @@ class SegGraph(nx.Graph):
         reg_map = {reg: reg.from_file_tree_dict(file_tree_dict)
                    for reg in self.nodes}
 
-        # init new sg_hist
-        sg = type(self)()
-        sg.file_tree_dict = file_tree_dict
+        # init new SegGraph
+        sg = type(self)(obj=self.reg_type, file_tree_dict=file_tree_dict,
+                        _add_nodes=False)
 
         # add edges which mirror original
         new_edges = ((reg_map[r0], reg_map[r1]) for r0, r1 in self.edges)
@@ -260,30 +268,35 @@ class SegGraph(nx.Graph):
 
         return mu_offset_dict
 
-    def get_sig(self, alpha=.05, method='holm'):
+    def get_sig(self, alpha=.05, method='holm', _reg_pval_dict=None):
         """ returns a SegGraph containing only significant regions in self
 
         Args:
             alpha (float): significance level
             method (str): see multipletests, defaults to Holm's
+            _reg_pval_dict (dict):
 
         Returns:
             sg (SegGraph): contains only significant regions
         """
 
-        reg_list = list(self.nodes)
-        pval_list = [reg.pval for reg in reg_list]
-        if pval_list:
-            is_sig_vec = multipletests(pval_list, alpha=alpha, method=method)[
-                0]
-            reg_sig_list = [r for r, is_sig in zip(reg_list, is_sig_vec) if
-                            is_sig]
-        else:
-            reg_sig_list = list()
-
         # init seg graph
-        sg = SegGraph()
+        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
+                      _add_nodes=False)
         sg.file_tree_dict = self.file_tree_dict
+
+        # if self is empty, return empty SegGraph
+        if not self.nodes:
+            return sg
+
+        if _reg_pval_dict is None:
+            _reg_pval_dict = {reg: reg.pval for reg in self.nodes}
+
+        # get only the significant regions
+        sig_vec = multipletests(list(_reg_pval_dict.values()),
+                                alpha=alpha, method=method)[0]
+        reg_sig_list = [r for r, sig in zip(_reg_pval_dict.keys(), sig_vec)
+                        if sig]
 
         # add sig regions
         sg.add_nodes_from(reg_sig_list)
