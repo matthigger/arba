@@ -134,8 +134,17 @@ class FileTree:
         self.ijk_fs_dict = dict()
 
     def __reduce_ex__(self, *args, **kwargs):
-        self.unload()
-        return super().__reduce_ex__(*args, **kwargs)
+        # store and remove ijk_fs_dict from self
+        ijk_fs_dict = self.ijk_fs_dict
+        self.ijk_fs_dict = dict()
+
+        # save without ijk_fs_dict in self
+        x = super().__reduce_ex__(*args, **kwargs)
+
+        # put it back
+        self.ijk_fs_dict = ijk_fs_dict
+
+        return x
 
     def apply_mask(self, mask):
         ft = FileTree(self.sbj_feat_file_tree)
