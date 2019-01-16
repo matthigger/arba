@@ -33,14 +33,22 @@ class SegGraphHistory(SegGraph):
         self._err_edge_list = SortedList()
         return super().__reduce_ex__(*args, **kwargs)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, err_max=np.inf, **kwargs):
+        super().__init__(*args, **kwargs)
+
         self.n_combine = 0
         self.tree_hist = nx.DiGraph()
         self._err_edge_list = SortedList()
+        self.err_max = err_max
+
+        # init reg_node_dict, node_pval_dict
         self.reg_node_dict = dict()
         self.node_pval_dict = dict()
-        self.err_max = np.inf
+        for reg in self.nodes:
+            assert len(reg) == 1, 'invalid region, must be a single voxel'
+            ijk = next(iter(reg.pc_ijk))
+            self.reg_node_dict[reg] = ijk
+            self.node_pval_dict[ijk] = reg.pval
 
     def resolve_space(self, node):
         if isinstance(node, tuple):
@@ -107,7 +115,7 @@ class SegGraphHistory(SegGraph):
             sg (SegGraph): all its regions are disjoint and significant
         """
         # init output seg graph
-        sg = SegGraph()
+        sg = SegGraph(self.reg_type, self.file_tree_dict)
         sg.file_tree_dict = self.file_tree_dict
 
         # init search space of region to those which have pval <= alpha

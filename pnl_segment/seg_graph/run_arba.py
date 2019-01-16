@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from mh_pytools import file
 from .data import FileTree
-from .factory import seg_graph_factory
+from .seg_graph_hist import SegGraphHistory
 
 
 def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
@@ -67,7 +67,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         effect.apply_to_file_tree(ft_dict_test[grp_effect])
 
     # build sg_hist
-    sg_hist = seg_graph_factory(obj='maha', file_tree_dict=ft_dict_seg)
+    sg_hist = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
     if verbose:
         print('\n' * 3 + '---begin graph reduce---')
 
@@ -82,10 +82,10 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         file.save(sg_hist, folder_save / 'sg_hist.p.gz')
 
     # determine candidate regions
-    sg_arba = sg_hist.cut_greedy_sig(alpha=alpha)
+    sg_arba_seg = sg_hist.cut_greedy_sig(alpha=alpha)
 
     # swap data source for test data
-    sg_arba_test = sg_arba.from_file_tree_dict(ft_dict_test)
+    sg_arba_test = sg_arba_seg.from_file_tree_dict(ft_dict_test)
     sg_hist_test = sg_hist.from_file_tree_dict(ft_dict_test)
 
     #
@@ -94,17 +94,20 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     # save
     if folder_save is not None:
         folder_save = pathlib.Path(folder_save)
+        folder_save_image = folder_save / 'image'
+        folder_save_image.mkdir()
+
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
         file.save(ft_dict_seg, folder_save / 'ft_dict_seg.p.gz')
         file.save(ft_dict_test, folder_save / 'ft_dict_test.p.gz')
-        file.save(sg_arba, folder_save / 'sg_arba.p.gz')
+        file.save(sg_arba_seg, folder_save / 'sg_arba_seg.p.gz')
         file.save(sg_arba_test, folder_save / 'sg_arba_test.p.gz')
         file.save(sg_hist_test, folder_save / 'sg_hist_test.p.gz')
         file.save(sg_arba_test_sig, folder_save / 'sg_arba_test_sig.p.gz')
 
         # save mask
-        mask.to_nii(folder_save / 'mask.nii.gz')
-        sg_arba_test_sig.to_nii(folder_save / 'mask_sig_arba.nii.gz',
+        mask.to_nii(folder_save_image / 'mask.nii.gz')
+        sg_arba_test_sig.to_nii(folder_save_image / 'mask_sig_arba.nii.gz',
                                 ref=mask.ref,
                                 fnc=lambda r: 1,
                                 background=0)
@@ -113,12 +116,12 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         feat_list = next(iter(ft_dict.values())).feat_list
         for feat in feat_list:
             for grp, ft in ft_dict_test.items():
-                f_out = folder_save / f'{grp}_{feat}.nii.gz'
+                f_out = folder_save_image / f'{grp}_{feat}.nii.gz'
                 ft.to_nii(f_out, feat=feat)
 
         # save effect
         if effect is not None:
-            effect.mask.to_nii(folder_save / f'mask_effect.nii.gz')
+            effect.mask.to_nii(folder_save_image / f'mask_effect.nii.gz')
             file.save(effect, folder_save / f'effect.p.gz')
 
     return sg_arba_test

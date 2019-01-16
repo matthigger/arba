@@ -6,8 +6,8 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import FeatStatEmpty
-from ..space import get_ref
+from ..region import RegionWard, RegionMaha, FeatStatEmpty
+from ..space import get_ref, PointCloud
 
 
 class SegGraph(nx.Graph):
@@ -19,10 +19,78 @@ class SegGraph(nx.Graph):
     def error(self):
         return sum(reg.sq_error for reg in self.nodes)
 
-    def __init__(self):
-        # see factory, use of __init__ directly is discouraged
+    @property
+    def reg_type(self):
+        return type(next(iter(self.nodes)))
+
+    def __init__(self, obj, file_tree_dict, **kwargs):
+        """
+
+        Args:
+            obj (str): either 'ward' or 'maha' (can also pass class, useful if
+                       being called programatically)
+            file_tree_dict (dict): keys are grp, values are FileTree
+        """
         super().__init__()
-        self.file_tree_dict = None
+
+        # get appropriate region constructor
+        obj_dict = {'ward': RegionWard,
+                    'maha': RegionMaha}
+        if obj in obj_dict.values():
+            reg_type = obj
+        else:
+            reg_type = obj_dict[obj.lower()]
+
+        # store file_tree_dict
+        self.file_tree_dict = file_tree_dict
+
+        # check that all file trees have same ref
+        ref_list = [ft.ref for ft in file_tree_dict.values()]
+        if any(ref_list[0] != ref for ref in ref_list[1:]):
+            raise AttributeError('ref space mismatch')
+
+        # ensure file_tree is loaded
+        for ft in file_tree_dict.values():
+            if not ft.ijk_fs_dict.keys():
+                ft.load()
+
+        # get ijk_set, intersection of all ijk in ft
+        ijk_set = (set(ft.ijk_fs_dict.keys()) for ft in
+                   file_tree_dict.values())
+        ijk_set = set.intersection(*ijk_set)
+
+        # build regions
+        for ijk in ijk_set:
+            # space region occupies
+            pc_ijk = PointCloud({tuple(ijk)}, ref=ref_list[0])
+
+            # statistics of features in region
+            fs_dict = dict()
+            for grp, ft in file_tree_dict.items():
+                fs_dict[grp] = ft.ijk_fs_dict[ijk]
+
+            # build and store in graph
+            reg = reg_type(pc_ijk, fs_dict=fs_dict)
+            self.add_node(reg)
+
+        self.connect_neighbors(**kwargs)
+
+    def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
+        """ adds edge between each neighboring region """
+        # build ijk_reg_map, maps ijk to a corresponding region
+        ijk_reg_map = dict()
+        for reg in self.nodes:
+            for ijk in reg.pc_ijk:
+                ijk_reg_map[ijk] = reg
+
+        # iterate through edge_directions of each ijk to find neighbors
+        for ijk0, reg0 in ijk_reg_map.items():
+            for offset in edge_directions:
+                ijk1 = tuple((ijk0 + offset).astype(int))
+
+                # add edge if ijk1 neighbor corresponds to a region
+                if ijk1 in ijk_reg_map.keys():
+                    self.add_edge(reg0, ijk_reg_map[ijk1])
 
     def from_file_tree_dict(self, file_tree_dict):
         # build map of old regions to new (those from new file_tree_dict)
