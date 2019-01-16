@@ -29,6 +29,10 @@ class SegGraphHistory(SegGraph):
                                history
     """
 
+    def __reduce_ex__(self, *args, **kwargs):
+        self._err_edge_list = SortedList()
+        return super().__reduce_ex__(*args, **kwargs)
+
     def __init__(self):
         super().__init__()
         self.n_combine = 0

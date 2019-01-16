@@ -133,6 +133,10 @@ class FileTree:
     def unload(self):
         self.ijk_fs_dict = dict()
 
+    def __reduce_ex__(self, *args, **kwargs):
+        self.unload()
+        return super().__reduce_ex__(*args, **kwargs)
+
     def apply_mask(self, mask):
         ft = FileTree(self.sbj_feat_file_tree)
         ft.ijk_fs_dict = defaultdict(FeatStatEmpty)
