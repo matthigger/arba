@@ -38,7 +38,12 @@ class Simulator:
 
         self.effect_list = list()
 
-    def build_effect_list(self, n_effect, effect_rad, verbose=False):
+    def build_effect_list(self, n_effect, effect_rad, verbose=False, seed=1):
+        # reset seed
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+
         # load
         self.file_tree.load(verbose=True)
 
@@ -85,13 +90,7 @@ class Simulator:
                  ft_dict=self.ft_dict,
                  **kwargs)
 
-    def run(self, maha_list, par_flag=False, seed=1, **kwargs):
-
-        # reset seed
-        if seed is not None:
-            np.random.seed(seed)
-            random.seed(seed)
-
+    def run(self, maha_list, par_flag=False, **kwargs):
         # build arg_list
         arg_list = list()
         for maha in maha_list:
