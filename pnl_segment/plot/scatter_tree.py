@@ -39,7 +39,7 @@ def size_v_mahalanobis(*args, **kwargs):
     ylabel = 'mahalanobis between groups'
 
     def get_maha(reg):
-        return RegionMaha.get_obj(reg)
+        return reg.maha
 
     return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
@@ -48,7 +48,7 @@ def size_v_wmahalanobis(*args, **kwargs):
     ylabel = 'weighted mahalanobis between groups'
 
     def get_maha(reg):
-        return RegionMaha.get_obj(reg) * len(reg)
+        return reg.maha * len(reg)
 
     return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
 
@@ -57,7 +57,7 @@ def size_v_error(*args, **kwargs):
     ylabel = 'MSE in maha from vox to cluster'
 
     def get_error(reg):
-        return reg.error / len(reg)
+        return reg.sq_error / len(reg)
 
     return scatter_tree(*args, fnc=get_error, ylabel=ylabel, **kwargs)
 
@@ -98,7 +98,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
     # get node_pos
     node_pos = dict()
     if reg_list is None:
-        reg_list = sg.nodes
+        reg_list = list(sg.nodes)
     reg_list = set(reg_list) | set(reg_highlight)
 
     for reg in reg_list:
@@ -114,7 +114,10 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
             node_color = list()
             for reg in reg_list:
                 # get color
-                c = len([1 for ijk in reg.pc_ijk if mask[ijk]])
+                try:
+                    c = len([1 for ijk in reg.pc_ijk if mask[ijk]])
+                except AttributeError:
+                    c = reg.size
                 c *= 1 / len(reg)
                 node_color.append(c)
 

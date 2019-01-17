@@ -4,6 +4,13 @@ from scipy.stats import f
 from .reg import Region
 
 
+class RegionMahaDm:
+    def __init__(self, pc_ijk, maha, pval):
+        self.pc_ijk = pc_ijk
+        self.maha = maha
+        self.pval = pval
+
+
 class RegionMaha(Region):
     """ computes MSE error of representing maha per voxel by a single value
 

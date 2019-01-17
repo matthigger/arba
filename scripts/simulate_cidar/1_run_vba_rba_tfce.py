@@ -7,15 +7,9 @@ import numpy as np
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
+from pnl_segment.region import RegionMahaDm
 from pnl_segment.seg_graph import SegGraph, FileTree
 from pnl_segment.space import Mask
-
-
-class RegMahaDm:
-    def __init__(self, pc_ijk, maha, pval):
-        self.pc_ijk = pc_ijk
-        self.maha = maha
-        self.pval = pval
 
 
 def compute_sg_tfce(sg_vba, mask, folder=None):
@@ -37,24 +31,27 @@ def compute_sg_tfce(sg_vba, mask, folder=None):
 
     # read in tfce(maha), make dummy regions
     tfce_maha = nib.load(f_tfce).get_data()
-    sg = SegGraph()
+    sg_tfce = SegGraph(obj=sg_vba.reg_type,
+                       file_tree_dict=sg_vba.file_tree_dict,
+                       _add_nodes=False)
     for reg_vba in sg_vba.nodes:
         pc_ijk = reg_vba.pc_ijk
         maha = tfce_maha[next(iter(pc_ijk))]
-        r = RegMahaDm(pc_ijk=pc_ijk,
-                      maha=maha,
-                      pval=reg_vba.get_pval(maha=maha))
-        sg.add_node(r)
+        r = RegionMahaDm(pc_ijk=pc_ijk,
+                         maha=maha,
+                         pval=reg_vba.get_pval(maha=maha))
+        sg_tfce.add_node(r)
 
-    return sg
+    return sg_tfce
 
 
 def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
+    folder_image = folder / 'image'
     s_mask_sig = 'mask_sig_{method}.nii.gz'
 
     ft_dict = file.load(folder / 'ft_dict.p.gz')
-    sg_hist_test = file.load(folder / 'sg_hist.p.gz')
-    mask = Mask.from_nii(folder / 'mask.nii.gz')
+    sg_hist_seg = file.load(folder / 'sg_hist_seg.p.gz')
+    mask = Mask.from_nii(folder_image / 'mask.nii.gz')
     effect = file.load(folder / 'effect.p.gz')
 
     for ft in ft_dict.values():
@@ -66,19 +63,19 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     effect.apply_to_file_tree(ft_dict['grp_effect'])
 
     # initial element in __iter__ has one voxel per region (vba)
-    sg_vba_test, _ = next(iter(sg_hist_test))
+    sg_vba_test, _, _ = next(iter(sg_hist_seg))
 
     # build sg_vba and sg_rba
     sg_vba = sg_vba_test.from_file_tree_dict(ft_dict)
     sg_dict = {'vba': sg_vba, 'rba': copy.deepcopy(sg_vba)}
     sg_dict['rba'].combine_by_reg(f_rba)
 
-    sg_dict['tfce'] = compute_sg_tfce(sg_vba, mask, folder)
+    sg_dict['tfce'] = compute_sg_tfce(sg_vba, mask, folder_image)
 
     # output masks of detected volumes
     for method, sg in sg_dict.items():
         sg_sig = sg.get_sig(alpha=alpha)
-        sg_sig.to_nii(f_out=folder / s_mask_sig.format(method=method),
+        sg_sig.to_nii(f_out=folder_image / s_mask_sig.format(method=method),
                       ref=mask.ref,
                       fnc=lambda r: np.uint8(1),
                       background=np.uint8(0))
@@ -86,7 +83,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     # compute performance
     method_ss_dict = dict()
     for method in ['arba', 'vba', 'tfce', 'rba']:
-        f_estimate = folder / s_mask_sig.format(method=method)
+        f_estimate = folder_image / s_mask_sig.format(method=method)
         estimate = nib.load(str(f_estimate)).get_data()
         method_ss_dict[method] = effect.get_sens_spec(estimate=estimate,
                                                       mask=mask)
@@ -107,7 +104,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_14_13_52_27'
+    folder = folder / '2019_Jan_17_09_37_26'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()
