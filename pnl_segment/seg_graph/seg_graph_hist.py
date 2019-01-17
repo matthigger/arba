@@ -1,4 +1,5 @@
 import time
+from copy import deepcopy
 
 import networkx as nx
 import numpy as np
@@ -29,6 +30,45 @@ class SegGraphHistory(SegGraph):
                                history
     """
 
+    def __iter__(self):
+        """ returns SegGraph throughout the reduce_to() process
+
+        NOTE: each yield returns the same object, this method calls combine()
+        as was done in tree_hist ...
+
+        Yields:
+            sg (SegGraph): SegGraph
+            node (int): node which was just added to SegGraph (or None on 1st)
+            reg_sum: region which was just added to SegGraph (or None on 1st)
+        """
+        # init SegGraph
+        leaf_set = set(n for n in self.tree_hist
+                       if not nx.ancestors(self.tree_hist, n))
+        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
+                      ijk_set=leaf_set)
+
+        yield sg, None, None
+
+        # node_list are sorted by which was created first, doesnt include leafs
+        node_list = sorted(set(self.tree_hist.nodes) - leaf_set)
+
+        # node_reg_dict contains a
+        node_reg_dict = {next(iter(reg.pc_ijk)): reg for reg in sg.nodes}
+        for node in node_list:
+            # lookup which regions to combine
+            node_tuple = tuple(self.tree_hist.predecessors(node))
+            reg_tuple = [node_reg_dict[node] for node in node_tuple]
+
+            # combine
+            reg_sum = sg.combine(reg_tuple)
+
+            # update node_reg_dict
+            for n in node_tuple:
+                del node_reg_dict[n]
+            node_reg_dict[node] = reg_sum
+
+            yield sg, node, reg_sum
+
     def __reduce_ex__(self, *args, **kwargs):
         self._err_edge_list = SortedList()
         return super().__reduce_ex__(*args, **kwargs)
@@ -49,6 +89,10 @@ class SegGraphHistory(SegGraph):
             ijk = next(iter(reg.pc_ijk))
             self.reg_node_dict[reg] = ijk
             self.node_pval_dict[ijk] = reg.pval
+
+        # init tree_hist with leafs. other nodes added in combine(), no promise
+        # that all leafs called in combine()
+        self.tree_hist.add_nodes_from(self.node_pval_dict.keys())
 
     def resolve_space(self, node):
         if isinstance(node, tuple):
@@ -72,6 +116,51 @@ class SegGraphHistory(SegGraph):
 
     def resolve_reg(self, node):
         return sum(self.resolve_reg_iter(node))
+
+    def from_file_tree_dict(self, file_tree_dict):
+        sg_hist = super().from_file_tree_dict(file_tree_dict)
+
+        # copy fields from self
+        sg_hist.n_combine = self.n_combine
+        sg_hist.tree_hist = deepcopy(self.tree_hist)
+        sg_hist.err_max = self.err_max
+
+        # update reg_node_dict and node_pval_dict to new file_tree_dict
+        node_reg_dict, _ = sg_hist.resolve_hist()
+        sg_hist.reg_node_dict = {node_reg_dict[n]: n
+                                 for n in self.reg_node_dict.values()}
+        sg_hist.node_pval_dict = {node: reg.pval
+                                  for node, reg in node_reg_dict.items()}
+
+        return sg_hist
+
+    def resolve_hist(self):
+        """ returns a copy of tree_hist where each node is replaced by region
+
+        NOTE: for large tree_hist, this will use a lot of memory
+
+        Returns:
+            node_reg_dict (dict): keys are nodes, values are regions
+            tree_hist_resolve (nx.DiGraph): each node replaced with resolved
+                                            version
+        """
+        # initialize iterator over all historical SegGraph
+        pg_res_iter = iter(self)
+
+        # initialize node_reg_dict from the leafs
+        pg, _, _ = next(pg_res_iter)
+        node_reg_dict = {next(iter(reg.pc_ijk)): reg for reg in pg.nodes}
+
+        # build non leaf entries of node_reg_dict
+        for _, node, reg in pg_res_iter:
+            node_reg_dict[node] = reg
+
+        # map nodes
+        tree_hist_resolve = deepcopy(self.tree_hist)
+        tree_hist_resolve = nx.relabel_nodes(tree_hist_resolve,
+                                             mapping=node_reg_dict)
+
+        return node_reg_dict, tree_hist_resolve
 
     def combine(self, reg_tuple):
         """ record combination in tree_hist """
@@ -99,6 +188,39 @@ class SegGraphHistory(SegGraph):
 
         return reg_sum
 
+    def match(self, ijk_set):
+        """ given a set of ijk, returns the corresponding node (if it exists)
+
+        we choose an arbitrary ijk in ijk_set (a leaf in tree_hist).  we follow
+        edges in the tree until cover equals a leaf not in ijk_set
+        """
+
+        raise NotImplementedError('not tested')
+
+        # init a leaf_set
+        leaf_set = set(n for n in self.tree_hist.nodes
+                       if not nx.ancestors(self.tree_hist, n))
+
+        # init node and ijk_cover
+        node = next(iter(ijk_set))
+        ijk_cover = set(nx.ancestors(self.tree_hist, node)) | {node}
+        ijk_cover &= leaf_set
+
+        while True:
+            if ijk_cover - ijk_set:
+                # node doesnt exist
+                raise RuntimeError('no matching node found')
+
+            elif not ijk_set - ijk_cover:
+                # node found (node_cover == ijk_set)
+                return node
+
+            # go along outward edge
+            node_next = list(self.tree_hist.successors(node))
+            assert len(node_next) == 1, 'non tree tree_hist ...'
+            node = node_next[0]
+            ijk_cover = set(nx.ancestors(self.tree_hist, node)) & leaf_set
+
     def cut_greedy_sig(self, alpha=.05):
         """ gets seg_graph of disjoint regions with min pval & all reg are sig
 
@@ -115,7 +237,8 @@ class SegGraphHistory(SegGraph):
             sg (SegGraph): all its regions are disjoint and significant
         """
         # init output seg graph
-        sg = SegGraph(self.reg_type, self.file_tree_dict)
+        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
+                      _add_nodes=False)
         sg.file_tree_dict = self.file_tree_dict
 
         # init search space of region to those which have pval <= alpha
@@ -163,6 +286,12 @@ class SegGraphHistory(SegGraph):
                 'not all regions are significant'
 
         return sg
+
+    def get_sig(self, *args, **kwargs):
+        # compose self.reg_node_dict and self.node_pval_dict
+        _reg_pval_dict = {reg: self.node_pval_dict[n]
+                          for reg, n in self.reg_node_dict.items()}
+        return super().get_sig(*args, _reg_pval_dict=_reg_pval_dict, **kwargs)
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
                   update_period=10, verbose_dbg=False, **kwargs):
