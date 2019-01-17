@@ -70,11 +70,11 @@ class Effect:
 
     @property
     def maha(self):
-        return self.mean @ self.fs.cov_inv @ self.mean
+        return np.sqrt(self.mean @ self.fs.cov_inv @ self.mean)
 
     @maha.setter
     def maha(self, val):
-        self.mean *= np.sqrt(val / self.maha)
+        self.mean *= val / self.maha
 
     @property
     def u(self):
@@ -83,7 +83,7 @@ class Effect:
     @u.setter
     def u(self, val):
         c = val @ self.fs.cov_inv @ val
-        self.mean = np.array(val) * np.sqrt(self.maha / c)
+        self.mean = np.array(val) * self.maha / c
 
     def __init__(self, mask, mean, fs):
         self.mask = mask
