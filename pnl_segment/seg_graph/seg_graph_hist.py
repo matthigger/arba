@@ -222,11 +222,11 @@ class SegGraphHistory(SegGraph):
             ijk_cover = set(nx.ancestors(self.tree_hist, node)) & leaf_set
 
     def cut_greedy_sig(self, alpha=.05):
-        """ gets seg_graph of disjoint regions with min pval & all reg are sig
+        """ gets SegGraph of disjoint reg with min pval such that all are sig
 
         significance is under Bonferonni (equiv Holm if all sig)
 
-        this is achieved by greedily adding min pvalue to output seg graph so
+        this is achieved by greedily adding region of min pval to seg_graph so
         long as resultant seg_graph contains only significant regions.  after
         each addition, intersecting regions are discarded from search space
 
@@ -236,18 +236,19 @@ class SegGraphHistory(SegGraph):
         Returns:
             sg (SegGraph): all its regions are disjoint and significant
         """
+
         # init output seg graph
         sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
                       _add_nodes=False)
-        sg.file_tree_dict = self.file_tree_dict
 
         # init search space of region to those which have pval <= alpha
         pval_node_list = [(p, n) for (n, p) in self.node_pval_dict.items()
                           if p <= alpha]
         pval_node_list = sorted(pval_node_list)
-        node_covered = set()
 
-        node_pval_sig_list = list()
+        # init
+        node_covered = set()
+        node_pval_list_sig = list()
 
         while pval_node_list:
             p, n = pval_node_list.pop(0)
@@ -255,10 +256,10 @@ class SegGraphHistory(SegGraph):
                 continue
             else:
                 # add reg to significant regions
-                node_pval_sig_list.append((n, p))
+                node_pval_list_sig.append((n, p))
 
-                # add all intersecting regions to reg_covered
-                node_covered |= {n}
+                # add all intersecting regions to reg_covered (no need to add
+                # n, its only in pval_node_list once)
                 node_covered |= nx.descendants(self.tree_hist, n)
                 node_covered |= nx.ancestors(self.tree_hist, n)
 
@@ -266,7 +267,7 @@ class SegGraphHistory(SegGraph):
         # under holm-bonferonni.
         # note: it is expected these regions are retested on separate fold
         m_max = np.inf
-        for idx, (_, pval) in enumerate(node_pval_sig_list):
+        for idx, (_, pval) in enumerate(node_pval_list_sig):
             if idx == m_max:
                 break
             m_current = np.floor(alpha / pval).astype(int) + idx
@@ -274,8 +275,8 @@ class SegGraphHistory(SegGraph):
 
         if m_max < np.inf:
             # resolves nodes
-            reg_list = (self.resolve_reg(node)
-                        for node, _ in node_pval_sig_list[:m_max])
+            reg_list = [self.resolve_reg(node)
+                        for node, _ in node_pval_list_sig[:m_max]]
 
             # add these regions to output seg_graph
             # note: reg_sig_list is sorted in increasing p value
