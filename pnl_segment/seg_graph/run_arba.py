@@ -23,8 +23,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         grp_effect : target group of which effect is applied to
         harmonize (bool): toggles whether offset added to data so populations
                           have equal averages over active area ... otherwise
-                          may 'discover' that the entire region is most sig.
-                          note: only applied to segmentation data set
+                          may 'discover' that the entire region is most sig
         verbose (bool): toggles command line output
         alpha (float): false positive rate
 
@@ -66,27 +65,27 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         effect.apply_to_file_tree(ft_dict_seg[grp_effect])
         effect.apply_to_file_tree(ft_dict_test[grp_effect])
 
-    # build sg_hist
-    sg_hist = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
+    # build sg_hist_seg
+    sg_hist_seg = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
     if verbose:
         print('\n' * 3 + '---begin graph reduce---')
 
     # reduce
-    sg_hist.reduce_to(1, verbose=verbose, **kwargs)
+    sg_hist_seg.reduce_to(1, verbose=verbose, **kwargs)
 
     if verbose:
         print('\n' * 3 + '---begin saving output---')
 
     # save
     if folder_save is not None:
-        file.save(sg_hist, folder_save / 'sg_hist.p.gz')
+        file.save(sg_hist_seg, folder_save / 'sg_hist_seg.p.gz')
 
     # determine candidate regions
-    sg_arba_seg = sg_hist.cut_greedy_sig(alpha=alpha)
+    sg_arba_seg = sg_hist_seg.cut_greedy_sig(alpha=alpha)
 
     # swap data source for test data
     sg_arba_test = sg_arba_seg.from_file_tree_dict(ft_dict_test)
-    sg_hist_test = sg_hist.from_file_tree_dict(ft_dict_test)
+    sg_hist_test = sg_hist_seg.from_file_tree_dict(ft_dict_test)
 
     #
     sg_arba_test_sig = sg_arba_test.get_sig(alpha=alpha)
