@@ -101,14 +101,14 @@ class RegionMaha(Region):
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:
             reg_out = super().__add__(other)
-            reg_out.obj_per_vox = self.maha_per_vox
+            reg_out.maha_per_vox = self.maha_per_vox
             return reg_out
 
         if not isinstance(other, type(self)):
             raise TypeError
 
         reg_out = super().__add__(other)
-        reg_out.obj_per_vox = np.hstack(
+        reg_out.maha_per_vox = np.hstack(
             (self.maha_per_vox, other.maha_per_vox))
 
         if len(self.maha_per_vox.shape) > 1:
