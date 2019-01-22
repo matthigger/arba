@@ -103,9 +103,9 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
     p.wait()
 
     # call randomise
-    cmd = f'randomise -i {f_data} -o {folder} ' + \
+    cmd = f'randomise -i {f_data} -o {folder}/out ' + \
           f'-d {f_design}.mat -t {f_design}.con ' + \
-          f'-m {f_mask} -n {num_perm} -D -T'
+          f'-m {f_mask} -n {num_perm} -T'
     p = subprocess.Popen(shlex.split(cmd))
     p.wait()
 
