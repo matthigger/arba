@@ -12,10 +12,8 @@ from ..space import get_ref, Mask, PointCloud
 class FileTree:
     """ manages scalar files of 3d volumes
 
-    accessed as: file_tree[sbj][feat] = '/path/to/file.nii.gz'
-
-    we store ijk_fs_dict, as its comparably light on memory and allows one to
-    avoid loading the data again
+    the emphasis is on storing feature statistics per voxel across the
+    population (see ijk_fs_dict)
 
     Attributes:
         sbj_feat_file_tree (tree): tree, keys are sbj, feature, leafs are files
