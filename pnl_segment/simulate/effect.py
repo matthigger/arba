@@ -1,13 +1,15 @@
+from collections import Counter
 from copy import copy
-from functools import reduce
 
 import numpy as np
+import random
 from scipy.ndimage import binary_dilation
 from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu, multivariate_normal
+from skimage import measure
 
 from ..region import FeatStat
-from ..space import Mask, PointCloud
+from ..space import Mask, PointCloud, get_ref
 
 
 def draw_random_u(d):
@@ -179,7 +181,8 @@ class Effect:
             file_tree.ijk_fs_dict[ijk].mu += self.mean
 
     @staticmethod
-    def sample_mask(prior_array, radius, n=1, seg_array=None, ref=None):
+    def sample_mask(prior_array, radius=None, seg_array=None, ref=None,
+                    num_vox=None):
         """n effect centers chosen and dilated to build mask of affected volume
 
         Args:
@@ -187,91 +190,92 @@ class Effect:
                                     unweighted prob of effect center.
                                     note that prior array also masks effect (no
                                     effect exists where prior_array <= 0)
-            radius (int): effect radius, center is dilated by this amount
-            n (int): number of effects
+            radius (int, tuple): if int, acts as effect radius: center is
+                                 dilated this many times.  if tuple, expected
+                                 as shape of effect
             seg_array (np.array): segmentation array, if passed constrains
-                                      effect to the region of its center. has
-                                      same shape as prior_array
+                                  effect to the region of its center. has
+                                  same shape as prior_array
+            ref : reference space of output mask
+            num_vox (int): if passed, will ensure mask has exactly total_vox
+                             points
 
         Returns:
             eff_mask (np.array): array of 1s where effect is present
-
-        >>> np.random.seed(1)
-        >>> prior_array = np.ones((10, 10))
-        >>> m = Effect.sample_mask(prior_array, radius=3)
-        >>> m.x
-        array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-               [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-               [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-               [1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-               [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-               [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-               [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-        >>> seg_array = sum(Effect.sample_mask(prior_array, radius=5)
-        ...                 for _ in range(3)).x
-        >>> seg_array
-        array([[2, 2, 2, 1, 1, 1, 0, 0, 0, 0],
-               [2, 2, 2, 2, 1, 0, 0, 0, 0, 0],
-               [2, 2, 3, 2, 1, 0, 0, 0, 0, 0],
-               [2, 3, 3, 2, 1, 1, 0, 0, 0, 0],
-               [3, 3, 2, 2, 2, 0, 0, 0, 0, 0],
-               [3, 2, 2, 2, 1, 1, 0, 0, 0, 0],
-               [2, 2, 2, 1, 1, 1, 1, 0, 0, 0],
-               [2, 2, 1, 1, 1, 1, 1, 1, 0, 0],
-               [2, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-               [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]])
-        >>> Effect.sample_mask(prior_array, radius=7, seg_array=seg_array).x
-        array([[0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-               [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
         """
+        # check that inputs are consistent
+        assert (radius is None) != (num_vox is None), \
+            'radius xor num_vox required'
 
-        shape = prior_array.shape
+        # if num_vox passed, there are constraints on prior_array and seg_array
+        if num_vox is not None:
+            if seg_array is not None:
+                # avoid memory intersection with prior_array passed
+                prior_array = copy(prior_array)
 
-        # choose effect centers via prior array (idx is linear idx)
+                # selection must be in intersection of seg_array + prior_array
+                prior_array[np.logical_not(seg_array)] = 0
+                seg_array[np.logical_not(prior_array)] = 0
+
+                # ensure each idx of seg_array is connected
+                seg_array = measure.label(seg_array)
+
+                # rm idx in seg_array which don't have at least num_vox voxels
+                c = Counter(seg_array.flatten())
+                idx_invalid = [idx for idx, count in c.items()
+                               if count < num_vox]
+                assert len(idx_invalid) < len(c), \
+                    f'seg_array doesnt have regions with {num_vox} voxels'
+                for idx in idx_invalid:
+                    prior_array[seg_array == idx] = 0
+
+            assert prior_array.astype(bool).sum() >= num_vox, \
+                f'prior_array doesnt have {num_vox} valid voxels'
+
+        # choose effect center via prior array
         p = np.array(prior_array / prior_array.sum())
-        idx = np.random.choice(range(p.size), size=n, p=p.flatten())
+        idx = np.random.choice(range(p.size), size=1, p=p.flatten())
+        center_ijk = np.unravel_index(idx[0], prior_array.shape)
 
-        # build mask of effect centers
-        eff_mask = np.zeros(shape)
-        ijk_list = [np.unravel_index(_idx, shape) for _idx in idx]
-        for ijk in ijk_list:
-            eff_mask[ijk] = 1
+        # init mask
+        mask = np.zeros(prior_array.shape)
+        mask[center_ijk] = 1
 
-        # build mask
-        mask = prior_array
+        # meta_mask is a mask of the mask (contains all the possible voxels
+        # that an effect mask could contain)
+        meta_mask = prior_array.astype(bool)
         if seg_array is not None:
-            # build generator of mask per effect center
-            mask_gen = (seg_array == seg_array[ijk] for ijk in ijk_list)
-
-            # take union of regions which are valid
-            reg_idx_list = reduce(np.logical_or, mask_gen)
-
-            # take intersection with prior_array
-            mask = np.logical_and(mask, reg_idx_list)
+            meta_mask = np.logical_and(meta_mask,
+                                       seg_array == seg_array[center_ijk])
 
         # perform dilation
-        if isinstance(radius, int):
-            eff_mask = binary_dilation(eff_mask,
-                                       iterations=radius,
-                                       mask=mask)
-        elif len(radius) == 3:
-            pc = PointCloud.from_mask(eff_mask)
-            ijk = np.array(next(iter(pc)))
-            for delta in np.ndindex(radius):
-                pc.add(tuple(ijk + delta))
-            eff_mask = pc.to_mask(shape=prior_array.shape)
-            eff_mask = np.logical_and(eff_mask, prior_array)
-        else:
-            raise AttributeError(r'invalid radius given: {radius}')
-        return Mask(eff_mask, ref=ref)
+        if radius is not None:
+            if isinstance(radius, int):
+                # dilate radius number of times
+                mask = binary_dilation(mask, iterations=radius, mask=meta_mask)
+            elif len(radius) == 3:
+                # shape specified
+                for delta in np.ndindex(radius):
+                    mask[tuple(center_ijk + delta)] = 1
+                mask = np.logical_and(mask, meta_mask)
+            else:
+                raise AttributeError('invalid radius, must be int or tuple')
+            return Mask(mask, ref=get_ref(ref))
+
+        # dilate mask until it has > num_vox voxels
+        assert num_vox > 1, 'num_vox must be > 1'
+        while mask.sum() < num_vox:
+            mask_last = mask
+            mask = binary_dilation(mask, iterations=1, mask=meta_mask,
+                                   structure=np.ones((3, 3, 3)))
+
+        # rm some of the voxels added in last dilation until mask has num_vox
+        shell_mask = Mask(np.logical_and(mask, np.logical_not(mask_last)))
+        shell_pc = PointCloud.from_mask(shell_mask)
+        ijk_to_rm = random.sample(shell_pc, k=mask.sum() - num_vox)
+        for ijk in ijk_to_rm:
+            mask[ijk] = False
+
+        assert mask.sum() == num_vox, 'mask doesnt have num_vox voxels'
+
+        return Mask(mask, ref=get_ref(ref))

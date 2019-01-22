@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 from mh_pytools import parallel
 from . import Effect
-import pathlib
 from ..seg_graph import run_arba
 from ..space import PointCloud
 
@@ -38,7 +37,7 @@ class Simulator:
 
         self.effect_list = list()
 
-    def build_effect_list(self, n_effect, effect_rad, verbose=False, seed=1):
+    def build_effect_list(self, n_effect, verbose=False, seed=1, **kwargs):
         # reset seed
         if seed is not None:
             np.random.seed(seed)
@@ -54,8 +53,8 @@ class Simulator:
                      'disable': not verbose}
         for _ in tqdm(range(n_effect), **tqdm_dict):
             mask = Effect.sample_mask(prior_array=self.file_tree.mask,
-                                      radius=effect_rad,
-                                      ref=self.file_tree.ref)
+                                      ref=self.file_tree.ref,
+                                      **kwargs)
 
             # compute feat_stat in mask
             pc = PointCloud.from_mask(mask)
