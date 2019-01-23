@@ -85,11 +85,11 @@ class Effect:
     @u.setter
     def u(self, val):
         c = val @ self.fs.cov_inv @ val
-        self.mean = np.array(val) * self.maha / c
+        self.mean = np.atleast_1d(val) * self.maha / c
 
     def __init__(self, mask, mean, fs):
         self.mask = mask
-        self.mean = np.reshape(mean, len(mean))
+        self.mean = np.atleast_1d(mean)
         self.fs = fs
 
     def __len__(self):
@@ -176,6 +176,12 @@ class Effect:
         return sens, spec
 
     def apply_to_file_tree(self, file_tree):
+        """ applies effect to a file tree
+
+        NOTE: we avoid building apply_to_array() and apply_to_file() methods
+        directly as effect may be multivariate; file_tree encapsulates the
+        indexing of effects.
+        """
         ijk_set = PointCloud.from_mask(self.mask)
         for ijk in ijk_set:
             file_tree.ijk_fs_dict[ijk].mu += self.mean
