@@ -69,7 +69,7 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
     sbj_list1 = sorted(ft1.sbj_feat_file_tree.keys())
     sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list0)}
     sbj_idx_dict.update({sbj: idx + len(sbj_list0)
-                       for idx, sbj in enumerate(sbj_list1)})
+                         for idx, sbj in enumerate(sbj_list1)})
 
     # build data array to temp file
     shape = (*ft0.ref.shape, len(sbj_idx_dict))
@@ -103,14 +103,20 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
     p.wait()
 
     # call randomise
-    cmd = f'randomise -i {f_data} -o {folder}/out ' + \
+    cmd = f'randomise -i {f_data} -o {folder}/one_minus ' + \
           f'-d {f_design}.mat -t {f_design}.con ' + \
           f'-m {f_mask} -n {num_perm} -T'
     p = subprocess.Popen(shlex.split(cmd))
     p.wait()
 
-    # rewrite output pval (fsl does 1-p ...)
-    raise NotImplementedError('poke around first, find f_tfce_pval, 1-p')
-    # Warning: tfce has detected a large number of integral steps. This operation may require a great deal of time to complete.
+    # rewrite output pval' (fsl does 1-p ...)
+    f_pval_list = list()
+    for idx in [1, 2]:
+        f_pval_flip = folder / f'one_minus_tfce_corrp_tstat{idx}.nii.gz'
+        f_pval = folder / f'tfce_corrp_tstat{idx}_p.nii.gz'
+        img_p_flip = nib.load(str(f_pval_flip))
+        img_p = nib.Nifti1Image(1 - img_p_flip.get_data(), img_p_flip.affine)
+        img_p.to_filename(str(f_pval))
+        f_pval_list.append(f_pval)
 
-    return f_tfce_pval
+    return f_pval_list
