@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import file
-from .data import FileTree
+from .file_tree import FileTree
 from .seg_graph_hist import SegGraphHistory
 
 
