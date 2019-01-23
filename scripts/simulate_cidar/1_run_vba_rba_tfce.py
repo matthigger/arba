@@ -1,48 +1,13 @@
 import copy
-import shlex
-import subprocess
 
 import nibabel as nib
 import numpy as np
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.region import RegionMahaDm
-from pnl_segment.seg_graph import SegGraph, FileTree
+from pnl_segment.seg_graph import FileTree
+from pnl_segment.simulate import Simulator, compute_tfce
 from pnl_segment.space import Mask
-
-
-def compute_sg_tfce(sg_vba, mask, folder=None):
-    # init temp files
-    if folder is None:
-        f_tfce = file.get_temp(suffix='.nii.gz')
-        f_vba = file.get_temp(suffix='.nii.gz')
-    else:
-        f_tfce = str(folder / 'wmaha_tfce.nii.gz')
-        f_vba = str(folder / 'wmaha_vba.nii.gz')
-
-    # write vba maha to temp file, apply tfce
-    sg_vba.to_nii(f_out=f_vba,
-                  ref=mask.ref,
-                  fnc=lambda r: r.maha,
-                  background=0)
-    cmd = f'fslmaths {f_vba} -tfce 2 0.5 6 {f_tfce}'
-    subprocess.Popen(shlex.split(cmd)).wait()
-
-    # read in tfce(maha), make dummy regions
-    tfce_maha = nib.load(f_tfce).get_data()
-    sg_tfce = SegGraph(obj=sg_vba.reg_type,
-                       file_tree_dict=sg_vba.file_tree_dict,
-                       _add_nodes=False)
-    for reg_vba in sg_vba.nodes:
-        pc_ijk = reg_vba.pc_ijk
-        maha = tfce_maha[next(iter(pc_ijk))]
-        r = RegionMahaDm(pc_ijk=pc_ijk,
-                         maha=maha,
-                         pval=reg_vba.get_pval(maha=maha))
-        sg_tfce.add_node(r)
-
-    return sg_tfce
 
 
 def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
@@ -54,23 +19,24 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     mask = Mask.from_nii(folder_image / 'mask.nii.gz')
     effect = file.load(folder / 'effect.p.gz')
 
+    # compute tfce
+    f_sig = folder_image / s_mask_sig.format(method='tfce')
+    compute_tfce(ft0=ft_dict[Simulator.grp_null],
+                 ft1=ft_dict[Simulator.grp_effect], effect=effect, alpha=alpha,
+                 f_sig=f_sig, mask=mask)
+
+    # build file tree of entire dataset (no folds needed)
     for ft in ft_dict.values():
         ft.load(mask=mask)
-
     if harmonize:
         FileTree.harmonize_via_add(ft_dict.values(), apply=True)
+    effect.apply_to_file_tree(ft_dict[Simulator.grp_effect])
 
-    effect.apply_to_file_tree(ft_dict['grp_effect'])
-
-    # initial element in __iter__ has one voxel per region (vba)
+    # compute vba + rba
     sg_vba_test, _, _ = next(iter(sg_hist_seg))
-
-    # build sg_vba and sg_rba
     sg_vba = sg_vba_test.from_file_tree_dict(ft_dict)
     sg_dict = {'vba': sg_vba, 'rba': copy.deepcopy(sg_vba)}
     sg_dict['rba'].combine_by_reg(f_rba)
-
-    sg_dict['tfce'] = compute_sg_tfce(sg_vba, mask, folder_image)
 
     # output masks of detected volumes
     for method, sg in sg_dict.items():
@@ -104,7 +70,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_17_09_37_26'
+    folder = folder / '2019_Jan_23_12_55_21'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()

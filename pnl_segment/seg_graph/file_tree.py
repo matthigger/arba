@@ -1,4 +1,6 @@
+import pathlib
 import random
+import tempfile
 from collections import defaultdict
 
 import nibabel as nib
@@ -40,8 +42,8 @@ class FileTree:
         # find average per file tree
         ft_fs_dict = defaultdict(FeatStatEmpty)
         tqdm_dict0 = {'disable': not verbose,
-                     'desc': 'compute fs sum per group',
-                     'total': len(ft_list)}
+                      'desc': 'compute fs sum per group',
+                      'total': len(ft_list)}
         for ft in tqdm(ft_list, **tqdm_dict0):
             tqdm_dict1 = {'disable': not verbose,
                           'desc': 'summing fs per voxel',
@@ -74,6 +76,59 @@ class FileTree:
     @property
     def sbj_iter(self):
         return iter(self.sbj_feat_file_tree.keys())
+
+    def copy_files(self, folder=None, mask=None, effect=None):
+        """ copies all the files in self to a new folder
+
+        useful if one wants to apply an effect without modifying original files
+
+        Args:
+            folder (str or Path): output folder of data
+            mask (Mask): if passed, constrains which values are copied
+            effect (Effect): if passed, applies effect to data
+
+        Returns:
+            file_tree (FileTree): output file tree
+        """
+
+        # default to new temporary folder
+        if folder is None:
+            folder = pathlib.Path(tempfile.mkdtemp())
+        else:
+            folder = pathlib.Path(folder)
+
+        if effect is not None and mask is not None:
+            effect_mask = np.logical_and(effect.mask, mask)
+
+        sbj_feat_file_tree = defaultdict(dict)
+        for sbj, d in self.sbj_feat_file_tree.items():
+            for feat, f in d.items():
+                # build output directory + get file location
+                f_out = folder / sbj / feat / pathlib.Path(f).name
+                f_out.parent.mkdir(exist_ok=True, parents=True)
+                if f_out.exists():
+                    raise FileExistsError
+
+                # load data
+                img = nib.load(str(f))
+                x = img.get_data()
+
+                if mask is not None:
+                    # apply mask
+                    x[~mask] = 0
+
+                if effect is not None:
+                    # apply effect
+                    feat_idx = self.feat_list.index(feat)
+                    x[effect_mask] += effect.mean[feat_idx]
+
+                # save
+                img_out = nib.Nifti1Image(x, img.affine)
+                img_out.to_filename(str(f_out))
+
+                sbj_feat_file_tree[sbj][feat] = f_out
+
+        return FileTree(sbj_feat_file_tree, mask=mask)
 
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())

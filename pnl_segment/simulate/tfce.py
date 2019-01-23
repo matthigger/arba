@@ -79,7 +79,7 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
             # get img
             idx = sbj_idx_dict[sbj]
             f = ft.sbj_feat_file_tree[sbj][feat]
-            img = nib.load(f)
+            img = nib.load(str(f))
 
             # store
             x[:, :, :, idx] = img.get_data()
@@ -105,7 +105,7 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
     # call randomise
     cmd = f'randomise -i {f_data} -o {folder}/one_minus ' + \
           f'-d {f_design}.mat -t {f_design}.con ' + \
-          f'-m {f_mask} -n {num_perm} -T'
+          f'-m {f_mask} -n {num_perm} -T --quiet'
     p = subprocess.Popen(shlex.split(cmd))
     p.wait()
 
@@ -120,3 +120,44 @@ def run_tfce(ft0, ft1, folder=None, num_perm=500, mask=None):
         f_pval_list.append(f_pval)
 
     return f_pval_list
+
+
+def compute_tfce(ft0, ft1, effect=None, mask=None, alpha=.05, f_sig=None,
+                 folder=None, **kwargs):
+    """ computes tfce by calling randomise
+
+    Args:
+        ft0 (FileTree): images of grp0
+        ft1 (FileTree): images of grp1
+        effect (Effect): if passed, is applied to ft1 (useful for simulation)
+        mask (Mask): mask of area to run on tfce
+        alpha (float): family wise error rate
+        f_sig (str or Path): output file of significant voxels (bool)
+        folder (str or Path): folder to put files
+
+    Returns:
+        f_sig (Path): output file of significant voxels
+    """
+    assert len(ft0.feat_list) == len(ft1.feat_list) == 1, \
+        'tfce requires scalar features'
+
+    if folder is None:
+        folder = pathlib.Path(tempfile.mkdtemp())
+
+    if f_sig is None:
+        f_sig = folder / 'tfce_sig.nii.gz'
+
+    # copy ft1 and apply effect
+    if effect is not None:
+        ft1 = ft1.copy_files(folder, mask=mask, effect=effect)
+
+    # run tfce
+    f_pval_list = run_tfce(ft0, ft1, folder=folder, mask=mask, **kwargs)
+
+    # load pval, apply FWER significance threshold and save binary image
+    img_pval = nib.load(str(f_pval_list[0]))
+    sig = img_pval.get_data() <= alpha
+    img_sig = nib.Nifti1Image(sig.astype(np.uint8), img_pval.affine)
+    img_sig.to_filename(str(f_sig))
+
+    return f_sig
