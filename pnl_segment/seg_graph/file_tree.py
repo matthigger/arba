@@ -20,7 +20,7 @@ class FileTree:
         feat_list (list): list of features, defines ordering of feat
         ref (RefSpace): defines shape and affine of data
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
-        data (np.array): shape is (space0, space1, space2, num_feat, num_sbj)
+        data (np.array): shape is (space0, space1, space2, num_sbj, num_feat)
     """
 
     @staticmethod
@@ -71,16 +71,10 @@ class FileTree:
                     ft.ijk_fs_dict[ijk].mu += mu_delta
 
                 # apply to raw data
-                x = ft.data
-                _mask = np.broadcast_to(mask.T, x.T.shape).T
-                x_active = x[_mask]
-                x_active += np.atleast_2d(mu_delta).T
+                _mask = np.broadcast_to(mask.T, ft.data.T.shape).T
+                ft.data = np.add(ft.data, mu_delta, where=_mask)
 
         return mu_offset_dict
-
-    @property
-    def is_loaded(self):
-        return not (self.data is None)
 
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
@@ -90,10 +84,13 @@ class FileTree:
         # init
         self.sbj_feat_file_tree = sbj_feat_file_tree
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
-        self.ijk_fs_dict = dict()
-        self.data = None
+
+        self.mask = mask
         if mask is None:
             self.mask = self.get_mask(p=1)
+
+        self.ijk_fs_dict = dict()
+        self.data = None
 
         # assign and validate feat_list
         self.feat_list = None
@@ -128,7 +125,7 @@ class FileTree:
                      'desc': 'compute feat stat'}
         self.ijk_fs_dict = dict()
         for ijk in tqdm(PointCloud.from_mask(self.mask), **tqdm_dict):
-            x = self.data[ijk[0], ijk[1], ijk[2], :, :]
+            x = self.data[ijk[0], ijk[1], ijk[2], :, :].T
             self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
     def unload(self):
@@ -155,14 +152,14 @@ class FileTree:
         """ returns an array of all data
 
         Returns:
-            data (np.array): shape=(space0, space1, space2, num_feat, num_sbj)
+            data (np.array): shape=(space0, space1, space2, num_sbj, num_feat)
         """
 
         # preallocate
         num_feat = len(self.feat_list)
         num_sbj = len(self.sbj_feat_file_tree.items())
         shape = self.ref.shape
-        data = np.empty((shape[0], shape[1], shape[2], num_feat, num_sbj))
+        data = np.empty((shape[0], shape[1], shape[2], num_sbj, num_feat))
 
         tqdm_dict = {'disable': not verbose,
                      'desc': 'load data',
@@ -173,7 +170,7 @@ class FileTree:
         for sbj_idx, (sbj, f_nii_dict) in tqdm(idx_sbj_dict_iter, **tqdm_dict):
             for feat_idx, feat in enumerate(self.feat_list):
                 img = nib.load(str(f_nii_dict[feat]))
-                data[:, :, :, feat_idx, sbj_idx] = img.get_data()
+                data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
         # apply mask
         if mask is not None:
@@ -269,7 +266,7 @@ class FileTree:
         for sbj_grp in (sbj_grp0, sbj_grp1):
             sbj_feat_file_tree = {sbj: self.sbj_feat_file_tree[sbj]
                                   for sbj in sbj_grp}
-            ft = FileTree(sbj_feat_file_tree)
+            ft = FileTree(sbj_feat_file_tree, mask=self.mask)
             file_tree_list.append(ft)
 
         return file_tree_list

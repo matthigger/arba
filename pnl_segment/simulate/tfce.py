@@ -62,7 +62,7 @@ def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
     sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list)}
 
     # build data cube
-    x = np.concatenate((ft0.data, ft1.data), axis=-1)
+    x = np.concatenate((ft0.data, ft1.data), axis=3)
 
     # apply mask (mask is
     assert np.allclose(mask.shape, x.shape[:3]), 'mask shape mismatch'
@@ -71,7 +71,7 @@ def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
 
     # mahalanobis or scalar reduce
     # todo: currently just tosses a dimension ... should apply maha
-    x = np.squeeze(x, axis=3)
+    x = np.squeeze(x, axis=4)
 
     # save data
     f_data = get_temp_file(suffix='_tfce.nii.gz')
@@ -105,6 +105,10 @@ def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None, **kwargs):
 
     assert f_design_ttest2, 'design_ttest2 not found, FSL install / path?'
     assert f_randomise, 'randomise not found, FSL install / path?'
+
+    # build folder
+    folder = pathlib.Path(folder)
+    folder.mkdir(exist_ok=True)
 
     # write design.mat, design.con
     f_design = folder / 'design'

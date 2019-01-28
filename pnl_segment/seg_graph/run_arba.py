@@ -34,9 +34,13 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
         print('---begin seg graph init---')
 
     # get mask
+    ft0, ft1 = tuple(ft_dict.values())
     if mask is None:
-        m0, m1 = tuple(ft.get_mask() for ft in ft_dict.values())
-        mask = np.logical_and(m0, m1)
+        assert np.allclose(ft0.mask, ft1.mask), 'mask mismatch'
+        mask = ft0.mask
+    else:
+        ft0.mask = mask
+        ft1.mask = mask
 
     # split into segmentation + test data
     ft_dict_seg = dict()
@@ -49,7 +53,7 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     tqdm_dict = {'disable': not verbose,
                  'desc': 'load data, compute stats per voxel'}
     for ft in tqdm(ft_list, **tqdm_dict):
-        ft.load(mask=mask, verbose=verbose)
+        ft.load(verbose=verbose)
 
     # harmonize
     if harmonize:

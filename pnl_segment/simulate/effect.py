@@ -1,8 +1,8 @@
+import random
 from collections import Counter
 from copy import copy
 
 import numpy as np
-import random
 from scipy.ndimage import binary_dilation
 from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu, multivariate_normal
@@ -185,6 +185,10 @@ class Effect:
         ijk_set = PointCloud.from_mask(self.mask)
         for ijk in ijk_set:
             file_tree.ijk_fs_dict[ijk].mu += self.mean
+
+        # apply to raw data
+        _mask = np.broadcast_to(self.mask.T, file_tree.data.T.shape).T
+        file_tree.data = np.add(file_tree.data, self.mean, where=_mask)
 
     @staticmethod
     def sample_mask(prior_array, radius=None, seg_array=None, ref=None,

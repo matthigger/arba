@@ -1,4 +1,5 @@
 import copy
+import shutil
 
 import nibabel as nib
 import numpy as np
@@ -20,20 +21,21 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     effect = file.load(folder / 'effect.p.gz')
     folder_tfce = folder / 'tfce'
 
-    # compute tfce
-    f_sig = folder_image / s_mask_sig.format(method='tfce')
-    ft_effect_dict = {ft_dict[Simulator.grp_effect]: effect}
-    ft_tuple = ft_dict[Simulator.grp_null], ft_dict[Simulator.grp_effect]
-    compute_tfce(ft_tuple, ft_effect_dict=ft_effect_dict, alpha=alpha,
-                 f_sig=f_sig, mask=mask, folder=folder_tfce,
-                 harmonize=harmonize)
-
     # build file tree of entire dataset (no folds needed)
     for ft in ft_dict.values():
         ft.load(mask=mask)
+
+    # harmonize and apply effect
     if harmonize:
-        FileTree.harmonize_via_add(ft_dict.values(), apply=True)
+        FileTree.harmonize_via_add(tuple(ft_dict.values()), apply=True)
     effect.apply_to_file_tree(ft_dict[Simulator.grp_effect])
+
+    # compute tfce
+    f_sig = folder_image / s_mask_sig.format(method='tfce')
+    ft_tuple = ft_dict[Simulator.grp_null], ft_dict[Simulator.grp_effect]
+    _, f_sig_list = compute_tfce(ft_tuple, alpha=alpha, mask=mask,
+                                      folder=folder_tfce)
+    shutil.copy(f_sig_list[0], str(f_sig))
 
     # compute vba + rba
     sg_vba_test, _, _ = next(iter(sg_hist_seg))
@@ -51,7 +53,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
 
     # compute performance
     method_ss_dict = dict()
-    for method in ['arba', 'vba', 'tfce1', 'tfce2' 'rba']:
+    for method in ['arba', 'vba', 'tfce', 'rba']:
         f_estimate = folder_image / s_mask_sig.format(method=method)
         estimate = nib.load(str(f_estimate)).get_data()
         method_ss_dict[method] = effect.get_sens_spec(estimate=estimate,
@@ -73,7 +75,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_24_15_44_51'
+    folder = folder / '2019_Jan_28_12_09_06'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()
