@@ -8,11 +8,16 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.space import Mask, PointCloud
+from pnl_segment.seg_graph import FileTree
 
 
-def prep_files(ft_tuple, f_data=None, ft_effect_dict=dict(), mask=None,
-               harmonize=False, **kwargs):
+def get_temp_file(*args, **kwargs):
+    h, f = tempfile.mkstemp(*args, **kwargs)
+    os.close(h)
+    return pathlib.Path(f)
+
+
+def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
     """ build nifti of input data
 
     tfce requires a data cube [i, j, k, sbj_idx].  this function writes such
@@ -20,11 +25,10 @@ def prep_files(ft_tuple, f_data=None, ft_effect_dict=dict(), mask=None,
 
     Args:
         ft_tuple (tuple): two FileTree objects
-        f_data (str or Path): output file of data cube
         ft_effect_dict (dict): keys are file trees (which should be ft0 or f1)
                                values are effects to apply to data cube.
                                useful for simulation
-        mask : constrains output datacube
+        mask (Mask): constrains output datacube
         harmonize (bool): toggles whether data per group is harmonized (in
                           initial partitioning)
 
@@ -33,95 +37,51 @@ def prep_files(ft_tuple, f_data=None, ft_effect_dict=dict(), mask=None,
         sbj_idx_dict (dict): keys are sbj, values are idx in datacube
     """
     ft0, ft1 = ft_tuple
-    assert ft0.feat_list == ft1.feat_list, 'feature mismatch'
     assert ft0.ref == ft1.ref, 'space mismatch'
-    assert not set(ft0.sbj_iter) & set(ft1.sbj_iter), 'case overlap'
-    # todo: support multivariate with Mahalanobis projection
-    assert len(ft0.feat_list) == 1, 'only scalar features currently supported'
+    assert not set(ft0.sbj_list) & set(ft1.sbj_list), 'case overlap'
 
-    # get constants from file trees
-    ref = ft0.ref
-
-    # init file
-    if f_data is None:
-        h, f_data = tempfile.mkstemp(suffix='tfce.nii.gz')
-        os.close(h)
-        f_data = pathlib.Path(f_data)
-
-    # build mapping of sbj to idx
-    sbj_list0 = sorted(ft0.sbj_feat_file_tree.keys())
-    sbj_list1 = sorted(ft1.sbj_feat_file_tree.keys())
-    sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list0)}
-    sbj_idx_dict.update({sbj: idx + len(sbj_list0)
-                         for idx, sbj in enumerate(sbj_list1)})
-    grp0_bool = np.array([True] * len(sbj_list0) + [False] * len(sbj_list1))
-    grp1_bool = np.logical_not(grp0_bool)
-    grp_bool = grp0_bool, grp1_bool
-
-    # get mask and f_mask
-    f_mask = str(f_data).replace('.nii.gz', 'mask.nii.gz')
+    # get mask
     if mask is None:
-        # build mask as intersection of masks in each file tree
-        mask = np.logical_and(ft0.mask, ft1.mask)
-        mask.to_nii(f_out=f_mask)
-    elif isinstance(mask, str) or isinstance(mask, pathlib.Path):
-        # load it
-        f_mask = pathlib.Path(mask)
-        mask = Mask.from_nii(f_mask)
-    elif isinstance(mask, Mask) or isinstance(mask, PointCloud):
-        assert mask.ref == ref, 'mask reference mismatch'
-        if isinstance(mask, PointCloud):
-            # convert PointCloud to Mask
-            mask = mask.to_mask()
-        mask.to_nii(f_out=f_mask)
-    else:
-        raise TypeError('mask must be PointCloud, Mask or path to a nii')
+        assert np.allclose(ft0.mask, ft1.mask), 'mask mistmatch'
+        mask = ft0.mask
 
-    # build data array to temp file
-    shape = (*ft0.ref.shape, len(sbj_idx_dict), len(ft0.feat_list))
-    # todo: this init should be replaced by a broadcast...
-    _mask = np.zeros(shape).astype(bool)
-    not_mask = np.logical_not(mask)
-    for i, j in np.ndindex(*shape[-2:]):
-        _mask[:, :, :, i, j] = not_mask
-    x = np.ma.MaskedArray(np.empty(shape), mask=_mask, fill_value=0)
-    for ft in (ft0, ft1):
-        for sbj in ft.sbj_iter:
-            for feat_idx, feat in enumerate(ft0.feat_list):
-                # file
-                sbj_idx = sbj_idx_dict[sbj]
-                f = ft.sbj_feat_file_tree[sbj][feat]
-
-                # store
-                x[:, :, :, sbj_idx, feat_idx] = nib.load(str(f)).get_data()
+    # ensure data is loaded
+    for ft in ft_tuple:
+        ft.load(mask=mask)
 
     # harmonize
     if harmonize:
-        # compute averages per group (and total average)
-        mu0 = x[:, :, :, grp_bool[0], :].mean(axis=(0, 1, 2, 3))
-        mu1 = x[:, :, :, grp_bool[1], :].mean(axis=(0, 1, 2, 3))
-        n0, n1 = len(sbj_list0), len(sbj_list1)
-        mu = (mu0 * n0 + mu1 * n1) / (n0 + n1)
+        FileTree.harmonize_via_add(ft_tuple, apply=True)
 
-        # compute and apply offsets
-        del0 = mu - mu0
-        del1 = mu - mu1
-
-        x[:, :, :, grp_bool[0], :] += del0
-        x[:, :, :, grp_bool[1], :] += del1
-
-    # add effect
+    # apply effects
     for ft, effect in ft_effect_dict.items():
-        # get view of data corresponding to given file tree
-        grp_idx = ft_tuple.index(ft)
-        y = x[:, :, :, grp_bool[grp_idx], :]
+        effect.apply_to_file_tree(ft)
 
-        # apply
-        y[effect.mask, :, :] += effect.mean
+    # build mapping of sbj to idx
+    sbj_list = ft0.sbj_list + ft1.sbj_list
+    sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list)}
 
-    # build and write data
-    img_data = nib.Nifti1Image(x, affine=ref.affine)
+    # build data cube
+    x = np.concatenate((ft0.data, ft1.data), axis=-1)
+
+    # apply mask (mask is
+    assert np.allclose(mask.shape, x.shape[:3]), 'mask shape mismatch'
+    _mask = np.broadcast_to(mask.T, x.T.shape).T
+    x[np.logical_not(_mask)] = 0
+
+    # mahalanobis or scalar reduce
+    # todo: currently just tosses a dimension ... should apply maha
+    x = np.squeeze(x, axis=3)
+
+    # save data
+    f_data = get_temp_file(suffix='_tfce.nii.gz')
+    img_data = nib.Nifti1Image(x, affine=ft0.ref.affine)
     img_data.to_filename(str(f_data))
+
+    # save mask
+    f_mask = str(f_data).replace('_tfce.nii.gz', '_mask.nii.gz')
+    img_mask = nib.Nifti1Image(mask.astype(np.uint8), affine=ft0.ref.affine)
+    img_mask.to_filename(str(f_mask))
 
     return f_data, f_mask, sbj_idx_dict
 
@@ -181,7 +141,6 @@ def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
     Args:
         ft_tuple (tuple): two FileTree objects
         alpha (float): family wise error rate
-        f_sig (str or Path): output file of significant voxels (bool)
         folder (str or Path): folder to put files
 
     Returns:
