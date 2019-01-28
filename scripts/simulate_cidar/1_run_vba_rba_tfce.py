@@ -18,12 +18,15 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
     sg_hist_seg = file.load(folder / 'sg_hist_seg.p.gz')
     mask = Mask.from_nii(folder_image / 'mask.nii.gz')
     effect = file.load(folder / 'effect.p.gz')
+    folder_tfce = folder / 'tfce'
 
     # compute tfce
     f_sig = folder_image / s_mask_sig.format(method='tfce')
-    compute_tfce(ft0=ft_dict[Simulator.grp_null],
-                 ft1=ft_dict[Simulator.grp_effect], effect=effect, alpha=alpha,
-                 f_sig=f_sig, mask=mask)
+    ft_effect_dict = {ft_dict[Simulator.grp_effect]: effect}
+    ft_tuple = ft_dict[Simulator.grp_null], ft_dict[Simulator.grp_effect]
+    compute_tfce(ft_tuple, ft_effect_dict=ft_effect_dict, alpha=alpha,
+                 f_sig=f_sig, mask=mask, folder=folder_tfce,
+                 harmonize=harmonize)
 
     # build file tree of entire dataset (no folds needed)
     for ft in ft_dict.values():
@@ -48,7 +51,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True, harmonize=False):
 
     # compute performance
     method_ss_dict = dict()
-    for method in ['arba', 'vba', 'tfce', 'rba']:
+    for method in ['arba', 'vba', 'tfce1', 'tfce2' 'rba']:
         f_estimate = folder_image / s_mask_sig.format(method=method)
         estimate = nib.load(str(f_estimate)).get_data()
         method_ss_dict[method] = effect.get_sens_spec(estimate=estimate,
@@ -70,7 +73,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_23_12_55_21'
+    folder = folder / '2019_Jan_24_15_44_51'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()

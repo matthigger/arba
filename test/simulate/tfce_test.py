@@ -4,8 +4,8 @@ from pnl_segment.simulate import *
 
 
 @pytest.fixture
-def ft0_ft1(var=1, eff=1, shape=(10, 10, 10), shape_eff=(4, 5, 6), n_null=10,
-            n_effect=11):
+def ft_tuple(var=1, eff=10, shape=(10, 10, 10), shape_eff=(4, 5, 6), n_null=10,
+             n_effect=11):
     """ builds two file trees with some effect
 
     Args:
@@ -50,8 +50,8 @@ def ft0_ft1(var=1, eff=1, shape=(10, 10, 10), shape_eff=(4, 5, 6), n_null=10,
     return ft0, ft1
 
 
-def test_run_tfce(ft0_ft1):
+def test_compute_tfce(ft_tuple):
     """ runs a dummy tfce """
-    ft0, ft1 = ft0_ft1
 
-    run_tfce(ft0, ft1)
+    folder, f_sig_list = compute_tfce(ft_tuple)
+
