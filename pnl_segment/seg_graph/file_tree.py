@@ -1,6 +1,4 @@
-import pathlib
 import random
-import tempfile
 from collections import defaultdict
 
 import nibabel as nib
@@ -22,10 +20,11 @@ class FileTree:
         feat_list (list): list of features, defines ordering of feat
         ref (RefSpace): defines shape and affine of data
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
+        data (np.array): shape is (space0, space1, space2, num_feat, num_sbj)
     """
 
     @staticmethod
-    def harmonize_via_add(ft_list, apply=True, verbose=False):
+    def harmonize_via_add(ft_list, apply=True, verbose=False, mask=None):
         """ ensures that each file tree has same mean (over all ijk)
 
         average is determined by summing across all file tree and ijk
@@ -34,10 +33,16 @@ class FileTree:
             ft_list (list): list of file trees
             apply (bool): toggles whether to apply offset
             verbose (bool): toggles command line output
+            mask (np.array): where to harmonize
 
         Returns:
             mu_offset_dict (dict): keys are file tree, values are offset needed
         """
+        if mask is None:
+            assert np.allclose(ft_list[0].mask, ft_list[1].mask), \
+                'mask mismatch'
+            mask = ft_list[0].mask
+        pc = PointCloud.from_mask(mask)
 
         # find average per file tree
         ft_fs_dict = defaultdict(FeatStatEmpty)
@@ -48,8 +53,8 @@ class FileTree:
             tqdm_dict1 = {'disable': not verbose,
                           'desc': 'summing fs per voxel',
                           'total': len(ft.ijk_fs_dict)}
-            for fs in tqdm(ft.ijk_fs_dict.values(), **tqdm_dict1):
-                ft_fs_dict[ft] += fs
+            for ijk in tqdm(pc, **tqdm_dict1):
+                ft_fs_dict[ft] += ft.ijk_fs_dict[ijk]
 
         # find average (over all file trees)
         fs_average = sum(ft_fs_dict.values())
@@ -61,74 +66,21 @@ class FileTree:
         # apply (if need be)
         if apply:
             for ft, mu_delta in mu_offset_dict.items():
-                for ijk in ft.ijk_fs_dict.keys():
+                # apply to feature stats
+                for ijk in pc:
                     ft.ijk_fs_dict[ijk].mu += mu_delta
+
+                # apply to raw data
+                x = ft.data
+                _mask = np.broadcast_to(mask.T, x.T.shape).T
+                x_active = x[_mask]
+                x_active += np.atleast_2d(mu_delta).T
 
         return mu_offset_dict
 
     @property
-    def mask(self):
-        if self._mask is None:
-            self._mask = self.get_mask()
-
-        return self._mask
-
-    @property
-    def sbj_iter(self):
-        return iter(self.sbj_feat_file_tree.keys())
-
-    def copy_files(self, folder=None, mask=None, effect=None):
-        """ copies all the files in self to a new folder
-
-        useful if one wants to apply an effect without modifying original files
-
-        Args:
-            folder (str or Path): output folder of data
-            mask (Mask): if passed, constrains which values are copied
-            effect (Effect): if passed, applies effect to data
-
-        Returns:
-            file_tree (FileTree): output file tree
-        """
-
-        # default to new temporary folder
-        if folder is None:
-            folder = pathlib.Path(tempfile.mkdtemp())
-        else:
-            folder = pathlib.Path(folder)
-
-        if effect is not None and mask is not None:
-            effect_mask = np.logical_and(effect.mask, mask)
-
-        sbj_feat_file_tree = defaultdict(dict)
-        for sbj, d in self.sbj_feat_file_tree.items():
-            for feat, f in d.items():
-                # build output directory + get file location
-                f_out = folder / sbj / feat / pathlib.Path(f).name
-                f_out.parent.mkdir(exist_ok=True, parents=True)
-                if f_out.exists():
-                    raise FileExistsError
-
-                # load data
-                img = nib.load(str(f))
-                x = img.get_data()
-
-                if mask is not None:
-                    # apply mask
-                    x[~mask] = 0
-
-                if effect is not None:
-                    # apply effect
-                    feat_idx = self.feat_list.index(feat)
-                    x[effect_mask] += effect.mean[feat_idx]
-
-                # save
-                img_out = nib.Nifti1Image(x, img.affine)
-                img_out.to_filename(str(f_out))
-
-                sbj_feat_file_tree[sbj][feat] = f_out
-
-        return FileTree(sbj_feat_file_tree, mask=mask)
+    def is_loaded(self):
+        return not (self.data is None)
 
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
@@ -137,14 +89,15 @@ class FileTree:
         # todo: all attributes should be internal
         # init
         self.sbj_feat_file_tree = sbj_feat_file_tree
+        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
         self.ijk_fs_dict = dict()
-        self._mask = mask
-        if isinstance(self._mask, Mask):
-            self._mask = PointCloud.from_mask(self._mask)
+        self.data = None
+        if mask is None:
+            self.mask = self.get_mask(p=1)
 
         # assign and validate feat_list
         self.feat_list = None
-        for sbj in self.sbj_iter:
+        for sbj in self.sbj_list:
             feat_list = sorted(self.sbj_feat_file_tree[sbj].keys())
             if self.feat_list is None:
                 self.feat_list = feat_list
@@ -160,57 +113,45 @@ class FileTree:
                 elif self.ref != get_ref(f_nii):
                     raise AttributeError('space mismatch')
 
-    def load(self, mask=None, verbose=False, **kwargs):
+    def load(self, verbose=False, **kwargs):
         """ loads files, adds data to statistics per voxel
 
         Args:
-            mask (Mask): ijk tuples to load
             verbose (bool): toggles command line output
         """
-        # get mask_ijk
-        if mask is None:
-            mask = self.get_mask(**kwargs)
 
         # load all data
-        data = self.get_array(verbose=verbose)
+        self.data = self.get_data(verbose=verbose, mask=self.mask)
 
         # compute feat stat
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute feat stat'}
         self.ijk_fs_dict = dict()
-
-        for ijk in tqdm(PointCloud.from_mask(mask), **tqdm_dict):
-            x = data[ijk[0], ijk[1], ijk[2], :, :]
+        for ijk in tqdm(PointCloud.from_mask(self.mask), **tqdm_dict):
+            x = self.data[ijk[0], ijk[1], ijk[2], :, :]
             self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
     def unload(self):
         self.ijk_fs_dict = dict()
+        self.data = None
 
     def __reduce_ex__(self, *args, **kwargs):
         # store and remove ijk_fs_dict from self
+        data = self.data
         ijk_fs_dict = self.ijk_fs_dict
-        self.ijk_fs_dict = dict()
+
+        self.unload()
 
         # save without ijk_fs_dict in self
         x = super().__reduce_ex__(*args, **kwargs)
 
         # put it back
         self.ijk_fs_dict = ijk_fs_dict
+        self.data = data
 
         return x
 
-    def apply_mask(self, mask):
-        ft = FileTree(self.sbj_feat_file_tree)
-        ft.ijk_fs_dict = defaultdict(FeatStatEmpty)
-
-        ijk_set = PointCloud.from_mask(mask)
-        ijk_set &= {x for x in self.ijk_fs_dict.keys()}
-        for ijk in ijk_set:
-            ft.ijk_fs_dict[ijk] = self.ijk_fs_dict[ijk]
-
-        return ft
-
-    def get_array(self, verbose=False):
+    def get_data(self, verbose=False, mask=None):
         """ returns an array of all data
 
         Returns:
@@ -220,19 +161,25 @@ class FileTree:
         # preallocate
         num_feat = len(self.feat_list)
         num_sbj = len(self.sbj_feat_file_tree.items())
-        f_any = next(iter(self.sbj_feat_file_tree.values()))[self.feat_list[0]]
-        shape = nib.load(str(f_any)).shape
+        shape = self.ref.shape
         data = np.empty((shape[0], shape[1], shape[2], num_feat, num_sbj))
 
         tqdm_dict = {'disable': not verbose,
                      'desc': 'load data',
                      'total': num_sbj}
 
+        # load files
         idx_sbj_dict_iter = enumerate(self.sbj_feat_file_tree.items())
         for sbj_idx, (sbj, f_nii_dict) in tqdm(idx_sbj_dict_iter, **tqdm_dict):
             for feat_idx, feat in enumerate(self.feat_list):
                 img = nib.load(str(f_nii_dict[feat]))
                 data[:, :, :, feat_idx, sbj_idx] = img.get_data()
+
+        # apply mask
+        if mask is not None:
+            _mask = np.broadcast_to(mask.T, data.T.shape).T
+            data[np.logical_not(_mask)] = 0
+
         return data
 
     def get_mean_array(self, fnc=None, feat=None):
@@ -256,11 +203,11 @@ class FileTree:
         if feat is not None:
             feat_idx = self.feat_list.index(feat)
 
-            def fnc(reg):
-                return reg.mu.flatten()[feat_idx]
+            def fnc(fs):
+                return fs.mu[feat_idx]
 
-        for ijk, reg in self.ijk_fs_dict.items():
-            x[ijk] = fnc(reg)
+        for ijk, fs in self.ijk_fs_dict.items():
+            x[ijk] = fnc(fs)
 
         return x
 
@@ -277,7 +224,7 @@ class FileTree:
 
         # get set of all voxels present in all data file
         f_nii_list = list()
-        for sbj in self.sbj_iter:
+        for sbj in self.sbj_list:
             f_nii_list += list(self.sbj_feat_file_tree[sbj].values())
 
         # build mask
@@ -299,6 +246,7 @@ class FileTree:
         Args:
             p (float): in (0, 1), splits data to have at least p percent of sbj
                        in the first grp
+            seed: sets random seed
 
         Returns:
             file_tree_list (list): FileTree for each grp
@@ -307,10 +255,12 @@ class FileTree:
         # compute n_effect
         n_grp0 = np.ceil(p * len(self)).astype(int)
 
-        # split sbj into health and effect groups
-        sbj_set = set(self.sbj_iter)
+        # reset seed
         if seed is not None:
             random.seed(seed)
+
+        # split sbj into health and effect groups
+        sbj_set = set(self.sbj_list)
         sbj_grp0 = set(random.sample(sbj_set, k=n_grp0))
         sbj_grp1 = sbj_set - sbj_grp0
 
