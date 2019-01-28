@@ -8,7 +8,7 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.seg_graph import FileTree
+from pnl_segment.space import PointCloud
 
 
 def get_temp_file(*args, **kwargs):
@@ -17,20 +17,16 @@ def get_temp_file(*args, **kwargs):
     return pathlib.Path(f)
 
 
-def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
+def prep_files(ft_tuple):
     """ build nifti of input data
 
     tfce requires a data cube [i, j, k, sbj_idx].  this function writes such
     a nifti file.
 
     Args:
-        ft_tuple (tuple): two FileTree objects
-        ft_effect_dict (dict): keys are file trees (which should be ft0 or f1)
-                               values are effects to apply to data cube.
-                               useful for simulation
-        mask (Mask): constrains output datacube
-        harmonize (bool): toggles whether data per group is harmonized (in
-                          initial partitioning)
+        ft_tuple (tuple): two FileTree objects, the first defines the compare
+                          group (defines mu and cov in computation of
+                          Mahalanobis distance)
 
     Returns:
         f_data (Path): output file of nifti cube
@@ -41,21 +37,12 @@ def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
     assert not set(ft0.sbj_list) & set(ft1.sbj_list), 'case overlap'
 
     # get mask
-    if mask is None:
-        assert np.allclose(ft0.mask, ft1.mask), 'mask mistmatch'
-        mask = ft0.mask
+    assert np.allclose(ft0.mask, ft1.mask), 'mask mistmatch'
+    mask = ft0.mask
 
     # ensure data is loaded
     for ft in ft_tuple:
-        ft.load(mask=mask)
-
-    # harmonize
-    if harmonize:
-        FileTree.harmonize_via_add(ft_tuple, apply=True)
-
-    # apply effects
-    for ft, effect in ft_effect_dict.items():
-        effect.apply_to_file_tree(ft)
+        assert ft.data is not None, 'file_tree must be loaded'
 
     # build mapping of sbj to idx
     sbj_list = ft0.sbj_list + ft1.sbj_list
@@ -63,19 +50,33 @@ def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
 
     # build data cube
     x = np.concatenate((ft0.data, ft1.data), axis=3)
+    sbj_cmp_idx = np.concatenate((np.ones(len(ft0)),
+                                  np.zeros(len(ft1)))).astype(bool)
 
-    # apply mask (mask is
+    # apply mask
     assert np.allclose(mask.shape, x.shape[:3]), 'mask shape mismatch'
-    _mask = np.broadcast_to(mask.T, x.T.shape).T
-    x[np.logical_not(_mask)] = 0
 
-    # mahalanobis or scalar reduce
-    # todo: currently just tosses a dimension ... should apply maha
-    x = np.squeeze(x, axis=4)
+    # compute mahalanobis per voxel (across entire population)
+    maha = np.zeros(x.shape[:4])
+    for i, j, k in PointCloud.from_mask(mask):
+
+        _x = x[i, j, k, :, :]
+        _x_cmp = _x[sbj_cmp_idx, :]
+        mu = np.atleast_2d(np.mean(_x_cmp))
+        cov = np.atleast_2d(np.cov(_x_cmp.T))
+        cov_inv = np.linalg.pinv(cov)
+
+        for sbj_idx, sbj_x in enumerate(_x):
+            delta = sbj_x - mu
+            maha[i, j, k, sbj_idx] = np.sqrt(delta @ cov_inv @ delta.T)
+
+    # ensure all maha are positive
+    _mask = np.broadcast_to(mask.T, maha.T.shape).T
+    assert np.all(maha[_mask] > 0), 'invalid maha, must be positive'
 
     # save data
-    f_data = get_temp_file(suffix='_tfce.nii.gz')
-    img_data = nib.Nifti1Image(x, affine=ft0.ref.affine)
+    f_data = get_temp_file(suffix='_maha_tfce.nii.gz')
+    img_data = nib.Nifti1Image(maha, affine=ft0.ref.affine)
     img_data.to_filename(str(f_data))
 
     # save mask
@@ -86,7 +87,7 @@ def prep_files(ft_tuple, ft_effect_dict=dict(), mask=None, harmonize=False):
     return f_data, f_mask, sbj_idx_dict
 
 
-def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None, **kwargs):
+def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None):
     """ wrapper around randomise, interfaces at file level
 
     Args:
@@ -139,7 +140,7 @@ def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None, **kwargs):
     return f_pval_list
 
 
-def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
+def compute_tfce(ft_tuple, alpha=.05, folder=None):
     """ computes tfce by calling randomise
 
     Args:
@@ -154,12 +155,11 @@ def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
         folder = pathlib.Path(tempfile.mkdtemp())
 
     # prep data cube
-    f_data, f_mask, _ = prep_files(ft_tuple, **kwargs)
+    f_data, f_mask, _ = prep_files(ft_tuple)
 
     # run tfce
     nm = tuple(len(ft) for ft in ft_tuple)
-    f_pval_list = run_tfce(f_data, folder=folder, f_mask=f_mask, nm=nm,
-                           **kwargs)
+    f_pval_list = run_tfce(f_data, folder=folder, f_mask=f_mask, nm=nm)
 
     # load pval, apply FWER significance threshold and save binary image
     f_sig_list = list()
