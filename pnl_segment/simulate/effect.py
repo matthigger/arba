@@ -187,8 +187,9 @@ class Effect:
             file_tree.ijk_fs_dict[ijk].mu += self.mean
 
         # apply to raw data
-        _mask = np.broadcast_to(self.mask.T, file_tree.data.T.shape).T
-        file_tree.data = np.add(file_tree.data, self.mean, where=_mask)
+        pc = PointCloud.from_mask(self.mask)
+        for i, j, k in pc:
+            file_tree.data[i, j, k, :, :] += self.mean
 
     @staticmethod
     def sample_mask(prior_array, radius=None, seg_array=None, ref=None,

@@ -70,9 +70,8 @@ class FileTree:
                 for ijk in pc:
                     ft.ijk_fs_dict[ijk].mu += mu_delta
 
-                # apply to raw data
-                _mask = np.broadcast_to(mask.T, ft.data.T.shape).T
-                ft.data = np.add(ft.data, mu_delta, where=_mask)
+                    i, j, k = ijk
+                    ft.data[i, j, k, :, :] += mu_delta
 
         return mu_offset_dict
 
