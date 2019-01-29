@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+from copy import deepcopy
 
 import nibabel as nib
 import numpy as np
@@ -12,13 +13,27 @@ from ..space import get_ref, Mask, PointCloud
 class FileTree:
     """ manages scalar files of 3d volumes
 
-    the emphasis is on storing feature statistics per voxel across the
-    population (see ijk_fs_dict)
+    minimizing memory usage is prioritized.  the last two attributes in the
+    list below are memory intensive.  load() and unload() can be used to
+    discard them when they are not needed.  add_hist_list serves as a memory of
+    all the addition operations which have occurred to the data, such that
+    calling load() will redo each addition operation in the history to ensure
+    the state is not lost.
 
     Attributes:
         sbj_feat_file_tree (tree): tree, keys are sbj, feature, leafs are files
+        sbj_list (list): list of all subjects, redundant, but other
+                         applications may need this order fixed (dict is fishy
+                         for this purpose)
+        mask (Mask): a mask of the active area, this is fixed at __init__
         feat_list (list): list of features, defines ordering of feat
         ref (RefSpace): defines shape and affine of data
+
+        add_hist_list (list): a list of tuples (value, mask) which are memory
+                              of all additions which have been applied.  value
+                              is np.array of length feat_list, mask is np.array
+                              of booleans which describe location of addition
+
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
         data (np.array): shape is (space0, space1, space2, num_sbj, num_feat)
     """
@@ -66,12 +81,7 @@ class FileTree:
         # apply (if need be)
         if apply:
             for ft, mu_delta in mu_offset_dict.items():
-                # apply to feature stats
-                for ijk in pc:
-                    ft.ijk_fs_dict[ijk].mu += mu_delta
-
-                    i, j, k = ijk
-                    ft.data[i, j, k, :, :] += mu_delta
+                ft.add(mu_delta, mask=mask)
 
         return mu_offset_dict
 
@@ -79,10 +89,10 @@ class FileTree:
         return len(self.sbj_feat_file_tree.keys())
 
     def __init__(self, sbj_feat_file_tree, mask=None):
-        # todo: all attributes should be internal
         # init
         self.sbj_feat_file_tree = sbj_feat_file_tree
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        self.add_hist_list = list()
 
         self.mask = mask
         if mask is None:
@@ -109,10 +119,46 @@ class FileTree:
                 elif self.ref != get_ref(f_nii):
                     raise AttributeError('space mismatch')
 
-    def load(self, verbose=False, **kwargs):
+    def reset(self):
+        self.add_hist_list = list()
+
+    def add(self, value, point_cloud=None, mask=None, record=True):
+        # get point_cloud and mask
+        if (point_cloud is None) == (mask is None):
+            raise AttributeError('either point_cloud xor mask required')
+        if point_cloud is not None:
+            # point cloud passed, get mask
+            mask = point_cloud.to_mask(self.ref)
+        else:
+            # mask passed, get point_cloud
+            if isinstance(mask, np.ndarray):
+                assert mask.shape == self.ref.shape, 'invalid shape'
+                mask = Mask(mask, ref=self.ref)
+            point_cloud = PointCloud.from_mask(mask)
+        assert mask.ref == self.ref, 'invalid space'
+
+        # store this addition (mask stored as its lighter for large volumes)
+        if record:
+            mask = deepcopy(np.array(mask))
+            self.add_hist_list.append((value, mask))
+
+        # add to feature statistics (if present)
+        if self.ijk_fs_dict:
+            for ijk in point_cloud:
+                self.ijk_fs_dict[ijk].mu += value
+
+        # add to data (if present)
+        if self.data is not None:
+            for i, j, k in point_cloud:
+                self.data[i, j, k, :, :] += value
+
+    def load(self, verbose=False, load_data=True, load_ijk_fs=True, **kwargs):
         """ loads files, adds data to statistics per voxel
 
         Args:
+            load_data (bool): toggles whether data is loaded (very heavy)
+            load_ijk_fs (bool): toggles wehther feature stats per voxel are
+                                loaded (heavy)
             verbose (bool): toggles command line output
         """
 
@@ -120,16 +166,26 @@ class FileTree:
         self.data = self.get_data(verbose=verbose, mask=self.mask)
 
         # compute feat stat
-        tqdm_dict = {'disable': not verbose,
-                     'desc': 'compute feat stat'}
-        self.ijk_fs_dict = dict()
-        for ijk in tqdm(PointCloud.from_mask(self.mask), **tqdm_dict):
-            x = self.data[ijk[0], ijk[1], ijk[2], :, :].T
-            self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
+        if load_ijk_fs:
+            tqdm_dict = {'disable': not verbose,
+                         'desc': 'compute feat stat'}
+            self.ijk_fs_dict = dict()
+            for ijk in tqdm(PointCloud.from_mask(self.mask), **tqdm_dict):
+                x = self.data[ijk[0], ijk[1], ijk[2], :, :].T
+                self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
-    def unload(self):
-        self.ijk_fs_dict = dict()
-        self.data = None
+        # add values into history
+        for value, mask in self.add_hist_list:
+            self.add(value=value, mask=mask, record=False)
+
+        if not load_data:
+            self.data = None
+
+    def unload(self, unload_data=True, unload_ijk_fs=True):
+        if unload_ijk_fs:
+            self.ijk_fs_dict = dict()
+        if unload_data:
+            self.data = None
 
     def __reduce_ex__(self, *args, **kwargs):
         # store and remove ijk_fs_dict from self

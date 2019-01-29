@@ -177,19 +177,8 @@ class Effect:
 
     def apply_to_file_tree(self, file_tree):
         """ applies effect to a file tree
-
-        NOTE: we avoid building apply_to_array() and apply_to_file() methods
-        directly as effect may be multivariate; file_tree encapsulates the
-        indexing of effects.
         """
-        ijk_set = PointCloud.from_mask(self.mask)
-        for ijk in ijk_set:
-            file_tree.ijk_fs_dict[ijk].mu += self.mean
-
-        # apply to raw data
-        pc = PointCloud.from_mask(self.mask)
-        for i, j, k in pc:
-            file_tree.data[i, j, k, :, :] += self.mean
+        file_tree.add(self.mean, mask=self.mask)
 
     @staticmethod
     def sample_mask(prior_array, radius=None, seg_array=None, ref=None,
