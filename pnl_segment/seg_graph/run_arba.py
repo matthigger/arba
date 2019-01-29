@@ -48,29 +48,36 @@ def run_arba(ft_dict, mask=None, folder_save=None, effect=None,
     for grp, ft in ft_dict.items():
         ft_dict_seg[grp], ft_dict_test[grp] = ft.split()
 
+    # todo: a lot of verbose code loading / harmonizing and applying ...
     # load data
-    ft_list = list(ft_dict_seg.values()) + list(ft_dict_test.values())
+    ft_list = list(ft_dict.values()) + \
+              list(ft_dict_seg.values()) + \
+              list(ft_dict_test.values())
     tqdm_dict = {'disable': not verbose,
                  'desc': 'load data, compute stats per voxel'}
     for ft in tqdm(ft_list, **tqdm_dict):
-        ft.load(verbose=verbose)
+        ft.reset()
+        ft.load(verbose=verbose, load_data=False)
 
     # harmonize
     if harmonize:
         tqdm_dict = {'disable': not verbose,
                      'desc': 'harmonizing per fold (segmentation + testing)'}
-        ft_tuple_list = [tuple(ft_dict_test.values()),
+        ft_tuple_list = [tuple(ft_dict.values()),
+                         tuple(ft_dict_test.values()),
                          tuple(ft_dict_seg.values())]
         for ft_tuple in tqdm(ft_tuple_list, **tqdm_dict):
             FileTree.harmonize_via_add(ft_tuple, apply=True, verbose=verbose)
 
     # apply effects
     if effect is not None:
+        effect.apply_to_file_tree(ft_dict[grp_effect])
         effect.apply_to_file_tree(ft_dict_seg[grp_effect])
         effect.apply_to_file_tree(ft_dict_test[grp_effect])
 
     # build sg_hist_seg
     sg_hist_seg = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
+
     if verbose:
         print('\n' * 3 + '---begin graph reduce---')
 
