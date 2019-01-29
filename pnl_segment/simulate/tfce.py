@@ -17,7 +17,7 @@ def get_temp_file(*args, **kwargs):
     return pathlib.Path(f)
 
 
-def prep_files(ft_tuple):
+def prep_files(ft_tuple, f_data=None):
     """ build nifti of input data
 
     tfce requires a data cube [i, j, k, sbj_idx].  this function writes such
@@ -40,16 +40,17 @@ def prep_files(ft_tuple):
     assert np.allclose(ft0.mask, ft1.mask), 'mask mistmatch'
     mask = ft0.mask
 
-    # ensure data is loaded
-    for ft in ft_tuple:
-        assert ft.data is not None, 'file_tree must be loaded'
-
     # build mapping of sbj to idx
     sbj_list = ft0.sbj_list + ft1.sbj_list
     sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list)}
 
     # build data cube
+    ft0.load(load_data=True, load_ijk_fs=False)
+    ft1.load(load_data=True, load_ijk_fs=False)
     x = np.concatenate((ft0.data, ft1.data), axis=3)
+    ft0.unload()
+    ft1.unload()
+
     sbj_cmp_idx = np.concatenate((np.ones(len(ft0)),
                                   np.zeros(len(ft1)))).astype(bool)
 
@@ -62,7 +63,7 @@ def prep_files(ft_tuple):
 
         _x = x[i, j, k, :, :]
         _x_cmp = _x[sbj_cmp_idx, :]
-        mu = np.atleast_2d(np.mean(_x_cmp))
+        mu = np.atleast_2d(np.mean(_x_cmp, axis=0))
         cov = np.atleast_2d(np.cov(_x_cmp.T))
         cov_inv = np.linalg.pinv(cov)
 
@@ -74,20 +75,27 @@ def prep_files(ft_tuple):
     _mask = np.broadcast_to(mask.T, maha.T.shape).T
     assert np.all(maha[_mask] > 0), 'invalid maha, must be positive'
 
+    # get filenames
+    if f_data is None:
+        f_data = get_temp_file(suffix='_maha_tfce.nii.gz')
+        f_mask = str(f_data).replace('_tfce.nii.gz', '_mask.nii.gz')
+    else:
+        folder = pathlib.Path(f_data).parent
+        folder.mkdir(exist_ok=True)
+        f_mask = folder / 'tfce_mask.nii.gz'
+
     # save data
-    f_data = get_temp_file(suffix='_maha_tfce.nii.gz')
     img_data = nib.Nifti1Image(maha, affine=ft0.ref.affine)
     img_data.to_filename(str(f_data))
 
     # save mask
-    f_mask = str(f_data).replace('_tfce.nii.gz', '_mask.nii.gz')
     img_mask = nib.Nifti1Image(mask.astype(np.uint8), affine=ft0.ref.affine)
     img_mask.to_filename(str(f_mask))
 
     return f_data, f_mask, sbj_idx_dict
 
 
-def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None):
+def run_tfce(f_data, nm, folder, num_perm=100, f_mask=None):
     """ wrapper around randomise, interfaces at file level
 
     Args:
@@ -140,7 +148,7 @@ def run_tfce(f_data, nm, folder, num_perm=500, f_mask=None):
     return f_pval_list
 
 
-def compute_tfce(ft_tuple, alpha=.05, folder=None):
+def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
     """ computes tfce by calling randomise
 
     Args:
@@ -155,7 +163,7 @@ def compute_tfce(ft_tuple, alpha=.05, folder=None):
         folder = pathlib.Path(tempfile.mkdtemp())
 
     # prep data cube
-    f_data, f_mask, _ = prep_files(ft_tuple)
+    f_data, f_mask, _ = prep_files(ft_tuple, **kwargs)
 
     # run tfce
     nm = tuple(len(ft) for ft in ft_tuple)
