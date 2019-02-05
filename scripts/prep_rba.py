@@ -1,4 +1,4 @@
-from pnl_brain.tools import register, map
+from pnl_brain.tools import register, transform
 from pnl_data.set.cidar_post import folder
 
 folder_fs = folder / 'fs' / '01193'
@@ -22,5 +22,5 @@ trans_iter = [(f_affine, 0), (f_warp, 0)]
 for f in ['aparc.a2009s+aseg.mgz', 'aparc+aseg.mgz', 'aseg.mgz']:
     f = folder_fs / f
     f_out = str(f).replace('.mgz', '_in_dti.nii.gz')
-    map.map_affine_warp(f_in=f, f_out=f_out, f_ref=f_fa,
-                        interp='NearestNeighbor', trans_iter=trans_iter)
+    transform.map_affine_warp(f_in=f, f_out=f_out, f_ref=f_fa,
+                              interp='NearestNeighbor', trans_iter=trans_iter)
