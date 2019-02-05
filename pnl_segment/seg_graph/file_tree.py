@@ -39,13 +39,13 @@ class FileTree:
     """
 
     @staticmethod
-    def harmonize_via_add(ft_list, apply=True, verbose=False, mask=None):
+    def harmonize_via_add(ft_iter, apply=True, verbose=False, mask=None):
         """ ensures that each file tree has same mean (over all ijk)
 
         average is determined by summing across all file tree and ijk
 
         Args:
-            ft_list (list): list of file trees
+            ft_iter (iter): file trees
             apply (bool): toggles whether to apply offset
             verbose (bool): toggles command line output
             mask (np.array): where to harmonize
@@ -53,18 +53,19 @@ class FileTree:
         Returns:
             mu_offset_dict (dict): keys are file tree, values are offset needed
         """
+        ft_tuple = tuple(ft_iter)
         if mask is None:
-            assert np.allclose(ft_list[0].mask, ft_list[1].mask), \
+            assert np.allclose(ft_tuple[0].mask, ft_tuple[1].mask), \
                 'mask mismatch'
-            mask = ft_list[0].mask
+            mask = ft_tuple[0].mask
         pc = PointCloud.from_mask(mask)
 
         # find average per file tree
         ft_fs_dict = defaultdict(FeatStatEmpty)
         tqdm_dict0 = {'disable': not verbose,
                       'desc': 'compute fs sum per group',
-                      'total': len(ft_list)}
-        for ft in tqdm(ft_list, **tqdm_dict0):
+                      'total': len(ft_tuple)}
+        for ft in tqdm(ft_tuple, **tqdm_dict0):
             tqdm_dict1 = {'disable': not verbose,
                           'desc': 'summing fs per voxel',
                           'total': len(ft.ijk_fs_dict)}
