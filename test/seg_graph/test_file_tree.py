@@ -76,7 +76,7 @@ def test_memory(file_tree):
 
     assert np.allclose(x, file_tree.data), 'memory failure'
 
-    file_tree.reset()
+    file_tree.reset_hist()
     file_tree.load()
 
     assert np.allclose(x_init, file_tree.data), 'reset failure'

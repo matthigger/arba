@@ -5,11 +5,11 @@ import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import file
-from pnl_segment.seg_graph import FileTree
+from ..file_tree import FileTree
 
 
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
-              verbose=False, folder_save=None, label=None):
+              verbose=False, folder_save=None, label=None, load_data=False):
     """ runs entire arba process, optionally saves outputs
 
     Args:
@@ -41,8 +41,8 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
     tqdm_dict = {'disable': not verbose,
                  'desc': 'load data, compute stats per voxel'}
     for ft in tqdm(ft_dict.values(), **tqdm_dict):
-        ft.reset()
-        ft.load(verbose=verbose, load_data=False)
+        ft.reset_hist()
+        ft.load(verbose=verbose, load_data=load_data)
 
     # harmonize
     if harmonize:

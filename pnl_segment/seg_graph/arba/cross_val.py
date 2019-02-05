@@ -22,7 +22,7 @@ def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):
     ft_dict_seg = dict()
     ft_dict_test = dict()
     for grp, ft in ft_dict.items():
-        ft_dict_seg[grp], ft_dict_test[grp] = ft.split()
+        ft_dict_seg[grp], ft_dict_test[grp] = ft.split(p=.5)
 
     # prep each
     ft_dict_seg = prep_arba(ft_dict_seg, label='segmentation',

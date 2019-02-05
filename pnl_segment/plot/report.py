@@ -36,7 +36,7 @@ def plot_feat(reg, ft_dict, feat_x, feat_y, grp_data_dict=None, ax=None,
     idx_feat_y = ft.feat_list.index(feat_y)
 
     if grp_data_dict is None:
-        grp_data_dict = {grp: ft.get_array(verbose=verbose) for grp, ft in
+        grp_data_dict = {grp: ft.load_data(verbose=verbose) for grp, ft in
                          ft_dict.items()}
 
     grp_feat_data_dict = defaultdict(lambda: defaultdict(list))
@@ -83,7 +83,7 @@ def ordinal(n):
 def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
                 f_back=None, verbose=True, label_dict=None):
     # load data
-    grp_data_dict = {grp: ft.get_array(verbose=verbose)
+    grp_data_dict = {grp: ft.load_data(verbose=verbose)
                      for grp, ft in ft_dict.items()}
 
     tqdm_dict = {'disable': not verbose,
