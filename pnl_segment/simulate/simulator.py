@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from mh_pytools import parallel
 from . import Effect
-from ..seg_graph import run_arba
+from ..seg_graph import run_arba_cv
 from ..space import PointCloud
 
 
@@ -82,12 +82,12 @@ class Simulator:
         effect.maha = maha
 
         # run effect
-        run_arba(mask=mask_active,
-                 effect=effect,
-                 grp_effect=self.grp_effect,
-                 folder_save=folder,
-                 ft_dict=self.ft_dict,
-                 **kwargs)
+        grp_effect_dict = {self.grp_effect: effect}
+        run_arba_cv(mask=mask_active,
+                    grp_effect_dict=grp_effect_dict,
+                    folder_save=folder,
+                    ft_dict=self.ft_dict,
+                    **kwargs)
 
     def run(self, maha_list, par_flag=False, **kwargs):
         # build arg_list

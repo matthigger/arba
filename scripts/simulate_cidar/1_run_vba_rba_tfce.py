@@ -16,7 +16,7 @@ def run_vba_rba_tfce(folder, alpha, write_outfile=True):
     s_mask_sig = 'mask_sig_{method}.nii.gz'
     ft_dict = file.load(folder / 'ft_dict.p.gz')
     sg_hist_seg = file.load(folder / 'sg_hist_seg.p.gz')
-    effect = file.load(folder / 'effect.p.gz')
+    effect = file.load(folder / 'effect_grp_effect.p.gz')
 
     # build file tree of entire dataset (no folds needed)
     ft0, ft1 = ft_dict[Simulator.grp_null], ft_dict[Simulator.grp_effect]
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     par_flag = True
     alpha = .05
     f_rba = folder / 'fs' / '01193' / 'aparc.a2009s+aseg_in_dti.nii.gz'
-    folder = folder / '2019_Jan_29_14_58_07'
+    folder = folder / 'test_cv_tmp'
     f_out = folder / 'performance_stats.p.gz'
 
     # find relevant folders, build inputs to run()
