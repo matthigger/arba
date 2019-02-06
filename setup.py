@@ -1,13 +1,13 @@
 from setuptools import setup
 
-setup(name='pnl_segment',
+setup(name='arba',
       version='0.1',
       description='pnl segmentation tool',
-      url='https://github.com/matthigger/pnl_segment',
+      url='https://github.com/matthigger/arba',
       author='matt higger',
       author_email='matt.higger@gmail.com',
       license='MIT',
-      packages=['pnl_segment'],
+      packages=['arba'],
       install_requires=[
           'numpy',
           'sortedcontainers',

@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from pnl_data.set import ofer_tbss
-from pnl_segment.seg_graph import FileTree, run_arba
+from arba.seg_graph import FileTree, run_arba
 
 # params
 alpha = .05

@@ -8,7 +8,7 @@ import tempfile
 import nibabel as nib
 import numpy as np
 
-from pnl_segment.space import PointCloud
+from arba.space import PointCloud
 
 
 def get_temp_file(*args, **kwargs):

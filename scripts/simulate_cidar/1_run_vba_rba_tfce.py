@@ -6,7 +6,7 @@ import numpy as np
 
 from mh_pytools import file, parallel
 from pnl_data.set.cidar_post import folder
-from pnl_segment.simulate import Simulator, compute_tfce
+from arba.simulate import Simulator, compute_tfce
 
 
 def run_vba_rba_tfce(folder, alpha, write_outfile=True):

@@ -4,7 +4,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from mh_pytools import file
 from pnl_data.set import ofer_tbss
-from pnl_segment.plot import plot_report
+from arba.plot import plot_report
 
 folder_out = ofer_tbss.folder / 'arba'
 f_back = ofer_tbss.folder / 'arba' / 'wm_skeleton.nii.gz'

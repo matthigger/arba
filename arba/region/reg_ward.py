@@ -1,4 +1,4 @@
-from pnl_segment.region.reg import Region
+from arba.region.reg import Region
 
 
 class RegionWard(Region):

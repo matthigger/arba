@@ -4,8 +4,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import pnl_data
 from mh_pytools import file
-from pnl_segment.plot.scatter_tree import size_v_mahalanobis, size_v_pval
-from pnl_segment.space import Mask
+from arba.plot.scatter_tree import size_v_mahalanobis, size_v_pval
+from arba.space import Mask
 
 # param
 alpha = .05

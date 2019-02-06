@@ -4,8 +4,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from mh_pytools import file
 from mh_pytools.parallel import run_par_fnc
 from pnl_data.set.cidar_post import folder
-from pnl_segment import plot
-from pnl_segment.space import Mask
+from arba import plot
+from arba.space import Mask
 
 
 def save_fig(f_out):

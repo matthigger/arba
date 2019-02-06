@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
-from pnl_segment.seg_graph import FeatStat
-from pnl_segment.simulate import Model
+from arba.seg_graph import FeatStat
+from arba.simulate import Model
 
 shape = (4, 4)
 low = FeatStat(n=1000, mu=-2, cov=1)

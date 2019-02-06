@@ -6,8 +6,8 @@ import numpy as np
 
 from mh_pytools import file
 from pnl_data.set.cidar_post import get_name, folder
-from pnl_segment.seg_graph.data import FileTree
-from pnl_segment.simulate import simulator
+from arba.seg_graph.data import FileTree
+from arba.simulate import simulator
 
 #######################
 num_locations = 100

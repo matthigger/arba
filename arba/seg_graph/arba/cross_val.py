@@ -1,8 +1,8 @@
 import pathlib
 
 from mh_pytools import file
-from pnl_segment.seg_graph.arba.prep import prep_arba
-from pnl_segment.seg_graph.seg_graph_hist import SegGraphHistory
+from arba.seg_graph.arba.prep import prep_arba
+from arba.seg_graph.seg_graph_hist import SegGraphHistory
 
 
 def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):

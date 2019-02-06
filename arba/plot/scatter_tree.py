@@ -4,8 +4,8 @@ import networkx as nx
 import numpy as np
 import seaborn as sns
 
-from pnl_segment.region import RegionMaha
-from pnl_segment.space.mask import Mask
+from arba.region import RegionMaha
+from arba.space.mask import Mask
 
 
 def size_v_mu_diff(*args, **kwargs):

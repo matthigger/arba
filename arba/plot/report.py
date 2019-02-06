@@ -9,7 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from nilearn.plotting import plot_roi
 from tqdm import tqdm
 
-from pnl_segment.space import PointCloud, get_ref
+from arba.space import PointCloud, get_ref
 
 
 def plot_reg(reg, f_back, f_mask=None, ax=None):

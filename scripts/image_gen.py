@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from pnl_segment.plot import scatter_tree
-from pnl_segment.region import FeatStat
-from pnl_segment.seg_graph import SegGraphHistory
-from pnl_segment.simulate import Model
-from pnl_segment.space import Mask
+from arba.plot import scatter_tree
+from arba.region import FeatStat
+from arba.seg_graph import SegGraphHistory
+from arba.simulate import Model
+from arba.space import Mask
 
 obj = 'maha'
 

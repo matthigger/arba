@@ -1,6 +1,6 @@
 import pytest
 
-from pnl_segment.simulate import *
+from arba.simulate import *
 
 
 @pytest.fixture

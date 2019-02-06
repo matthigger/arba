@@ -4,9 +4,9 @@ import shutil
 import numpy as np
 
 import pnl_data
-from pnl_segment.seg_graph import FeatStat, run_arba
-from pnl_segment.simulate import Model
-from pnl_segment.space import RefSpace, Mask
+from arba.seg_graph import FeatStat, run_arba
+from arba.simulate import Model
+from arba.space import RefSpace, Mask
 
 alpha = .05
 n_img = 100

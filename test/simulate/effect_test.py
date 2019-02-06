@@ -1,6 +1,6 @@
 import pytest
 
-from pnl_segment.simulate import *
+from arba.simulate import *
 
 
 def test_draw_random_u():

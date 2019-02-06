@@ -6,9 +6,9 @@ import numpy as np
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
-from pnl_segment import plot
-from pnl_segment.seg_graph import FeatStat, SegGraphHistory
-from pnl_segment.simulate import Model
+from arba import plot
+from arba.seg_graph import FeatStat, SegGraphHistory
+from arba.simulate import Model
 
 
 def build_and_reduce(model, num_sbj_per_grp, folder):

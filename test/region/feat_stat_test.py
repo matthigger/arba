@@ -1,4 +1,4 @@
-from pnl_segment.region import *
+from arba.region import *
 import pytest
 
 
