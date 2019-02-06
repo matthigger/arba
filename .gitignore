@@ -1,6 +1,6 @@
-/pnl_segment.egg-info/
-/pnl_segment/.idea/
-/pnl_segment/__pycache__/
-*.pyc
 /.idea/
-/.coverage
+/.pytest_cache/
+/arba.egg-info/
+/venv/
+/arba/__pycache__/
+*.pyc
