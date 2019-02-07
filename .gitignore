@@ -4,3 +4,4 @@
 /venv/
 /arba/__pycache__/
 *.pyc
+/tmp.py
