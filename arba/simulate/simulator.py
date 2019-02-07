@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from mh_pytools import parallel
 from . import Effect
-from ..seg_graph import run_arba_cv
+from ..seg_graph import run_arba_cv, run_arba_permute
 from ..space import PointCloud
 
 
@@ -22,10 +22,22 @@ def increment_to_unique(folder, num_width=3):
 
 
 class Simulator:
+    """
+    Attributes:
+        folder (Path): location of output
+        file_tree (FileTree): full file tree of all healthy sbj
+        p_effect (float): percentage of sbj which have effect applied
+        effect_list (list): list of effects to apply
+        modes (tuple): includes 'cv' and 'permute'
+    """
+
     grp_effect = 'grp_effect'
     grp_null = 'grp_null'
+    mode_fnc_name_dict = {'cv': 'run_effect_cv',
+                          'permute': 'run_effect_permute'}
 
-    def __init__(self, folder, file_tree, p_effect=.5):
+    def __init__(self, folder, file_tree, p_effect=.5,
+                 modes=('permute', 'cv')):
         self.folder = pathlib.Path(folder)
         folder.mkdir(parents=True)
 
@@ -36,6 +48,7 @@ class Simulator:
                         self.grp_null: ft_null}
 
         self.effect_list = list()
+        self.modes = modes
 
     def build_effect_list(self, n_effect, verbose=False, seed=1, **kwargs):
         # reset seed
@@ -67,7 +80,7 @@ class Simulator:
         # delete voxel wise stats
         self.file_tree.unload()
 
-    def run_effect(self, effect, maha, active_rad=None, **kwargs):
+    def run_effect_prep(self, effect, maha=None, active_rad=None, **kwargs):
         # get folder
         folder = increment_to_unique(self.folder / f'maha{maha:.3E}')
 
@@ -79,30 +92,59 @@ class Simulator:
             mask_active = np.logical_and(mask_eff_dilated, mask_active)
 
         # set scale of effect
-        effect.maha = maha
+        if maha is not None:
+            effect.maha = maha
 
         # run effect
         grp_effect_dict = {self.grp_effect: effect}
-        run_arba_cv(mask=mask_active,
+
+        return folder, mask_active, grp_effect_dict
+
+    def run_effect_permute(self, effect, par_flag=False, **kwargs):
+        folder, mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
+
+        run_arba_permute(mask=mask,
+                         grp_effect_dict=grp_effect_dict,
+                         folder_save=folder,
+                         ft_dict=self.ft_dict,
+                         par_flag=par_flag,
+                         **kwargs)
+
+    def run_effect_cv(self, effect, **kwargs):
+        folder, mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
+
+        run_arba_cv(mask=mask,
                     grp_effect_dict=grp_effect_dict,
                     folder_save=folder,
                     ft_dict=self.ft_dict,
                     **kwargs)
 
-    def run(self, maha_list, par_flag=False, **kwargs):
+    def run(self, maha_list, par_flag=False, par_permute_flag=False,
+            **kwargs):
+
+        if par_flag and par_permute_flag:
+            raise AttributeError('par_flag or par_permute_flag must be false')
+
         # build arg_list
         arg_list = list()
         for maha in maha_list:
             for effect in self.effect_list:
                 d = {'effect': effect,
                      'maha': maha,
-                     'verbose': not par_flag}
+                     'verbose': not par_flag,
+                     'par_flag': par_permute_flag}
                 d.update(kwargs)
                 arg_list.append(d)
 
         # run
-        if par_flag:
-            parallel.run_par_fnc('run_effect', arg_list=arg_list, obj=self)
-        if not par_flag:
-            for d in arg_list:
-                self.run_effect(**d)
+        for mode in self.modes:
+            fnc_name = Simulator.mode_fnc_name_dict[mode]
+            desc = f'simulating effects ({mode})'
+
+            if par_flag:
+                parallel.run_par_fnc(fnc_name, arg_list=arg_list, obj=self,
+                                     desc=desc)
+            if not par_flag:
+                for d in arg_list:
+                    fnc = getattr(self, fnc_name)
+                    fnc(**d)

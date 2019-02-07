@@ -1,8 +1,8 @@
-import time
 from copy import deepcopy
 
 import networkx as nx
 import numpy as np
+import time
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
@@ -221,6 +221,41 @@ class SegGraphHistory(SegGraph):
             node = node_next[0]
             ijk_cover = set(nx.ancestors(self.tree_hist, node)) & leaf_set
 
+    def _cut_greedy_min(self, node_val_dict):
+        """ gets SegGraph of disjoint reg which minimize val
+
+        NOTE: the resultant node_list covers node_val_dict, ie each node in
+        node_val_dict has some ancestor, descendant or itself in node_list
+
+        Args:
+            node_val_dict (dict): keys are nodes, values are associated values
+                                  to be minimized
+
+        Returns:
+             node_list (list): nodes have minimum val, are disjoint
+        """
+        # sort all nodes
+        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get)
+
+        # init
+        node_covered = set()
+        node_list = list()
+
+        while node_list_sorted:
+            n = node_list_sorted.pop(0)
+            if n in node_covered:
+                continue
+            else:
+                # add reg to significant regions
+                node_list.append(n)
+
+                # add all intersecting regions to reg_covered (no need to add
+                # n, its only in node_list_sorted once)
+                node_covered |= nx.descendants(self.tree_hist, n)
+                node_covered |= nx.ancestors(self.tree_hist, n)
+
+        return node_list
+
     def cut_greedy_sig(self, alpha=.05):
         """ gets SegGraph of disjoint reg with min pval such that all are sig
 
@@ -241,27 +276,11 @@ class SegGraphHistory(SegGraph):
         sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
                       _add_nodes=False)
 
-        # init search space of region to those which have pval <= alpha
-        pval_node_list = [(p, n) for (n, p) in self.node_pval_dict.items()
-                          if p <= alpha]
-        pval_node_list = sorted(pval_node_list)
-
-        # init
-        node_covered = set()
-        node_pval_list_sig = list()
-
-        while pval_node_list:
-            p, n = pval_node_list.pop(0)
-            if n in node_covered:
-                continue
-            else:
-                # add reg to significant regions
-                node_pval_list_sig.append((n, p))
-
-                # add all intersecting regions to reg_covered (no need to add
-                # n, its only in pval_node_list once)
-                node_covered |= nx.descendants(self.tree_hist, n)
-                node_covered |= nx.ancestors(self.tree_hist, n)
+        # get spanning, disjoint and minimal pval node_list
+        node_pval_dict = {n: p for n, p in self.node_pval_dict.items()
+                          if p <= alpha}
+        node_list = self._cut_greedy_min(node_val_dict=node_pval_dict)
+        node_pval_list_sig = [(n, node_pval_dict[n]) for n in node_list]
 
         # get m_max: max num regions for which all are still `significant'
         # under holm-bonferonni.

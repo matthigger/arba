@@ -9,7 +9,8 @@ from ..file_tree import FileTree
 
 
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
-              verbose=False, folder_save=None, label=None, load_data=False):
+              verbose=False, folder_save=None, label=None, load_data=False,
+              **kwargs):
     """ runs entire arba process, optionally saves outputs
 
     Args:
