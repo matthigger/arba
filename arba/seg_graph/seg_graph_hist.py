@@ -359,7 +359,8 @@ class SegGraphHistory(SegGraph):
             # break early if no more valid edges available
             if not self._err_edge_list or \
                     self._err_edge_list[0][0] > self.err_max:
-                print(f'stop @ {len(self)} nodes: wanted {num_reg_stop}')
+                if verbose_dbg:
+                    print(f'stop @ {len(self)} nodes: wanted {num_reg_stop}')
                 break
 
             # find n edges with min err
