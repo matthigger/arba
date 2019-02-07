@@ -11,13 +11,13 @@ from ..seg_graph import SegGraph
 from ..seg_graph_maha import SegGraphMaha
 
 
-def run_arba_permute(ft_dict, folder_save=None, verbose=False, alpha=.05,
+def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
                      par_flag=True, seed=1, n_permute=100, **kwargs):
     """ runs arba (cross validation), optionally saves outputs.
 
     Args:
         ft_dict (dict): keys are population labels, values are FileTree
-        folder_save (str or Path): output folder for experiment, if None will
+        folder (str or Path): output folder for experiment, if None will
                                    not save
         verbose (bool): toggles command line output
         alpha (float): false positive rate
@@ -29,7 +29,7 @@ def run_arba_permute(ft_dict, folder_save=None, verbose=False, alpha=.05,
         sg_arba_test (SegGraph): candidate regions (test data)
     """
     # prep
-    ft_dict = prep_arba(ft_dict, label='full', folder_save=folder_save,
+    ft_dict = prep_arba(ft_dict, label='full', folder=folder,
                         load_data=True, **kwargs)
 
     # build sg_hist
@@ -70,10 +70,10 @@ def run_arba_permute(ft_dict, folder_save=None, verbose=False, alpha=.05,
     sg_arba_sig = get_sig(sg_arba_max_maha, max_maha_list, alpha=alpha)
 
     # save
-    if folder_save is not None:
-        folder_save = pathlib.Path(folder_save)
-        folder_save_image = folder_save / 'image'
-        folder_save_image.mkdir(exist_ok=True)
+    if folder is not None:
+        folder = pathlib.Path(folder)
+        folder_save = folder / 'save'
+        folder_save.mkdir(exist_ok=True)
 
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
 
@@ -83,7 +83,7 @@ def run_arba_permute(ft_dict, folder_save=None, verbose=False, alpha=.05,
 
         # save sig mask
         ref = next(iter(ft_dict.values())).ref
-        sg_arba_sig.to_nii(folder_save_image / 'mask_sig_arba.nii.gz',
+        sg_arba_sig.to_nii(folder / 'mask_sig_arba_permute.nii.gz',
                            ref=ref,
                            fnc=lambda r: 1,
                            background=0)

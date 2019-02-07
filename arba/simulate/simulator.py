@@ -10,17 +10,6 @@ from ..seg_graph import run_arba_cv, run_arba_permute
 from ..space import PointCloud
 
 
-def increment_to_unique(folder, num_width=3):
-    idx = 0
-    while True:
-        _folder = pathlib.Path(
-            str(folder) + '_run' + str(idx).zfill(num_width))
-        if not _folder.exists():
-            _folder.mkdir(exist_ok=True, parents=True)
-            return _folder
-        idx += 1
-
-
 class Simulator:
     """
     Attributes:
@@ -50,7 +39,8 @@ class Simulator:
         self.effect_list = list()
         self.modes = modes
 
-    def build_effect_list(self, n_effect, verbose=False, seed=1, **kwargs):
+    def build_effect_list(self, radius=None, num_vox=None, verbose=False,
+                          seed=1, seg_array=None):
         # reset seed
         if seed is not None:
             np.random.seed(seed)
@@ -59,16 +49,30 @@ class Simulator:
         # load
         self.file_tree.load(verbose=True)
 
+        # build mask list (corresponds to effect location)
+        mask_list = list()
+        tqdm_dict = {'desc': 'sample effect mask',
+                     'disable': not verbose}
+        if (radius is None) == (num_vox is None):
+            raise AttributeError('either radius xor num_vox required')
+        elif radius is not None:
+            for rad in tqdm(radius, **tqdm_dict):
+                mask = Effect.sample_mask(prior_array=self.file_tree.mask,
+                                          ref=self.file_tree.ref,
+                                          radius=rad,
+                                          seg_array=seg_array)
+                mask_list.append(mask)
+        else:
+            for n in tqdm(num_vox, **tqdm_dict):
+                mask = Effect.sample_mask(prior_array=self.file_tree.mask,
+                                          ref=self.file_tree.ref,
+                                          num_vox=n,
+                                          seg_array=seg_array)
+                mask_list.append(mask)
+
         # build effects (such that their locations are constant across maha)
         self.effect_list = list()
-        tqdm_dict = {'desc': 'sample effect mask',
-                     'total': n_effect,
-                     'disable': not verbose}
-        for _ in tqdm(range(n_effect), **tqdm_dict):
-            mask = Effect.sample_mask(prior_array=self.file_tree.mask,
-                                      ref=self.file_tree.ref,
-                                      **kwargs)
-
+        for mask in mask_list:
             # compute feat_stat in mask
             pc = PointCloud.from_mask(mask)
             fs = sum(self.file_tree.ijk_fs_dict[ijk] for ijk in pc)
@@ -81,9 +85,6 @@ class Simulator:
         self.file_tree.unload()
 
     def run_effect_prep(self, effect, maha=None, active_rad=None, **kwargs):
-        # get folder
-        folder = increment_to_unique(self.folder / f'maha{maha:.3E}')
-
         # get mask of active area
         mask_active = self.file_tree.mask
         if active_rad is not None:
@@ -95,27 +96,27 @@ class Simulator:
         if maha is not None:
             effect.maha = maha
 
-        # run effect
+        # build effect dict
         grp_effect_dict = {self.grp_effect: effect}
 
-        return folder, mask_active, grp_effect_dict
+        return mask_active, grp_effect_dict
 
-    def run_effect_permute(self, effect, par_flag=False, **kwargs):
-        folder, mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
+    def run_effect_permute(self, effect, folder, par_flag=False, **kwargs):
+        mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
 
         run_arba_permute(mask=mask,
                          grp_effect_dict=grp_effect_dict,
-                         folder_save=folder,
+                         folder=folder / 'arba_permute',
                          ft_dict=self.ft_dict,
                          par_flag=par_flag,
                          **kwargs)
 
-    def run_effect_cv(self, effect, **kwargs):
-        folder, mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
+    def run_effect_cv(self, effect, folder, **kwargs):
+        mask, grp_effect_dict = self.run_effect_prep(effect, **kwargs)
 
         run_arba_cv(mask=mask,
                     grp_effect_dict=grp_effect_dict,
-                    folder_save=folder,
+                    folder=folder / 'arba_cv',
                     ft_dict=self.ft_dict,
                     **kwargs)
 
@@ -127,12 +128,19 @@ class Simulator:
 
         # build arg_list
         arg_list = list()
-        for maha in maha_list:
-            for effect in self.effect_list:
+        z_width_maha = np.ceil(np.log10(len(maha_list))).astype(int)
+        z_width_eff = np.ceil(np.log10(len(self.effect_list))).astype(int)
+        for maha_idx, maha in enumerate(sorted(maha_list)):
+            for eff_idx, effect in enumerate(self.effect_list):
+                s_maha = str(maha_idx).zfill(z_width_maha)
+                s_eff = str(eff_idx).zfill(z_width_eff)
+                folder = self.folder / f'maha{s_maha}_{maha:.1E}_effect{s_eff}'
+
                 d = {'effect': effect,
                      'maha': maha,
                      'verbose': not par_flag,
-                     'par_flag': par_permute_flag}
+                     'par_flag': par_permute_flag,
+                     'folder': folder}
                 d.update(kwargs)
                 arg_list.append(d)
 

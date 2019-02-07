@@ -1,16 +1,16 @@
 import pathlib
 
-from mh_pytools import file
 from arba.seg_graph.arba.prep import prep_arba
 from arba.seg_graph.seg_graph_hist import SegGraphHistory
+from mh_pytools import file
 
 
-def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):
+def run_arba_cv(ft_dict, folder=None, verbose=False, alpha=.05, **kwargs):
     """ runs arba (cross validation), optionally saves outputs.
 
     Args:
         ft_dict (dict): keys are population labels, values are FileTree
-        folder_save (str or Path): output folder for experiment, if None will
+        folder (str or Path): output folder for experiment, if None will
                                    not save
         verbose (bool): toggles command line output
         alpha (float): false positive rate
@@ -26,11 +26,11 @@ def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):
 
     # prep each
     ft_dict_seg = prep_arba(ft_dict_seg, label='segmentation',
-                            folder_save=folder_save, **kwargs)
+                            folder=folder, **kwargs)
     ft_dict_test = prep_arba(ft_dict_test, label='testing',
-                             folder_save=folder_save, **kwargs)
+                             folder=folder, **kwargs)
     ft_dict = prep_arba(ft_dict, label='full',
-                        folder_save=folder_save, **kwargs)
+                        folder=folder, **kwargs)
 
     # build sg_hist_seg
     sg_hist_seg = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
@@ -49,10 +49,10 @@ def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):
     sg_arba_test_sig = sg_arba_test.get_sig(alpha=alpha)
 
     # save
-    if folder_save is not None:
-        folder_save = pathlib.Path(folder_save)
-        folder_save_image = folder_save / 'image'
-        folder_save_image.mkdir(exist_ok=True)
+    if folder is not None:
+        folder = pathlib.Path(folder)
+        folder_save = folder / 'save'
+        folder.mkdir(exist_ok=True, parents=True)
 
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
         file.save(ft_dict_seg, folder_save / 'ft_dict_seg.p.gz')
@@ -66,7 +66,7 @@ def run_arba_cv(ft_dict, folder_save=None, verbose=False, alpha=.05, **kwargs):
 
         # save sig mask
         ref = next(iter(ft_dict_seg.values())).ref
-        sg_arba_test_sig.to_nii(folder_save_image / 'mask_sig_arba.nii.gz',
+        sg_arba_test_sig.to_nii(folder / 'mask_sig_arba_cv.nii.gz',
                                 ref=ref,
                                 fnc=lambda r: 1,
                                 background=0)

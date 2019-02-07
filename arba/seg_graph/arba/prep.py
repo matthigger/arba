@@ -9,7 +9,7 @@ from ..file_tree import FileTree
 
 
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
-              verbose=False, folder_save=None, label=None, load_data=False,
+              verbose=False, folder=None, label=None, load_data=False,
               **kwargs):
     """ runs entire arba process, optionally saves outputs
 
@@ -23,7 +23,7 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
                           have equal averages over active area ... otherwise
                           may 'discover' that the entire region is most sig
         verbose (bool): toggles command line output
-        folder_save (str or Path): if passed, saves output.  otherwise no save
+        folder (str or Path): if passed, saves output.  otherwise no save
         label (str): if passed, printed to f_save to label output
 
     Returns:
@@ -60,37 +60,37 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
         effect.apply_to_file_tree(ft_dict[grp])
 
     # save files
-    if folder_save is not None:
+    if folder is not None:
         def print_feat_vec(x):
             s = ''
             for f in sorted(ft0.feat_list):
                 idx = ft0.feat_list.index(f)
-                s += f'{f} {x[idx]:.03f} '
+                s += f'{f} {x[idx]:.2e} '
             return s
 
         if label is None:
             label = str(uuid.uuid4())[:8]
 
         # save images and effects
-        folder_save = pathlib.Path(folder_save)
-        folder_save_image = folder_save / 'image'
-        folder_save_image.mkdir(exist_ok=True, parents=True)
+        folder = pathlib.Path(folder)
+        folder_save = folder / 'save'
+        folder_save.mkdir(exist_ok=True, parents=True)
 
-        mask.to_nii(folder_save_image / 'mask.nii.gz')
+        mask.to_nii(folder / 'mask.nii.gz')
 
         for grp, effect in grp_effect_dict.items():
-            effect.mask.to_nii(folder_save_image / f'mask_effect_{grp}.nii.gz')
+            effect.mask.to_nii(folder / f'mask_effect_{grp}.nii.gz')
             file.save(effect, folder_save / f'effect_{grp}.p.gz')
 
         # output mean images of each feature per grp (of testing dataset)
         feat_list = next(iter(ft_dict.values())).feat_list
         for feat in feat_list:
             for grp, ft in ft_dict.items():
-                f_out = folder_save_image / f'{grp}_{feat}_{label}.nii.gz'
+                f_out = folder / f'{grp}_{feat}_{label}.nii.gz'
                 ft.to_nii(f_out, feat=feat)
 
         # write description of prep
-        f_save = folder_save / 'data_prep.txt'
+        f_save = folder / 'data_prep.txt'
         with open(str(f_save), 'a+') as f:
             if label is not None:
                 print(f'{label}:', file=f)
