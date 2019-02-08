@@ -136,26 +136,43 @@ class FeatStat:
         n = self.n + othr.n
 
         # compute mu
-        lam = self.n / n
-        mu = self.mu * lam + \
-             othr.mu * (1 - lam)
+        mu = (self.mu * self.n +
+              othr.mu * othr.n) / n
 
         # compute cov
-        var = self.n / n * (self.cov + np.outer(self.mu, self.mu)) + \
-              othr.n / n * (othr.cov + np.outer(othr.mu, othr.mu)) - \
-              np.outer(mu, mu)
+        cov = self.n * (self.cov + np.outer(self.mu, self.mu)) + \
+              othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = cov / n - np.outer(mu, mu)
 
-        return FeatStat(n, mu, var)
+        return FeatStat(n, mu, cov)
 
     __radd__ = __add__
 
-    def __reduce_ex__(self, *args, **kwargs):
-        self.reset()
-        return super().__reduce_ex__(*args, **kwargs)
+    def __sub__(self, othr):
+        n = self.n - othr.n
+        assert n > 0, 'invalid subtraction: not enough observations in other'
 
-    def reset(self):
-        self.__cov_det = None
-        self.__cov_inv = None
+        mu = (self.n * self.mu -
+              othr.n * othr.mu) / n
+
+        cov = self.n * (self.cov + np.outer(self.mu, self.mu)) - \
+              othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
+
+        cov = cov / n - np.outer(mu, mu)
+
+        assert (np.diag(cov) >= 0).all(), 'invalid subtraction'
+
+        return FeatStat(n, mu, cov)
+
+
+def __reduce_ex__(self, *args, **kwargs):
+    self.reset()
+    return super().__reduce_ex__(*args, **kwargs)
+
+
+def reset(self):
+    self.__cov_det = None
+    self.__cov_inv = None
 
 
 class FeatStatSingle(FeatStat):
