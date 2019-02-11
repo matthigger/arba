@@ -64,7 +64,7 @@ def prep_files(ft_tuple, f_data=None):
                                           np.zeros(len(ft1)))).astype(bool)
             sbj_cmp_idx[sbj_idx] = 0
             _x_cmp = _x[sbj_cmp_idx, :]
-            mu = np.atleast_2d(np.mean(_x_cmp, axis=0))
+            mu = np.mean(_x_cmp, axis=0)
             cov = np.atleast_2d(np.cov(_x_cmp.T))
             cov_inv = np.linalg.pinv(cov)
 
