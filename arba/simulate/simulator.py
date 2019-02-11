@@ -40,7 +40,7 @@ class Simulator:
         self.modes = modes
 
     def build_effect_list(self, radius=None, num_vox=None, verbose=False,
-                          seed=1, seg_array=None):
+                          seed=1, seg_array=None, par_flag=False):
         # reset seed
         if seed is not None:
             np.random.seed(seed)
@@ -49,26 +49,35 @@ class Simulator:
         # load
         self.file_tree.load(verbose=True)
 
-        # build mask list (corresponds to effect location)
-        mask_list = list()
-        tqdm_dict = {'desc': 'sample effect mask',
-                     'disable': not verbose}
+        # build list of input args to build_effect_list()
+        arg_list = list()
         if (radius is None) == (num_vox is None):
             raise AttributeError('either radius xor num_vox required')
         elif radius is not None:
-            for rad in tqdm(radius, **tqdm_dict):
-                mask = Effect.sample_mask(prior_array=self.file_tree.mask,
-                                          ref=self.file_tree.ref,
-                                          radius=rad,
-                                          seg_array=seg_array)
-                mask_list.append(mask)
+            for rad in radius:
+                d = {'prior_array': self.file_tree.mask,
+                     'ref': self.file_tree.ref,
+                     'radius': rad,
+                     'seg_array': seg_array}
+                arg_list.append(d)
         else:
-            for n in tqdm(num_vox, **tqdm_dict):
-                mask = Effect.sample_mask(prior_array=self.file_tree.mask,
-                                          ref=self.file_tree.ref,
-                                          num_vox=n,
-                                          seg_array=seg_array)
-                mask_list.append(mask)
+            for n in num_vox:
+                d = {'prior_array': self.file_tree.mask,
+                     'ref': self.file_tree.ref,
+                     'num_vox': n,
+                     'seg_array': seg_array}
+                arg_list.append(d)
+
+        # sample mask
+        tqdm_dict = {'desc': 'sample effect mask',
+                     'disable': not verbose}
+        if par_flag:
+            mask_list = parallel.run_par_fnc(Effect.sample_mask, arg_list,
+                                             desc=tqdm_dict['desc'])
+        else:
+            mask_list = list()
+            for d in tqdm(arg_list, **tqdm_dict):
+                mask_list.append(Effect.sample_mask(**d))
 
         # build effects (such that their locations are constant across maha)
         self.effect_list = list()
