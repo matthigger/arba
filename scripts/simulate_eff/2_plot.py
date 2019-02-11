@@ -5,16 +5,17 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
 from mh_pytools import file
-from pnl_data.set.cidar_post import folder
+from pnl_data.set.hcp_100 import folder
 
-folder_out = folder / '2019_Jan_10_16_05_01'
+folder_out = folder / '2019_Feb_11_09_43_11'
+x_axis = 'Effect Size (vox)'
 
 # load
 f_in = folder_out / 'performance_stats.p.gz'
 maha_method_perf_tree = file.load(f_in)
 
-maha_list = sorted(maha_method_perf_tree.keys())
-method_list = sorted(maha_method_perf_tree[maha_list[0]].keys())
+mahasize_list = sorted(maha_method_perf_tree.keys())
+method_list = sorted(maha_method_perf_tree[mahasize_list[0]].keys())
 
 sns.set(font_scale=1.2)
 cm = plt.get_cmap('Set1')
@@ -22,10 +23,11 @@ color_dict = {method: cm(idx) for idx, method in enumerate(method_list)}
 color_dict.update({method.upper(): c for method, c in color_dict.items()})
 
 series_list = list()
-for maha, d0 in maha_method_perf_tree.items():
+for (mahasize, num_vox), d0 in maha_method_perf_tree.items():
     for method, ss_list in d0.items():
         for (sens, spec) in ss_list:
-            s = pd.Series({'SNR (Mahalanobis)': maha,
+            s = pd.Series({'Effect Size (vox)': num_vox,
+                           'SNR (Mahalanobis)': mahasize,
                            'Method': method.upper(),
                            'Sensitivity': sens,
                            'Specificity': spec})
@@ -42,7 +44,7 @@ sns.set(font_scale=1)
 for y_ax in ['Sensitivity', 'Specificity']:
     f_out = folder_out / f'{y_ax}.pdf'
     with PdfPages(f_out) as pdf:
-        sns.lineplot(x='SNR (Mahalanobis)', y=y_ax, data=df, hue='Method',
+        sns.lineplot(x=x_axis, y=y_ax, data=df, hue='Method',
                      ci=95,
                      palette=color_dict)
         plt.gca().set_xscale('log')
@@ -52,9 +54,9 @@ for y_ax in ['Sensitivity', 'Specificity']:
 
 f_out = folder_out / 'sens_spec_maha.pdf'
 with PdfPages(f_out) as pdf:
-    for maha in maha_list:
+    for mahasize in mahasize_list:
         for method in reversed(method_list):
-            perf_list = maha_method_perf_tree[maha][method]
+            perf_list = maha_method_perf_tree[mahasize][method]
 
             sens = [x[0] for x in perf_list]
             spec = [x[1] for x in perf_list]
@@ -63,7 +65,7 @@ with PdfPages(f_out) as pdf:
                         color=color_dict[method])
 
         for method in reversed(method_list):
-            perf_list = maha_method_perf_tree[maha][method]
+            perf_list = maha_method_perf_tree[mahasize][method]
 
             sens = [x[0] for x in perf_list]
             spec = [x[1] for x in perf_list]
@@ -76,7 +78,8 @@ with PdfPages(f_out) as pdf:
         ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
-        plt.suptitle(f'maha: {maha:.2E}')
+        maha, size = mahasize
+        plt.suptitle(f'maha: {maha:.1E}, size: {size:.1E}')
         plt.xlabel('specificity')
         plt.ylabel('sensitivity')
         plt.xlim((0, 1.05))

@@ -1,11 +1,10 @@
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from mh_pytools import file
-from mh_pytools.parallel import run_par_fnc
-from pnl_data.set.cidar_post import folder
 from arba import plot
 from arba.space import Mask
+from mh_pytools import file
+from mh_pytools.parallel import run_par_fnc
 
 
 def save_fig(f_out):
@@ -20,7 +19,8 @@ def save_fig(f_out):
 def make_plots(folder, label):
     f_sg_hist = folder / f'sg_hist{label}.p.gz'
     f_sg_arba = folder / f'sg_arba{label}.p.gz'
-    f_effect = folder / 'image' / 'mask_effect.nii.gz'
+    folder_image = folder.parent
+    f_effect = folder_image / 'mask_effect_grp_effect.nii.gz'
 
     if not f_sg_hist.exists():
         return
@@ -46,25 +46,28 @@ def make_plots(folder, label):
                                      'edgecolors': 'k'},
                      log_x=True,
                      log_y=True)
-    save_fig(f_out=folder / f'size_vs_pval{label}.pdf')
+    save_fig(f_out=folder_image / f'size_vs_pval{label}.pdf')
 
 
 if __name__ == '__main__':
     from tqdm import tqdm
 
-    folder = folder / '2019_Jan_17_09_37_26'
+    from pnl_data.set.hcp_100 import folder
+
+    folder = folder / '2019_Feb_11_09_43_11'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
     par_flag = True
 
     arg_list = []
-    s_folder_glob = '*maha*run*'
-    for _folder in tqdm(folder.glob(s_folder_glob)):
-        arg_list.append({'folder': _folder,
-                         'label': '_test'})
-        arg_list.append({'folder': _folder,
-                         'label': '_seg'})
+    s_folder_glob = '*maha*effect*'
+    for _folder in folder.glob(s_folder_glob):
+        for _file in _folder.glob('**/save/sg_hist*'):
+            __folder = _file.parent
+            label = _file.name.split('.')[0].replace('sg_hist', '')
+            arg_list.append({'folder': __folder,
+                             'label': label})
 
     if par_flag:
         run_par_fnc(make_plots, arg_list)
