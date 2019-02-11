@@ -124,6 +124,7 @@ class FeatStat:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
+        assert (np.linalg.eig(cov)[0] > 0).all(), 'non positive covariance'
         fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
         return fs
 
@@ -173,15 +174,18 @@ class FeatStat:
 
         return FeatStat(n, mu, cov)
 
+    def __reduce_ex__(self, *args, **kwargs):
+        self.reset()
+        return super().__reduce_ex__(*args, **kwargs)
 
-def __reduce_ex__(self, *args, **kwargs):
-    self.reset()
-    return super().__reduce_ex__(*args, **kwargs)
+    def reset(self):
+        self.__cov_det = None
+        self.__cov_inv = None
 
-
-def reset(self):
-    self.__cov_det = None
-    self.__cov_inv = None
+    def scale(self, x):
+        """ NOTE: left multiply"""
+        self.mu = x @ self.mu
+        self.cov = x @ self.cov @ x.T
 
 
 class FeatStatSingle(FeatStat):

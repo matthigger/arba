@@ -24,3 +24,17 @@ def test_add_sub_rand():
     fs0 = rand_fs()
     fs1 = rand_fs()
     assert (fs0 + fs1) - fs1 == fs0, 'error: add or subtract in random'
+
+
+def test_scale():
+    # original data
+    x = np.random.normal(0, 1, size=(3, 10))
+
+    # scaled data
+    a = np.random.normal(0, 1, size=(3, 3))
+
+    fs0 = FeatStat.from_array(x)
+    fs0.scale(a)
+
+    fs1 = FeatStat.from_array(a @ x)
+    assert fs1 == fs0, 'error in scale'
