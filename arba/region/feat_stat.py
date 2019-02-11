@@ -48,6 +48,12 @@ class FeatStat:
                 self.__cov_inv = np.linalg.pinv(self.cov)
         return self.__cov_inv
 
+    @property
+    def outer_sum(self):
+        if self._outer_sum is None:
+            self._outer_sum = self.n * (self.cov + np.outer(self.mu, self.mu))
+        return self._outer_sum
+
     def __init__(self, n, mu, cov):
         # defaults to 'empty' set of features
         self.n = int(n)
@@ -61,6 +67,7 @@ class FeatStat:
 
         self.__cov_det = None
         self.__cov_inv = None
+        self._outer_sum = None
 
         if self.d != self.cov.shape[0] or self.d != self.cov.shape[1]:
             raise AttributeError('dimension mismatch: mu and cov')
@@ -124,6 +131,7 @@ class FeatStat:
         cls_name = type(self).__name__
         return f'{cls_name}(n={self.n}, mu={self.mu}, cov={self.cov})'
 
+    # @profile
     def __add__(self, othr):
         if othr == 0 or othr.n == 0:
             # useful for sum(iter of PointSet), begins by adding 0 to 1st iter
@@ -140,8 +148,9 @@ class FeatStat:
               othr.mu * othr.n) / n
 
         # compute cov
-        cov = self.n * (self.cov + np.outer(self.mu, self.mu)) + \
-              othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
+        # cov = self.n * (self.cov + np.outer(self.mu, self.mu)) + \
+        #       othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = self.outer_sum + othr.outer_sum
         cov = cov / n - np.outer(mu, mu)
 
         return FeatStat(n, mu, cov)
@@ -155,9 +164,9 @@ class FeatStat:
         mu = (self.n * self.mu -
               othr.n * othr.mu) / n
 
-        cov = self.n * (self.cov + np.outer(self.mu, self.mu)) - \
-              othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
-
+        # cov = self.n * (self.cov + np.outer(self.mu, self.mu)) - \
+        #       othr.n * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = self.outer_sum - othr.outer_sum
         cov = cov / n - np.outer(mu, mu)
 
         assert (np.diag(cov) >= 0).all(), 'invalid subtraction'
