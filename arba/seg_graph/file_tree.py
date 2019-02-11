@@ -37,6 +37,7 @@ class FileTree:
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
         data (np.array): shape is (space0, space1, space2, num_sbj, num_feat)
     """
+
     def __or__(self, other):
         """ aggregates file tree
 
@@ -375,10 +376,15 @@ class FileTree:
             ft = FileTree(sbj_feat_file_tree, mask=self.mask)
             file_tree_list.append(ft)
 
+            # build ft.ijk_fs_dict if self has data
             if self.data is not None:
-                # init ft.data and ft.ijk_fs_dict
-                bool_idx = [sbj in ft.sbj_list for sbj in self.sbj_list]
-                _data = self.data[:, :, :, bool_idx, :]
-                ft.load(_data=_data, load_data=True, load_ijk_fs=True)
+                # get relevant sbj_idx
+                sbj_idx = [idx for idx, sbj in enumerate(self.sbj_list)
+                           if sbj in ft.sbj_list]
+
+                ft.ijk_fs_dict = dict()
+                for ijk in PointCloud.from_mask(self.mask):
+                    x = self.data[ijk[0], ijk[1], ijk[2], sbj_idx, :].T
+                    ft.ijk_fs_dict[ijk] = FeatStat.from_array(x)
 
         return file_tree_list
