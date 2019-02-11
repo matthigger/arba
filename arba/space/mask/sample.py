@@ -6,7 +6,9 @@ import numpy as np
 from scipy.ndimage import binary_dilation
 from skimage import measure
 
-from arba.space import Mask, PointCloud, get_ref
+from .mask import Mask
+from ..point_cloud import PointCloud
+from ..ref_space import get_ref
 
 
 def sample_mask(prior_array, radius=None, seg_array=None, ref=None,

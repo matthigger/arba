@@ -5,9 +5,9 @@ import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import parallel
-from .effect import Effect, sample_mask
+from .effect import Effect
 from ..seg_graph import run_arba_cv, run_arba_permute
-from ..space import PointCloud
+from ..space import PointCloud, sample_mask
 
 
 class Simulator:

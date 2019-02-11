@@ -5,7 +5,7 @@ import nibabel as nib
 import numpy as np
 from scipy.ndimage.morphology import binary_dilation
 
-from .ref_space import get_ref
+from arba.space.ref_space import get_ref
 
 
 class Mask(np.ndarray):
