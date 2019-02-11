@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import parallel
-from . import Effect
+from .effect import Effect, sample_mask
 from ..seg_graph import run_arba_cv, run_arba_permute
 from ..space import PointCloud
 
@@ -72,12 +72,12 @@ class Simulator:
         tqdm_dict = {'desc': 'sample effect mask',
                      'disable': not verbose}
         if par_flag:
-            mask_list = parallel.run_par_fnc(Effect.sample_mask, arg_list,
+            mask_list = parallel.run_par_fnc(sample_mask, arg_list,
                                              desc=tqdm_dict['desc'])
         else:
             mask_list = list()
             for d in tqdm(arg_list, **tqdm_dict):
-                mask_list.append(Effect.sample_mask(**d))
+                mask_list.append(sample_mask(**d))
 
         # build effects (such that their locations are constant across maha)
         self.effect_list = list()
