@@ -22,6 +22,7 @@ class RegionMaha(Region):
         super().__init__(*args, **kwargs)
         self._maha = None
         self._pval = None
+        self._sq_error = None
 
         if maha_per_vox is None:
             self.maha_per_vox = np.array(self.maha)
@@ -50,7 +51,7 @@ class RegionMaha(Region):
 
         mu_diff = fs0.mu - fs1.mu
         cov = (fs0.n * fs0.cov + fs1.n * fs1.cov) / (fs0.n + fs1.n - 2)
-        return mu_diff @ np.linalg.pinv(cov) @ mu_diff
+        return mu_diff @ np.linalg.inv(cov) @ mu_diff
 
     @property
     def pval(self):
@@ -89,8 +90,10 @@ class RegionMaha(Region):
     def sq_error(self):
         """ squared error of maha per voxel represented as whole region maha
         """
-        d = self._maha - self.maha_per_vox
-        return np.inner(d, d)
+        if self._sq_error is None:
+            d = self._maha - self.maha_per_vox
+            self._sq_error = np.inner(d, d)
+        return self._sq_error
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_union=None):
