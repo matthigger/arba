@@ -5,3 +5,4 @@
 /arba/__pycache__/
 *.pyc
 /tmp.py
+*.py.lprof
