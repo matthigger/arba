@@ -9,8 +9,8 @@ from mh_pytools import file
 from pnl_data.set.hcp_100 import get_name, folder
 
 #######################
-maha_list = np.logspace(-1, 1, 9)
-# maha_list = [1]
+# maha_list = np.logspace(-1, 1, 9)
+maha_list = [1]
 
 # effect shape: either radius xor num_vox required
 radius = None
@@ -45,8 +45,7 @@ for feat in feat_list:
 # init simulator, split into groups
 file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
 sim = simulator.Simulator(file_tree=file_tree, folder=folder_out, modes=modes)
-sim.build_effect_list(radius=radius, num_vox=num_vox, seg_array=seg_array,
-                      verbose=True, par_flag=True)
+sim.build_effect_list_min_var(num_vox=num_vox, verbose=True, par_flag=False)
 
 file.save(sim, folder_out / 'sim.p.gz')
 
