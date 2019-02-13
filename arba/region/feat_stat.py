@@ -184,8 +184,9 @@ class FeatStat:
 
     def scale(self, x):
         """ NOTE: left multiply"""
-        self.mu = x @ self.mu
-        self.cov = x @ self.cov @ x.T
+        mu = x @ self.mu
+        cov = x @ self.cov @ x.T
+        return FeatStat(n=self.n, mu=mu, cov=cov)
 
 
 class FeatStatSingle(FeatStat):

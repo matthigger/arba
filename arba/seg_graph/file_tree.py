@@ -1,5 +1,4 @@
 import random
-from collections import defaultdict
 from copy import deepcopy
 
 import nibabel as nib
@@ -36,6 +35,9 @@ class FileTree:
 
         ijk_fs_dict (dict): keys are ijk tuple, values are FeatStat objs
         data (np.array): shape is (space0, space1, space2, num_sbj, num_feat)
+
+        scale (np.array): square np.array, sets scaling of data via
+                          scale_data() and scale_equalize()
     """
 
     def __or__(self, other):
@@ -80,14 +82,70 @@ class FileTree:
 
         return ft
 
+    def sum_feat_stat(self, mask=None, verbose=False):
+        if mask is None:
+            mask = self.mask
+        pc = PointCloud.from_mask(mask)
+
+        # find average per file tree
+        fs = FeatStatEmpty()
+        tqdm_dict1 = {'disable': not verbose,
+                      'desc': 'summing fs per voxel',
+                      'total': len(self.ijk_fs_dict)}
+        for ijk in tqdm(pc, **tqdm_dict1):
+            fs += self.ijk_fs_dict[ijk]
+
+        return fs
+
     @staticmethod
-    def harmonize_via_add(ft_iter, apply=True, verbose=False, mask=None):
+    def scale_equalize(ft_tuple, verbose=False, mask=None):
         """ ensures that each file tree has same mean (over all ijk)
 
         average is determined by summing across all file tree and ijk
 
         Args:
-            ft_iter (iter): file trees
+            ft_tuple (tuple): file trees, length 2
+            verbose (bool): toggles command line output
+            mask (np.array): where to harmonize
+
+        Returns:
+            mu_offset_dict (dict): keys are file tree, values are offset needed
+        """
+        # compute average feature
+        ft_fs_dict = {ft: ft.sum_feat_stat(mask, verbose) for ft in ft_tuple}
+        fs_average = sum(ft_fs_dict.values())
+
+        # compute scale
+        scale = np.diag(np.diag(np.linalg.inv(fs_average.cov))) ** .5
+        for ft in ft_tuple:
+            ft.scale_data(scale)
+
+    def scale_data(self, scale=None):
+        if scale is None:
+            # unscale
+            if self.scale is None:
+                # no scale set, nothing to unscale
+                return
+            else:
+                scale = np.linalg.inv(scale)
+
+        # record scale
+        if self.scale is None:
+            self.scale = scale
+        else:
+            self.scale = scale @ self.scale
+
+        for ijk, fs in self.ijk_fs_dict.items():
+            self.ijk_fs_dict[ijk] = fs.scale(scale)
+
+    @staticmethod
+    def harmonize_via_add(ft_tuple, apply=True, verbose=False, mask=None):
+        """ ensures that each file tree has same mean (over all ijk)
+
+        average is determined by summing across all file tree and ijk
+
+        Args:
+            ft_tuple (tuple): file trees, length 2
             apply (bool): toggles whether to apply offset
             verbose (bool): toggles command line output
             mask (np.array): where to harmonize
@@ -95,26 +153,14 @@ class FileTree:
         Returns:
             mu_offset_dict (dict): keys are file tree, values are offset needed
         """
-        ft_tuple = tuple(ft_iter)
+        ft0, ft1 = ft_tuple
         if mask is None:
-            assert np.allclose(ft_tuple[0].mask, ft_tuple[1].mask), \
-                'mask mismatch'
-            mask = ft_tuple[0].mask
-        pc = PointCloud.from_mask(mask)
+            assert np.allclose(ft0.mask,
+                               ft1.mask), 'mask mismatch'
+            mask = ft0.mask
 
-        # find average per file tree
-        ft_fs_dict = defaultdict(FeatStatEmpty)
-        tqdm_dict0 = {'disable': not verbose,
-                      'desc': 'compute fs sum per group',
-                      'total': len(ft_tuple)}
-        for ft in tqdm(ft_tuple, **tqdm_dict0):
-            tqdm_dict1 = {'disable': not verbose,
-                          'desc': 'summing fs per voxel',
-                          'total': len(ft.ijk_fs_dict)}
-            for ijk in tqdm(pc, **tqdm_dict1):
-                ft_fs_dict[ft] += ft.ijk_fs_dict[ijk]
-
-        # find average (over all file trees)
+        # average features, compute average
+        ft_fs_dict = {ft: ft.sum_feat_stat(mask, verbose) for ft in ft_tuple}
         fs_average = sum(ft_fs_dict.values())
 
         # compute mu_offset per ft
@@ -154,6 +200,9 @@ class FileTree:
                     self.feat_list = feat_list
                 elif self.feat_list != feat_list:
                     raise AttributeError('feat_list mismatch')
+
+        # init null scale
+        self.scale = np.eye(len(self.feat_list))
 
         # assign and validate ref space
         self.ref = ref
@@ -307,8 +356,10 @@ class FileTree:
         if feat is not None:
             feat_idx = self.feat_list.index(feat)
 
+            unscale = np.linalg.inv(self.scale)
+
             def fnc(fs):
-                return fs.mu[feat_idx]
+                return (unscale @ fs.mu)[feat_idx]
 
         for ijk, fs in self.ijk_fs_dict.items():
             x[ijk] = fnc(fs)

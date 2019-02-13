@@ -10,7 +10,7 @@ from ..file_tree import FileTree
 
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
               verbose=False, folder=None, label=None, load_data=False,
-              **kwargs):
+              scale_equalize=True, **kwargs):
     """ runs entire arba process, optionally saves outputs
 
     Args:
@@ -25,6 +25,9 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
         verbose (bool): toggles command line output
         folder (str or Path): if passed, saves output.  otherwise no save
         label (str): if passed, printed to f_save to label output
+        scale_equalize (bool): toggles whether scale is equalized (ensures
+                               std dev is 1 for each feature internally). the
+                               scale factors are kept in file_tree
 
     Returns:
         ft_dict (dict): same as input, now prepped
@@ -58,6 +61,11 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
         grp_effect_dict = dict()
     for grp, effect in grp_effect_dict.items():
         effect.apply_to_file_tree(ft_dict[grp])
+
+    # scale equalize
+    ft_tuple = tuple(ft_dict.values())
+    if scale_equalize:
+        FileTree.scale_equalize(ft_tuple, verbose=verbose, mask=mask)
 
     # save files
     if folder is not None:
