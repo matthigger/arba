@@ -50,7 +50,9 @@ class RegionMaha(Region):
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        cov = (fs0.n * fs0.cov + fs1.n * fs1.cov) / (fs0.n + fs1.n - 2)
+        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0))
+        cov = (fs0.n * fs0.cov +
+               fs1.n * fs1.cov) / (fs0.n + fs1.n)
         return mu_diff @ np.linalg.inv(cov) @ mu_diff
 
     @property
