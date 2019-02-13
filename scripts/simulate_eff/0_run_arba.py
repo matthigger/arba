@@ -9,12 +9,12 @@ from mh_pytools import file
 from pnl_data.set.hcp_100 import get_name, folder
 
 #######################
-# maha_list = np.logspace(-1, 1, 9)
-maha_list = [1]
+maha_list = np.logspace(-1, 1, 9)
+# maha_list = [10]
 
 # effect shape: either radius xor num_vox required
 radius = None
-num_vox = [250] * 24
+num_vox = [250] * 100
 # num_vox = np.geomspace(50, 2000, num=12).astype(int)
 
 # constrains effect to single region of seg_array
@@ -29,6 +29,7 @@ par_flag = True
 par_permute_flag = False
 edge_per_step = None
 modes = 'cv',
+effect_shape = 'cube'  # either 'cube' or 'min_var'
 #######################
 
 # make output folder (timestamped)
@@ -45,7 +46,14 @@ for feat in feat_list:
 # init simulator, split into groups
 file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
 sim = simulator.Simulator(file_tree=file_tree, folder=folder_out, modes=modes)
-sim.build_effect_list_min_var(num_vox=num_vox, verbose=True, par_flag=False)
+if effect_shape == 'min_var':
+    sim.build_effect_list_min_var(num_vox=num_vox, verbose=True,
+                                  par_flag=par_flag)
+elif effect_shape == 'cube':
+    sim.build_effect_list(num_vox=num_vox, seg_array=seg_array, radius=radius,
+                          verbose=True, par_flag=par_flag)
+else:
+    raise AttributeError('invalid effect_shape')
 
 file.save(sim, folder_out / 'sim.p.gz')
 
