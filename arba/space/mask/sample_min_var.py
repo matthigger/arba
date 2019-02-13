@@ -58,6 +58,7 @@ def sample_mask_min_var(num_vox, ijk_fs_dict, ref=None):
             except KeyError:
                 # voxel not in ijk_fs_dict
                 ijk_to_rm.add(ijk)
+                continue
 
             if _fs.cov_det < min_cov:
                 min_ijk = ijk
