@@ -34,7 +34,7 @@ def test_scale():
     a = np.random.normal(0, 1, size=(3, 3))
 
     fs0 = FeatStat.from_array(x)
-    fs0.scale(a)
+    fs0 = fs0.scale(a)
 
     fs1 = FeatStat.from_array(a @ x)
     assert fs1 == fs0, 'error in scale'
