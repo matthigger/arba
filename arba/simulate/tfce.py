@@ -60,14 +60,17 @@ def prep_files(ft_tuple, f_data=None):
 
         _x = x[i, j, k, :, :]
         for sbj_idx, sbj_x in enumerate(_x):
-            sbj_cmp_idx = np.concatenate((np.ones(len(ft0)),
-                                          np.zeros(len(ft1)))).astype(bool)
+            # compare to all but self
+            sbj_cmp_idx = np.ones(len(sbj_list)).astype(bool)
             sbj_cmp_idx[sbj_idx] = 0
+
+            # get stats
             _x_cmp = _x[sbj_cmp_idx, :]
             mu = np.mean(_x_cmp, axis=0)
             cov = np.atleast_2d(np.cov(_x_cmp.T))
             cov_inv = np.linalg.pinv(cov)
 
+            # compute t_sq
             delta = sbj_x - mu
             maha[i, j, k, sbj_idx] = np.sqrt(delta @ cov_inv @ delta)
 
