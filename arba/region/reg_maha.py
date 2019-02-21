@@ -37,6 +37,8 @@ class RegionMaha(Region):
         # memoize
         if self._maha is None:
             self._maha = self.get_maha()
+        if self._maha < 0:
+            raise AttributeError('invalid maha')
         return self._maha
 
     def get_maha(self):
@@ -59,6 +61,8 @@ class RegionMaha(Region):
     def pval(self):
         if self._pval is None:
             self._pval = self.get_pval()
+        if np.isnan(self._pval):
+            raise AttributeError('invalid pval')
         return self._pval
 
     def get_pval(self, maha=None):
