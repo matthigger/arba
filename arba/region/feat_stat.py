@@ -51,24 +51,20 @@ class FeatStat:
     def __init__(self, n, mu, cov):
         # defaults to 'empty' set of features
         self.n = int(n)
-        if not self.n:
-            raise AttributeError('n must be positive')
+        assert self.n > 0, 'n must be positive'
 
-        self.mu = np.array(mu)
-        if len(self.mu.shape) > 1:
-            raise AttributeError('mu must be 1d')
-        self.cov = np.atleast_2d(cov)
+        self.mu = mu
+        assert len(self.mu.shape) == 1, 'mu must be 1d'
 
-        if not np.allclose(cov, cov.T):
-            raise AttributeError('non symmetric covariance')
-        if not (np.diag(cov) >= 0).all():
-            raise AttributeError('negative covariance')
+        self.cov = cov
+        assert np.allclose(cov, cov.T), 'non symmetric covariance'
+        assert (np.diag(cov) >= 0).all(), 'negative covariance'
 
         self.__cov_det = None
         self.__cov_inv = None
 
-        if self.d != self.cov.shape[0] or self.d != self.cov.shape[1]:
-            raise AttributeError('dimension mismatch: mu and cov')
+        assert self.d == self.cov.shape[0] == self.cov.shape[1], \
+            'dim mismatch: mu and covar'
 
     def __eq__(self, other):
         if not isinstance(other, FeatStat):
@@ -122,7 +118,7 @@ class FeatStat:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
-        assert (np.linalg.eig(cov)[0] > 0).all(), 'non positive covariance'
+        assert (np.linalg.eig(cov)[0] >= 0).all(), 'non positive covariance'
         fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
         return fs
 
@@ -140,14 +136,16 @@ class FeatStat:
 
         # compute n
         n = self.n + othr.n
+        lambda_self = self.n / n
+        lambda_othr = othr.n / n
 
         # compute mu
-        mu = (self.mu * self.n +
-              othr.mu * othr.n) / n
+        mu = self.mu * lambda_self + \
+             othr.mu * lambda_othr
 
         # compute cov
-        cov = (self.n / n) * (self.cov + np.outer(self.mu, self.mu)) + \
-              (othr.n / n) * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = lambda_self * (self.cov + np.outer(self.mu, self.mu)) + \
+              lambda_othr * (othr.cov + np.outer(othr.mu, othr.mu))
         cov -= np.outer(mu, mu)
 
         return FeatStat(n, mu, cov)
@@ -155,14 +153,17 @@ class FeatStat:
     __radd__ = __add__
 
     def __sub__(self, othr):
+        raise NotImplementedError
         n = self.n - othr.n
+        lambda_self = self.n / n
+        lambda_othr = othr.n / n
         assert n > 0, 'invalid subtraction: not enough observations in other'
 
-        mu = (self.n * self.mu -
-              othr.n * othr.mu) / n
+        mu = self.n * lambda_self - \
+             othr.n * lambda_othr
 
-        cov = (self.n / n) * (self.cov + np.outer(self.mu, self.mu)) - \
-              (othr.n / n) * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = lambda_self * (self.cov + np.outer(self.mu, self.mu)) - \
+              lambda_othr * (othr.cov + np.outer(othr.mu, othr.mu))
         cov -= np.outer(mu, mu)
 
         assert (np.diag(cov) >= 0).all(), 'invalid subtraction'
