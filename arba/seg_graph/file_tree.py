@@ -1,3 +1,4 @@
+import multiprocessing
 import random
 from copy import deepcopy
 
@@ -5,8 +6,57 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
+from mh_pytools.parallel import run_par_fnc
 from ..region.feat_stat import FeatStatEmpty, FeatStat
 from ..space import get_ref, Mask, PointCloud
+
+
+def get_ijk_fs_dict(ijk_list, x, n_cpu=None, verbose=False, par_flag=False):
+    if par_flag is False:
+        return _get_ijk_fs_dict(ijk_list=ijk_list, x=x, verbose=verbose)
+
+    if n_cpu is None:
+        n_cpu = multiprocessing.cpu_count()
+
+    # split into sub-matrices along first axis
+    ijk_list = sorted(ijk_list)
+    idx_list = np.linspace(0, len(ijk_list), n_cpu + 1).astype(int)
+
+    # build arg_list to get_ijk_fs_dict
+    arg_list = list()
+    for idx0, idx1 in zip(idx_list, idx_list[1:]):
+        _ijk_list = ijk_list[idx0: idx1 + 1]
+        offset = np.array((_ijk_list[0][0], 0, 0))
+        _x = x[_ijk_list[0][0]: _ijk_list[-1][0] + 1, ...]
+        arg_list.append({'offset': offset,
+                         'ijk_list': _ijk_list,
+                         'x': _x,
+                         'verbose': False})
+
+    # run
+    res_out = run_par_fnc(_get_ijk_fs_dict, arg_list,
+                          verbose=verbose)
+
+    # aggregate par output
+    ijk_fs_dict = res_out[0]
+    for _ijk_fs_dict in res_out[1:]:
+        ijk_fs_dict.update(_ijk_fs_dict)
+
+    return ijk_fs_dict
+
+
+def _get_ijk_fs_dict(ijk_list, x, verbose=False, offset=None):
+    if offset is None:
+        offset = np.array((0, 0, 0))
+
+    tqdm_dict = {'disable': not verbose,
+                 'desc': 'compute feat stat'}
+    ijk_fs_dict = dict()
+    for ijk in tqdm(ijk_list, **tqdm_dict):
+        _ijk = np.array(ijk) - offset
+        _x = x[_ijk[0], _ijk[1], _ijk[2], :, :].T
+        ijk_fs_dict[ijk] = FeatStat.from_array(_x)
+    return ijk_fs_dict
 
 
 class FileTree:
@@ -116,7 +166,9 @@ class FileTree:
         fs_average = sum(ft_fs_dict.values())
 
         # compute scale
-        scale = np.diag(np.diag(np.linalg.inv(fs_average.cov))) ** .5
+        scale = np.diag(np.diag(fs_average.cov) ** (-.5))
+        if np.isnan(scale).any():
+            raise RuntimeError('invalid scale')
         for ft in ft_tuple:
             ft.scale_data(scale)
 
@@ -248,7 +300,7 @@ class FileTree:
                 self.data[i, j, k, :, :] += value
 
     def load(self, verbose=False, load_data=True, load_ijk_fs=True, _data=None,
-             **kwargs):
+             par_flag=False, **kwargs):
         """ loads files, adds data to statistics per voxel
 
         Args:
@@ -258,6 +310,7 @@ class FileTree:
             _data (np.ndarray): if passed, used in place of self.get_data()'s
                                 return value.  useful internally in split()
             verbose (bool): toggles command line output
+            par_flag (bool): toggles parallel loading
         """
 
         # load all data
@@ -268,12 +321,11 @@ class FileTree:
 
         # compute feat stat
         if load_ijk_fs:
-            tqdm_dict = {'disable': not verbose,
-                         'desc': 'compute feat stat'}
-            self.ijk_fs_dict = dict()
-            for ijk in tqdm(PointCloud.from_mask(self.mask), **tqdm_dict):
-                x = self.data[ijk[0], ijk[1], ijk[2], :, :].T
-                self.ijk_fs_dict[ijk] = FeatStat.from_array(x)
+            pc = PointCloud.from_mask(self.mask)
+            self.ijk_fs_dict = get_ijk_fs_dict(ijk_list=pc,
+                                               x=self.data,
+                                               verbose=verbose,
+                                               par_flag=par_flag)
 
         # add values from history
         for value, mask in self.add_hist_list:
@@ -388,7 +440,8 @@ class FileTree:
 
         return Mask(mask, ref=get_ref(f_nii_list[0]))
 
-    def split(self, p=None, n=None, sbj_set0=None, seed=None):
+    def split(self, p=None, n=None, sbj_set0=None, seed=None, par_flag=False,
+              verbose=False):
         """ splits data into two groups
 
         Args:
@@ -397,6 +450,8 @@ class FileTree:
             n (int): number of sbj in the first file_tree returned
             sbj_set0 (set): set of sbj in first file_tree returned
             seed: sets random seed
+            par_flag (bool): toggles parallel
+            verbose (bool): toggles cmd line output
 
         Returns:
             file_tree_list (list): FileTree for each grp
@@ -417,7 +472,7 @@ class FileTree:
             # split sbj into health and effect groups
             sbj_set0 = set(random.sample(sbj_set, k=n))
 
-        sbj_set1 = sbj_set - sbj_set0
+        sbj_set1 = sbj_set - set(sbj_set0)
 
         # build file_tree of each group
         file_tree_list = list()
@@ -433,9 +488,11 @@ class FileTree:
                 sbj_idx = [idx for idx, sbj in enumerate(self.sbj_list)
                            if sbj in ft.sbj_list]
 
-                ft.ijk_fs_dict = dict()
-                for ijk in PointCloud.from_mask(self.mask):
-                    x = self.data[ijk[0], ijk[1], ijk[2], sbj_idx, :].T
-                    ft.ijk_fs_dict[ijk] = FeatStat.from_array(x)
+                pc = PointCloud.from_mask(self.mask)
+                x = self.data[:, :, :, sbj_idx, :]
+                ft.ijk_fs_dict = get_ijk_fs_dict(ijk_list=pc,
+                                                 x=x,
+                                                 verbose=verbose,
+                                                 par_flag=par_flag)
 
         return file_tree_list
