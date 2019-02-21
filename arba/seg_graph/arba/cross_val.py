@@ -25,12 +25,12 @@ def run_arba_cv(ft_dict, folder=None, verbose=False, alpha=.05, **kwargs):
         ft_dict_seg[grp], ft_dict_test[grp] = ft.split(p=.5)
 
     # prep each
-    ft_dict_seg = prep_arba(ft_dict_seg, label='segmentation',
-                            folder=folder, **kwargs)
-    ft_dict_test = prep_arba(ft_dict_test, label='testing',
-                             folder=folder, **kwargs)
-    ft_dict = prep_arba(ft_dict, label='full',
-                        folder=folder, **kwargs)
+    ft_dict_seg = prep_arba(ft_dict_seg, label='seg', folder=folder,
+                            verbose=verbose, **kwargs)
+    ft_dict_test = prep_arba(ft_dict_test, label='test', folder=folder,
+                             verbose=verbose, **kwargs)
+    prep_arba(ft_dict, label='', folder=folder, verbose=verbose,
+              **kwargs)
 
     # build sg_hist_seg
     sg_hist_seg = SegGraphHistory(obj='maha', file_tree_dict=ft_dict_seg)
@@ -54,9 +54,6 @@ def run_arba_cv(ft_dict, folder=None, verbose=False, alpha=.05, **kwargs):
         folder_save = folder / 'save'
         folder.mkdir(exist_ok=True, parents=True)
 
-        file.save(ft_dict, folder_save / 'ft_dict.p.gz')
-        file.save(ft_dict_seg, folder_save / 'ft_dict_seg.p.gz')
-        file.save(ft_dict_test, folder_save / 'ft_dict_test.p.gz')
         file.save(sg_arba_seg, folder_save / 'sg_arba_seg.p.gz')
         file.save(sg_arba_test, folder_save / 'sg_arba_test.p.gz')
 

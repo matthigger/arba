@@ -10,7 +10,7 @@ from ..file_tree import FileTree
 
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
               verbose=False, folder=None, label=None, load_data=False,
-              scale_equalize=True, **kwargs):
+              scale_equalize=True, par_flag=False, **kwargs):
     """ runs entire arba process, optionally saves outputs
 
     Args:
@@ -35,18 +35,19 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
     # get mask
     ft0, ft1 = tuple(ft_dict.values())
     if mask is None:
-        assert np.allclose(ft0.mask, ft1.mask), 'mask mismatch'
-        mask = ft0.mask
-    else:
-        ft0.mask = mask
-        ft1.mask = mask
+        if ft0.mask.ref != ft1.mask.ref:
+            raise AttributeError('space mismatch between file trees')
+        print('mask mismatch, taking intersection')
+        mask = np.logical_and(ft0.mask, ft1.mask)
+    ft0.mask = mask
+    ft1.mask = mask
 
     # load data
     tqdm_dict = {'disable': not verbose,
                  'desc': 'load data, compute stats per voxel'}
     for ft in tqdm(ft_dict.values(), **tqdm_dict):
         ft.reset_hist()
-        ft.load(verbose=verbose, load_data=load_data)
+        ft.load(verbose=verbose, load_data=load_data, par_flag=par_flag)
 
     # harmonize
     if harmonize:
@@ -85,6 +86,8 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
         folder_save.mkdir(exist_ok=True, parents=True)
 
         mask.to_nii(folder / 'mask.nii.gz')
+
+        file.save(ft_dict, folder_save / f'ft_dict_{label}.p.gz')
 
         for grp, effect in grp_effect_dict.items():
             effect.mask.to_nii(folder / f'mask_effect_{grp}.nii.gz')
