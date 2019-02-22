@@ -17,7 +17,7 @@ def get_temp_file(*args, **kwargs):
     return pathlib.Path(f)
 
 
-def prep_files(ft_tuple, f_data=None):
+def prep_files(ft_tuple, f_data=None, **kwargs):
     """ build nifti of input data
 
     tfce requires a data cube [i, j, k, sbj_idx].  this function writes such
@@ -98,7 +98,7 @@ def prep_files(ft_tuple, f_data=None):
     return f_data, f_mask, sbj_idx_dict
 
 
-def run_tfce(f_data, nm, folder, num_perm=100, f_mask=None):
+def run_tfce(f_data, nm, folder, num_perm=5000, f_mask=None, verbose=False):
     """ wrapper around randomise, interfaces at file level
 
     Args:
@@ -132,7 +132,9 @@ def run_tfce(f_data, nm, folder, num_perm=100, f_mask=None):
     # call randomise
     cmd = f'randomise -i {f_data} -o {folder}/one_minus ' + \
           f'-d {f_design}.mat -t {f_design}.con ' + \
-          f'-n {num_perm} -T --quiet'
+          f'-n {num_perm} -T'
+    if not verbose:
+        cmd += ' --quiet'
     if f_mask is not None:
         cmd += f' -m {f_mask}'
     p = subprocess.Popen(shlex.split(cmd))
