@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from pnl_segment.plot import scatter_tree
-from pnl_segment.region import FeatStat
-from pnl_segment.seg_graph import seg_graph_factory
-from pnl_segment.simulate import Model
-from pnl_segment.space import Mask
+from arba.plot import scatter_tree
+from arba.region import FeatStat
+from arba.seg_graph import SegGraphHistory
+from arba.simulate import Model
+from arba.space import Mask
 
 obj = 'maha'
 
@@ -34,7 +34,7 @@ for grp in ['healthy', 'effect']:
     image_gen = Model(ijk_fs_dict, shape=shape)
     ft_dict[grp] = image_gen.to_file_tree(n=n)
 
-sg_hist = seg_graph_factory(obj=obj, file_tree_dict=ft_dict)
+sg_hist = SegGraphHistory(obj=obj, file_tree_dict=ft_dict)
 sg_hist.reduce_to(1)
 
 sns.set(font_scale=1.2)

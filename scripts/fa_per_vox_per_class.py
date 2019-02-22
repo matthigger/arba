@@ -5,8 +5,8 @@ import nibabel as nib
 from tqdm import tqdm
 
 from pnl_data.set import intrust
-from pnl_segment.seg_graph import FeatStat, FeatStatEmpty
-from pnl_segment.space import Mask, PointCloud
+from arba.seg_graph import FeatStat, FeatStatEmpty
+from arba.space import Mask, PointCloud
 from pnl_brain.region import FSRegion
 
 # load data

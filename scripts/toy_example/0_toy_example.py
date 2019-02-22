@@ -4,15 +4,15 @@ import shutil
 import numpy as np
 
 import pnl_data
-from pnl_segment.seg_graph import FeatStat, run_arba
-from pnl_segment.simulate import Model
-from pnl_segment.space import RefSpace, Mask
+from arba.seg_graph import FeatStat, run_arba_cv
+from arba.simulate import Model
+from arba.space import RefSpace, Mask
 
 alpha = .05
 n_img = 100
 feat_var = 1
 shape = (4, 4, 1)
-# average feature for bottom, top side of image in each population
+# average feature for bottom, top of image in each population
 pop_mu_bt_dict = {'pop0': (0, 0),
                   'pop1': (3, 0)}
 folder = pnl_data.folder_data / 'arba_toy_ex'
@@ -59,5 +59,5 @@ mask_effect.to_nii(folder / 'mask_effect.nii.gz')
 mask = Mask(np.ones(shape), ref=ref)
 
 # run arba
-run_arba(ft_dict, mask=mask, folder_save=folder, alpha=alpha, harmonize=False,
-         verbose=True)
+run_arba_cv(ft_dict, mask=mask, folder=folder, alpha=alpha, harmonize=False,
+            verbose=True)

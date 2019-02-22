@@ -2,8 +2,8 @@ import os
 from collections import defaultdict
 
 from pnl_data.set import ofer_tbss
-from pnl_segment.seg_graph import FileTree, run_arba
-from pnl_segment.space import Mask
+from arba.seg_graph import FileTree, run_arba
+from arba.space import Mask
 
 # params
 alpha = .05

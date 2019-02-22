@@ -2,7 +2,7 @@ import pickle
 
 import pytest
 
-from pnl_segment.space import *
+from arba.space import *
 
 
 @pytest.fixture
