@@ -16,7 +16,7 @@ class RegionMaha(Region):
     """ computes MSE error of representing maha per voxel by a single value
 
     Attributes:
-        maha_per_vox (np.array): objective function per each voxel
+        t2_fs (FeatStat): describes set of t2 stats per voxel
     """
 
     def __init__(self, *args, maha_per_vox=None, **kwargs):
@@ -33,14 +33,6 @@ class RegionMaha(Region):
             assert len(maha_per_vox) == len(self), 'maha_per_vox mismatch'
             self.t2_fs = FeatStat.from_array(maha_per_vox,
                                              obs_greater_dim=True)
-
-        if maha_per_vox is None:
-            self.maha_per_vox = np.array(self.maha)
-        else:
-            self.maha_per_vox = np.array(maha_per_vox)
-
-        if len(self.maha_per_vox.shape) > 1:
-            raise AttributeError('maha_per_vox shape isnt 1d')
 
     @property
     def maha(self):
@@ -124,12 +116,6 @@ class RegionMaha(Region):
         if self._sq_error is None:
             delta = self.t2_fs.mu - self.maha
             self._sq_error = self.t2_fs.n * (self.t2_fs.cov[0, 0] + delta ** 2)
-
-            # old method (validate)
-            d = self._maha - self.maha_per_vox
-            _sq_error_validate = np.inner(d, d)
-            assert np.isclose(self._sq_error, _sq_error_validate), \
-                'error in error computation'
         return self._sq_error
 
     @staticmethod
@@ -141,22 +127,14 @@ class RegionMaha(Region):
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:
             reg_out = super().__add__(other)
-            reg_out.maha_per_vox = self.maha_per_vox
+            reg_out.t2_fs = self.t2_fs
             return reg_out
 
         if not isinstance(other, type(self)):
             raise TypeError
 
         reg_out = super().__add__(other)
-        reg_out.maha_per_vox = np.hstack((self.maha_per_vox,
-                                          other.maha_per_vox))
         reg_out.t2_fs = self.t2_fs + other.t2_fs
-        assert np.isclose(reg_out.t2_fs.cov[0, 0],
-                          np.cov(reg_out.maha_per_vox, ddof=0)), \
-            't2_fs covariance is off'
-
-        if len(self.maha_per_vox.shape) > 1:
-            raise AttributeError('maha_per_vox shape isnt 1d')
 
         return reg_out
 
