@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import f
 
+from .feat_stat import FeatStat, FeatStatSingle
 from .reg import Region
 
 
@@ -23,6 +24,12 @@ class RegionMaha(Region):
         self._maha = None
         self._pval = None
         self._sq_error = None
+
+        if len(self) == 1:
+            self.t2_fs = FeatStatSingle(mu=self.maha)
+        else:
+            self.t2_fs = FeatStat.from_array(maha_per_vox,
+                                             obs_greater_dim=True)
 
         if maha_per_vox is None:
             self.maha_per_vox = np.array(self.maha)
@@ -98,7 +105,11 @@ class RegionMaha(Region):
         """
         if self._sq_error is None:
             d = self._maha - self.maha_per_vox
-            self._sq_error = np.inner(d, d)
+            _sq_error_validate = np.inner(d, d)
+            delta = self.t2_fs.mu - self.maha
+            self._sq_error = self.t2_fs.cov ** 2 + delta ** 2
+            assert self._sq_error == _sq_error_validate, \
+                'error in error computation'
         return self._sq_error
 
     @staticmethod
@@ -119,6 +130,7 @@ class RegionMaha(Region):
         reg_out = super().__add__(other)
         reg_out.maha_per_vox = np.hstack(
             (self.maha_per_vox, other.maha_per_vox))
+        reg_out.t2_fs = self.t2_fs + other.t2_fs
 
         if len(self.maha_per_vox.shape) > 1:
             raise AttributeError('maha_per_vox shape isnt 1d')
