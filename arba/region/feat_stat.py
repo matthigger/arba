@@ -53,12 +53,12 @@ class FeatStat:
         self.n = int(n)
         assert self.n > 0, 'n must be positive'
 
-        self.mu = mu
+        self.mu =np.atleast_1d(mu)
         assert len(self.mu.shape) == 1, 'mu must be 1d'
 
-        self.cov = cov
+        self.cov = np.atleast_2d(cov)
         assert np.allclose(cov, cov.T), 'non symmetric covariance'
-        assert (np.diag(cov) >= 0).all(), 'negative covariance'
+        assert (np.diag(self.cov) >= 0).all(), 'negative covariance'
 
         self.__cov_det = None
         self.__cov_inv = None
@@ -118,7 +118,8 @@ class FeatStat:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
-        assert (np.linalg.eig(cov)[0] >= 0).all(), 'non positive covariance'
+        if len(cov.shape) > 1:
+            assert (np.linalg.eig(cov)[0] >= 0).all(), 'non positive covariance'
         fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
         return fs
 
@@ -211,7 +212,7 @@ class FeatStatSingle(FeatStat):
     def __init__(self, mu, n=1, cov=None):
         if n != 1 or cov is not None:
             raise AttributeError
-        self.mu = np.array(mu)
+        self.mu = np.atleast_1d(mu)
 
 
 class FeatStatEmpty(FeatStat):

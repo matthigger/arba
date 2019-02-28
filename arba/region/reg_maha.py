@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import f
 
-from .feat_stat import FeatStat, FeatStatSingle
+from .feat_stat import FeatStat, FeatStatSingle, FeatStatEmpty
 from .reg import Region
 
 
@@ -27,7 +27,10 @@ class RegionMaha(Region):
 
         if len(self) == 1:
             self.t2_fs = FeatStatSingle(mu=self.maha)
+        elif maha_per_vox is None:
+            self.t2_fs = FeatStatEmpty()
         else:
+            assert len(maha_per_vox) == len(self), 'maha_per_vox mismatch'
             self.t2_fs = FeatStat.from_array(maha_per_vox,
                                              obs_greater_dim=True)
 
@@ -102,13 +105,30 @@ class RegionMaha(Region):
     @property
     def sq_error(self):
         """ squared error of maha per voxel represented as whole region maha
+
+        define:
+
+        delta = self.t2 - self.t2_fs.mu
+
+        then, let x_i represent the t2 stat at voxel i
+
+        sq_error = \sum_i (x_i - self.t2)^2
+                 = \sum_i (x_i - (self.t2_fs.mu + delta))^2
+                 = ... complete the square ...
+                 = self.t2_fs.n * (self.t2_fs.cov + delta ^ 2)
+
+        rather than store voxel wise t2 stats to compute sq_error, we store
+        their summary statistics n, mu and cov.  above equality shows how
+        sufficient to get sq_error
         """
         if self._sq_error is None:
+            delta = self.t2_fs.mu - self.maha
+            self._sq_error = self.t2_fs.n * (self.t2_fs.cov[0, 0] + delta ** 2)
+
+            # old method (validate)
             d = self._maha - self.maha_per_vox
             _sq_error_validate = np.inner(d, d)
-            delta = self.t2_fs.mu - self.maha
-            self._sq_error = self.t2_fs.cov ** 2 + delta ** 2
-            assert self._sq_error == _sq_error_validate, \
+            assert np.isclose(self._sq_error, _sq_error_validate), \
                 'error in error computation'
         return self._sq_error
 
@@ -128,9 +148,12 @@ class RegionMaha(Region):
             raise TypeError
 
         reg_out = super().__add__(other)
-        reg_out.maha_per_vox = np.hstack(
-            (self.maha_per_vox, other.maha_per_vox))
+        reg_out.maha_per_vox = np.hstack((self.maha_per_vox,
+                                          other.maha_per_vox))
         reg_out.t2_fs = self.t2_fs + other.t2_fs
+        assert np.isclose(reg_out.t2_fs.cov[0, 0],
+                          np.cov(reg_out.maha_per_vox, ddof=0)), \
+            't2_fs covariance is off'
 
         if len(self.maha_per_vox.shape) > 1:
             raise AttributeError('maha_per_vox shape isnt 1d')
