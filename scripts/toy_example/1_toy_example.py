@@ -4,7 +4,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import pnl_data
 from mh_pytools import file
-from arba.plot.scatter_tree import size_v_mahalanobis, size_v_pval
+from arba.plot.scatter_tree import size_v_t2, size_v_pval
 from arba.space import Mask
 
 # param
@@ -32,10 +32,10 @@ def print_fig(f_out):
         plt.close()
 
 
-f_out = folder / 'toy_size_v_maha.pdf'
-cb = size_v_mahalanobis(tree_hist_resolved, mask=mask,
-                        reg_highlight=reg_highlight)
-plt.ylabel('Maha(r)')
+f_out = folder / 'toy_size_v_t2.pdf'
+cb = size_v_t2(tree_hist_resolved, mask=mask,
+               reg_highlight=reg_highlight)
+plt.ylabel('T-squared(r)')
 cb.remove()
 print_fig(f_out)
 

@@ -6,7 +6,7 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionWard, RegionMaha, RegionMahaDm, FeatStatEmpty
+from ..region import RegionWard, RegionT2, FeatStatEmpty
 from ..space import get_ref, PointCloud
 
 
@@ -24,7 +24,7 @@ class SegGraph(nx.Graph):
         """
 
         Args:
-            obj (str): either 'ward' or 'maha' (can also pass class, useful if
+            obj (str): either 'ward' or 't2' (can also pass class, useful if
                        being called programatically)
             file_tree_dict (dict): keys are grp, values are FileTree
             ijk_set (set): restricts construction of nodes to this set of ijk
@@ -35,8 +35,7 @@ class SegGraph(nx.Graph):
 
         # get appropriate region constructor
         obj_dict = {'ward': RegionWard,
-                    'maha': RegionMaha,
-                    'mahadm': RegionMahaDm}
+                    't2': RegionT2}
         if obj in obj_dict.values():
             self.reg_type = obj
         else:

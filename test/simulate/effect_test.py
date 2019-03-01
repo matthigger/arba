@@ -10,21 +10,21 @@ def test_draw_random_u():
 
 
 @pytest.fixture
-def effect(d=2, maha=5):
-    mean = np.ones(d) * maha * np.sqrt( 1 / d)
+def effect(d=2, t2=5):
+    mean = np.ones(d) * t2 * np.sqrt(1 / d)
     fs = FeatStat(n=10, mu=np.zeros(d), cov=np.eye(d))
     mask = Mask(np.ones((3, 3)))
     effect = Effect(mask=mask, mean=mean, fs=fs)
 
-    assert np.isclose(effect.maha, maha), 'maha computation'
+    assert np.isclose(effect.t2, t2), 't2 computation'
 
     return effect
 
 
-def test_u_maha_setter(effect):
+def test_u_t2_setter(effect):
     u_old = effect .u
-    effect.maha = 1
-    assert np.isclose(effect .maha, 1), 'maha setter'
+    effect.t2 = 1
+    assert np.isclose(effect .t2, 1), 't2 setter'
     assert np.allclose(u_old, effect .u), 'u computation error'
 
     u_target = np.array([-1, 1]).astype(float)

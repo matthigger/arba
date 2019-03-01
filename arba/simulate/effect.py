@@ -32,23 +32,23 @@ class Effect:
         mask (Mask): effect location
         fs (FeatStat): FeatStat of unaffected area
 
-        maha (float): mahalanobis
+        t2 (float): t squared distance
         u (np.array): effect direction
     """
 
     @staticmethod
-    def from_fs_maha(fs, maha, mask, u=None):
+    def from_fs_t2(fs, t2, mask, u=None):
         """ scales effect with observations
 
         Args:
             fs (FeatStat): stats of affected area
-            maha (float): ratio of effect to population variance
+            t2 (float): ratio of effect to population variance
             mask (Mask): effect location
             u (array): direction of offset
         """
 
-        if maha < 0:
-            raise AttributeError('maha must be positive')
+        if t2 < 0:
+            raise AttributeError('t2 must be positive')
 
         # get direction u
         if u is None:
@@ -56,23 +56,23 @@ class Effect:
         elif len(u) != fs.d:
             raise AttributeError('direction offset must have same len as fs.d')
 
-        # build effect with proper direction, scale to proper maha
+        # build effect with proper direction, scale to proper t2
         # (ensure u is copied so we have a spare to validate against)
         eff = Effect(mask=mask, mean=copy(u), fs=fs)
-        eff.maha = maha
+        eff.t2 = t2
 
         assert np.allclose(eff.u, u), 'direction error'
-        assert np.allclose(eff.maha, maha), 'maha scale error'
+        assert np.allclose(eff.t2, t2), 't2 scale error'
 
         return eff
 
     @property
-    def maha(self):
+    def t2(self):
         return np.sqrt(self.mean @ self.fs.cov_inv @ self.mean)
 
-    @maha.setter
-    def maha(self, val):
-        self.mean *= val / self.maha
+    @t2.setter
+    def t2(self, val):
+        self.mean *= val / self.t2
 
     @property
     def u(self):
@@ -81,7 +81,7 @@ class Effect:
     @u.setter
     def u(self, val):
         c = val @ self.fs.cov_inv @ val
-        self.mean = np.atleast_1d(val) * self.maha / c
+        self.mean = np.atleast_1d(val) * self.t2 / c
 
     def __init__(self, mask, mean, fs):
         self.mask = mask

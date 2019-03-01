@@ -113,21 +113,21 @@ class Simulator:
         self._build_effect_list(mask_list)
 
     def _build_effect_list(self, mask_list):
-        # build effects (such that their locations are constant across maha)
+        # build effects (such that their locations are constant across t2)
         self.effect_list = list()
         for mask in mask_list:
             # compute feat_stat in mask
             pc = PointCloud.from_mask(mask)
             fs = sum(self.file_tree.ijk_fs_dict[ijk] for ijk in pc)
 
-            # maha below is placeholder, it is reset with each run
-            e = Effect.from_fs_maha(fs=fs, mask=mask, maha=1)
+            # t2 below is placeholder, it is reset with each run
+            e = Effect.from_fs_t2(fs=fs, mask=mask, t2=1)
             self.effect_list.append(e)
 
         # delete voxel wise stats
         self.file_tree.unload()
 
-    def run_effect_prep(self, effect, maha=None, active_rad=None, **kwargs):
+    def run_effect_prep(self, effect, t2=None, active_rad=None, **kwargs):
         # get mask of active area
         mask_active = self.file_tree.mask
         if active_rad is not None:
@@ -136,8 +136,8 @@ class Simulator:
             mask_active = np.logical_and(mask_eff_dilated, mask_active)
 
         # set scale of effect
-        if maha is not None:
-            effect.maha = maha
+        if t2 is not None:
+            effect.t2 = t2
 
         # build effect dict
         grp_effect_dict = {self.grp_effect: effect}
@@ -163,7 +163,7 @@ class Simulator:
                     ft_dict=self.ft_dict,
                     **kwargs)
 
-    def run(self, maha_list, par_flag=False, par_permute_flag=False,
+    def run(self, t2_list, par_flag=False, par_permute_flag=False,
             **kwargs):
 
         if par_flag and par_permute_flag:
@@ -171,16 +171,16 @@ class Simulator:
 
         # build arg_list
         arg_list = list()
-        z_width_maha = np.ceil(np.log10(len(maha_list))).astype(int)
+        z_width_t2 = np.ceil(np.log10(len(t2_list))).astype(int)
         z_width_eff = np.ceil(np.log10(len(self.effect_list))).astype(int)
-        for maha_idx, maha in enumerate(sorted(maha_list)):
+        for t2_idx, t2 in enumerate(sorted(t2_list)):
             for eff_idx, effect in enumerate(self.effect_list):
-                s_maha = str(maha_idx).zfill(z_width_maha)
+                s_t2 = str(t2_idx).zfill(z_width_t2)
                 s_eff = str(eff_idx).zfill(z_width_eff)
-                folder = self.folder / f'maha{s_maha}_{maha:.1E}_effect{s_eff}'
+                folder = self.folder / f't2_{s_t2}_{t2:.1E}_effect{s_eff}'
 
                 d = {'effect': effect,
-                     'maha': maha,
+                     't2': t2,
                      'verbose': not par_flag,
                      'par_flag': par_permute_flag,
                      'folder': folder}
