@@ -11,7 +11,7 @@ from ..file_tree import FileTree
 def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
               verbose=False, folder=None, label=None, load_data=False,
               scale_equalize=True, par_flag=False, **kwargs):
-    """ runs entire arba process, optionally saves outputs
+    """ prepares input images, saves mean images and initial objects
 
     Args:
         ft_dict (dict): keys are population labels, values are FileTree
