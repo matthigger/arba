@@ -168,11 +168,14 @@ class SegGraph(nx.Graph):
         """
 
         # create rew region
-        reg_sum = sum(reg_tuple)
+        reg_iter = iter(reg_tuple)
+        reg_sum = next(reg_iter)
+        for reg in reg_iter:
+            reg_sum += reg
 
         # get neighbor list (before removing any nodes)
-        neighbr_set = frozenset().union(
-            *[self.neighbors(r) for r in reg_tuple])
+        neighbr_list = [self.neighbors(r) for r in reg_tuple]
+        neighbr_set = frozenset().union(*neighbr_list)
         neighbr_set -= set(reg_tuple)
 
         # rm old regions from seg_graph

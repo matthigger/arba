@@ -106,6 +106,12 @@ def prep_arba(ft_dict, mask=None, grp_effect_dict=None, harmonize=False,
             if label is not None:
                 print(f'{label}:', file=f)
             print(f'mask has {mask.sum()} voxels', file=f)
+            print(f'number of images: ', file=f)
+            for grp, ft in ft_dict.items():
+                print(f'{len(ft):8.0f} {grp}', file=f)
+            s_feat = ', '.join(sorted(ft.feat_list))
+            print(f'features: {s_feat}', file=f)
+
             if harmonize:
                 print('harmonization applied:' +
                       '\n    (offset added per grp so cross grp mean are equal)',

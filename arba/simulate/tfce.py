@@ -61,7 +61,10 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
         _x = x[i, j, k, :, :]
         for sbj_idx, sbj_x in enumerate(_x):
             # compare to all but self
-            sbj_cmp_idx = np.ones(len(sbj_list)).astype(bool)
+            # sbj_cmp_idx = np.ones(len(sbj_list)).astype(bool)
+            # compare to all in first grp except self
+            sbj_cmp_idx = np.concatenate((np.ones(len(ft0)),
+                                          np.zeros(len(ft1)))).astype(bool)
             sbj_cmp_idx[sbj_idx] = 0
 
             # get stats
@@ -172,7 +175,9 @@ def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
 
     # run tfce
     nm = tuple(len(ft) for ft in ft_tuple)
-    f_pval_list = run_tfce(f_data, folder=folder, f_mask=f_mask, nm=nm)
+    kwargs['f_data'] = f_data
+    f_pval_list = run_tfce(folder=folder, f_mask=f_mask, nm=nm,
+                           **kwargs)
 
     # load pval, apply FWER significance threshold and save binary image
     f_sig_list = list()
