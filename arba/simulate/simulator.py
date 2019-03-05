@@ -38,6 +38,8 @@ class Simulator:
                  verbose=True, par_flag=True, f_rba=None, tfce_num_perm=5000,
                  alpha=.05):
         self.folder = pathlib.Path(folder)
+        if self.folder.exists():
+            shutil.rmtree(self.folder)
         folder.mkdir(parents=True)
 
         # split into two file_trees
