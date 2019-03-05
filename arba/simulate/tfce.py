@@ -26,7 +26,7 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
     Args:
         ft_tuple (tuple): two FileTree objects, the first defines the compare
                           group (defines mu and cov in computation of
-                          Mahalanobis distance)
+                          t squared distance)
 
     Returns:
         f_data (Path): output file of nifti cube
@@ -54,8 +54,8 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
     # apply mask
     assert np.allclose(mask.shape, x.shape[:3]), 'mask shape mismatch'
 
-    # compute mahalanobis per voxel (across entire population)
-    maha = np.zeros(x.shape[:4])
+    # compute t-squared per voxel (across entire population)
+    t2 = np.zeros(x.shape[:4])
     for i, j, k in PointCloud.from_mask(mask):
 
         _x = x[i, j, k, :, :]
@@ -75,15 +75,15 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
 
             # compute t_sq
             delta = sbj_x - mu
-            maha[i, j, k, sbj_idx] = np.sqrt(delta @ cov_inv @ delta)
+            t2[i, j, k, sbj_idx] = np.sqrt(delta @ cov_inv @ delta)
 
-    # ensure all maha are positive
-    _mask = np.broadcast_to(mask.T, maha.T.shape).T
-    assert np.all(maha[_mask] > 0), 'invalid maha, must be positive'
+    # ensure all t2 are positive
+    _mask = np.broadcast_to(mask.T, t2.T.shape).T
+    assert np.all(t2[_mask] > 0), 'invalid t2, must be positive'
 
     # get filenames
     if f_data is None:
-        f_data = get_temp_file(suffix='_maha_tfce.nii.gz')
+        f_data = get_temp_file(suffix='_t2_tfce.nii.gz')
         f_mask = str(f_data).replace('_tfce.nii.gz', '_mask.nii.gz')
     else:
         folder = pathlib.Path(f_data).parent
@@ -91,7 +91,7 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
         f_mask = folder / 'tfce_mask.nii.gz'
 
     # save data
-    img_data = nib.Nifti1Image(maha, affine=ft0.ref.affine)
+    img_data = nib.Nifti1Image(t2, affine=ft0.ref.affine)
     img_data.to_filename(str(f_data))
 
     # save mask

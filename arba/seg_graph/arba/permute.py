@@ -8,7 +8,7 @@ from mh_pytools import file
 from mh_pytools.parallel import run_par_fnc
 from .prep import prep_arba
 from ..seg_graph import SegGraph
-from ..seg_graph_maha import SegGraphMaha
+from ..seg_graph_t2 import SegGraphT2
 
 
 def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
@@ -33,7 +33,7 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
                         load_data=True, **kwargs)
 
     # build sg_hist
-    sg_hist = SegGraphMaha(file_tree_dict=ft_dict)
+    sg_hist = SegGraphT2(file_tree_dict=ft_dict)
 
     # reduce
     sg_hist.reduce_to(1, verbose=verbose, **kwargs)
@@ -59,15 +59,15 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
 
     # run each permutation of the data
     if par_flag:
-        max_maha_list = run_par_fnc(_run_permute, arg_list, desc='permutation')
+        max_t2_list = run_par_fnc(_run_permute, arg_list, desc='permutation')
     else:
-        max_maha_list = list()
+        max_t2_list = list()
         for d in arg_list:
-            max_maha_list.append(_run_permute(**d))
+            max_t2_list.append(_run_permute(**d))
 
     # determine which regions are sig
-    sg_arba_max_maha = sg_hist.cut_greedy_maha()
-    sg_arba_sig = get_sig(sg_arba_max_maha, max_maha_list, alpha=alpha)
+    sg_arba_max_t2 = sg_hist.cut_greedy_t2()
+    sg_arba_sig = get_sig(sg_arba_max_t2, max_t2_list, alpha=alpha)
 
     # save
     if folder is not None:
@@ -78,7 +78,7 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
         file.save(ft_dict, folder_save / 'ft_dict.p.gz')
 
         file.save(sg_hist, folder_save / 'sg_hist.p.gz')
-        file.save(sg_arba_max_maha, folder_save / 'sg_arba_max_maha.p.gz')
+        file.save(sg_arba_max_t2, folder_save / 'sg_arba_max_t2.p.gz')
         file.save(sg_arba_sig, folder_save / 'sg_arba_sig.p.gz')
 
         # save sig mask
@@ -93,13 +93,13 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
 
 def _run_permute(ft_dict, **kwargs):
     """ runs """
-    # build sg_maha
-    sg_maha = SegGraphMaha(file_tree_dict=ft_dict)
+    # build sg_t2
+    sg_t2 = SegGraphT2(file_tree_dict=ft_dict)
 
     # reduce
-    sg_maha.reduce_to(1, verbose=False, **kwargs)
+    sg_t2.reduce_to(1, verbose=False, **kwargs)
 
-    return max(sg_maha.node_maha_dict.values())
+    return max(sg_t2.node_t2_dict.values())
 
 
 def _split(ft, n):
@@ -116,7 +116,7 @@ def _split(ft, n):
     return d
 
 
-def get_sig(sg, max_maha_list, alpha=.05):
+def get_sig(sg, max_t2_list, alpha=.05):
     """ builds copy of sg containing only significance regions
 
     # todo: compute confidence intervals using fnc below:
@@ -124,7 +124,7 @@ def get_sig(sg, max_maha_list, alpha=.05):
 
     Args:
         sg (SegGraph): a seg graph
-        max_maha_list (list): list of bootstrapped max mahalanobis distances
+        max_t2_list (list): list of bootstrapped max t squared distances
         alpha (float): false positive rate
 
     Returns:
@@ -132,14 +132,14 @@ def get_sig(sg, max_maha_list, alpha=.05):
     """
 
     # prep
-    max_maha_list = sorted(max_maha_list)
-    n = len(max_maha_list)
+    max_t2_list = sorted(max_t2_list)
+    n = len(max_t2_list)
 
     # determine which regions are sig
     reg_list = list()
     for reg in sg.nodes:
-        # k is the number of permutations for which observed maha is >= to
-        k = bisect_right(max_maha_list, reg.maha * len(reg))
+        # k is the number of permutations for which observed t2 is >= to
+        k = bisect_right(max_t2_list, reg.t2 * len(reg))
         if (k / n) >= (1 - alpha):
             reg_list.append(reg)
 

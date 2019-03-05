@@ -22,7 +22,7 @@ def build_and_reduce(model, num_sbj_per_grp, folder):
                                             folder=_folder)
 
     # build and reduce a seg_graph
-    sg_hist = SegGraphHistory(obj='maha', file_tree_dict=ft_dict)
+    sg_hist = SegGraphHistory(obj='t2', file_tree_dict=ft_dict)
     sg_hist.reduce_to(1, verbose=verbose)
     return sg_hist
 
@@ -47,24 +47,24 @@ def print_graph(sg_hist, folder):
         pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
         plt.close()
 
-    with PdfPages(str(folder / 'size_vs_maha.pdf')) as pdf:
-        plot.size_v_mahalanobis(sg=sg_hist.tree_history,
-                                dict_highlight={'linewidths': 3,
+    with PdfPages(str(folder / 'size_vs_t2.pdf')) as pdf:
+        plot.size_v_t2(sg=sg_hist.tree_history,
+                       dict_highlight={'linewidths': 3,
                                                 'edgecolors': 'k'},
-                                log_x=True,
-                                log_y=True)
+                       log_x=True,
+                       log_y=True)
 
         fig = plt.gcf()
         fig.set_size_inches(10, 7)
         pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
         plt.close()
 
-    with PdfPages(str(folder / 'size_vs_wmaha.pdf')) as pdf:
-        plot.size_v_wmahalanobis(sg=sg_hist.tree_history,
-                                 dict_highlight={'linewidths': 3,
+    with PdfPages(str(folder / 'size_vs_wt2.pdf')) as pdf:
+        plot.size_v_wt2(sg=sg_hist.tree_history,
+                        dict_highlight={'linewidths': 3,
                                                  'edgecolors': 'k'},
-                                 log_x=True,
-                                 log_y=True)
+                        log_x=True,
+                        log_y=True)
 
         fig = plt.gcf()
         fig.set_size_inches(10, 7)

@@ -1,3 +1,4 @@
+import math
 from collections import defaultdict
 
 import matplotlib.gridspec as gridspec
@@ -77,7 +78,7 @@ def plot_feat(reg, ft_dict, feat_x, feat_y, grp_data_dict=None, ax=None,
 # https://stackoverflow.com/questions/9647202/ordinal-numbers-replacement
 def ordinal(n):
     return "%d%s" % (
-        n, "tsnrhtdd"[(n / 10 % 10 != 1) * (n % 10 < 4) * n % 10::4])
+    n, "tsnrhtdd"[(math.floor(n / 10) % 10 != 1) * (n % 10 < 4) * n % 10::4])
 
 
 def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
@@ -123,7 +124,7 @@ if __name__ == '__main__':
     from pnl_data.set.sz import folder
     from mh_pytools import file
 
-    _folder = folder / 'arba_cv_HC-FES_fa-md'
+    _folder = folder / 'arba_cv_HC-SCZ_fa-md'
     folder_save = _folder / 'save'
 
     ft_dict = file.load(folder_save / 'ft_dict_.p.gz')
@@ -135,7 +136,6 @@ if __name__ == '__main__':
 
     # plot only sig regions, label with pvalue
     reg_list = sg_arba_test_sig.nodes
-    label_dict = {r: f'pval: {r.pval:.3e}' for r in reg_list}
 
     plot_report(reg_list, ft_dict, f_out=f_out, feat_x=feat_x, feat_y=feat_y,
-                f_back=f_back, verbose=True, label_dict=label_dict)
+                f_back=f_back, verbose=True)

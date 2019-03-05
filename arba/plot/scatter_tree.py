@@ -4,7 +4,6 @@ import networkx as nx
 import numpy as np
 import seaborn as sns
 
-from arba.region import RegionMaha
 from arba.space.mask import Mask
 
 
@@ -35,26 +34,26 @@ def size_v_cov_tr(*args, **kwargs):
     return scatter_tree(*args, fnc=get_cov, ylabel=ylabel, **kwargs)
 
 
-def size_v_mahalanobis(*args, **kwargs):
-    ylabel = 'mahalanobis between groups'
+def size_v_t2(*args, **kwargs):
+    ylabel = 't2 between groups'
 
-    def get_maha(reg):
-        return reg.maha
+    def get_t2(reg):
+        return reg.t2
 
-    return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_t2, ylabel=ylabel, **kwargs)
 
 
-def size_v_wmahalanobis(*args, **kwargs):
-    ylabel = 'weighted mahalanobis between groups'
+def size_v_wt2(*args, **kwargs):
+    ylabel = 'weighted t2 between groups'
 
-    def get_maha(reg):
-        return reg.maha * len(reg)
+    def get_wt2(reg):
+        return reg.t2 * len(reg)
 
-    return scatter_tree(*args, fnc=get_maha, ylabel=ylabel, **kwargs)
+    return scatter_tree(*args, fnc=get_wt2, ylabel=ylabel, **kwargs)
 
 
 def size_v_error(*args, **kwargs):
-    ylabel = 'MSE in maha from vox to cluster'
+    ylabel = 'MSE in t2 from vox to cluster'
 
     def get_error(reg):
         return reg.sq_error / len(reg)

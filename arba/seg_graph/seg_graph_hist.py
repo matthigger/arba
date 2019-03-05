@@ -7,7 +7,7 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import RegionMaha
+from ..region import RegionT2
 from ..space import PointCloud
 
 
@@ -112,7 +112,7 @@ class SegGraphHistory(SegGraph):
             # build pc
             pc = PointCloud({ijk}, ref=self.ref)
 
-            yield RegionMaha(pc_ijk=pc, fs_dict=fs_dict)
+            yield RegionT2(pc_ijk=pc, fs_dict=fs_dict)
 
     def resolve_reg(self, node):
         return sum(self.resolve_reg_iter(node))

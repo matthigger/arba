@@ -61,7 +61,7 @@ if __name__ == '__main__':
     par_flag = True
 
     arg_list = []
-    s_folder_glob = '*maha*effect*'
+    s_folder_glob = '*t2*effect*'
     for _folder in folder.glob(s_folder_glob):
         for _file in _folder.glob('**/save/sg_hist*'):
             __folder = _file.parent

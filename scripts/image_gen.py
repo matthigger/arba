@@ -8,7 +8,7 @@ from arba.seg_graph import SegGraphHistory
 from arba.simulate import Model
 from arba.space import Mask
 
-obj = 'maha'
+obj = 't2'
 
 # taken from "2018_P_INRIA.odp" example
 shape = (4, 4, 1)
@@ -39,7 +39,7 @@ sg_hist.reduce_to(1)
 
 sns.set(font_scale=1.2)
 fig, ax = plt.subplots(1, 1)
-scatter_tree.size_v_mahalanobis(sg=sg_hist.tree_history,
-                                log_x=True,
-                                log_y=True,
-                                mask=mask)
+scatter_tree.size_v_t2(sg=sg_hist.tree_history,
+                       log_x=True,
+                       log_y=True,
+                       mask=mask)
