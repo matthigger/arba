@@ -40,6 +40,10 @@ folder_out = folder / datetime.now().strftime("%Y_%b_%d_%H_%M_%S")
 sbj_feat_file_tree = defaultdict(dict)
 for feat in feat_list:
     for f in folder_data.glob(f'*{feat}.nii.gz'):
+        name = get_name(f.stem)
+        if name is None:
+            # file doesnt fit pattern
+            continue
         sbj_feat_file_tree[get_name(f.stem)][feat] = f
 file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
 
@@ -57,7 +61,7 @@ file.save(sim, folder_out / 'sim.p.gz')
 
 # run arba
 sim.run(t2_list, active_rad=active_rad, harmonize=harmonize,
-        edge_per_step=edge_per_step)
+        edge_per_step=edge_per_step, grp_r2=sim.grp_null)
 
 # run comparison methods
 sim.run_effect_comparison()

@@ -20,7 +20,7 @@ def make_plots(folder, label):
     f_sg_hist = folder / f'sg_hist{label}.p.gz'
     f_sg_arba = folder / f'sg_arba{label}.p.gz'
     folder_image = folder.parent
-    f_effect = folder_image / 'mask_effect_grp_effect.nii.gz'
+    f_effect = folder_image / 'mask_effect_EFFECT.nii.gz'
 
     if not f_sg_hist.exists():
         return
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     from pnl_data.set.hcp_100 import folder
 
-    folder = folder / '2019_Feb_11_09_43_11'
+    folder = folder / '_r2_correction_vox'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}

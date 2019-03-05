@@ -92,8 +92,8 @@ class RegionT2(Region):
 
         then, let x_i represent the t2 stat at voxel i
 
-        sq_error = \sum_i (x_i - self.t2)^2
-                 = \sum_i (x_i - (self.t2_fs.mu + delta))^2
+        sq_error = sum_i (x_i - self.t2)^2
+                 = sum_i (x_i - (self.t2_fs.mu + delta))^2
                  = ... complete the square ...
                  = self.t2_fs.n * (self.t2_fs.cov + delta ^ 2)
 
