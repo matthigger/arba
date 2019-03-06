@@ -50,19 +50,23 @@ class FeatStat:
 
     def __init__(self, n, mu, cov):
         # defaults to 'empty' set of features
-        self.n = int(n)
-        assert self.n > 0, 'n must be positive'
-
-        self.mu =np.atleast_1d(mu)
-        assert len(self.mu.shape) == 1, 'mu must be 1d'
-
-        self.cov = np.atleast_2d(cov)
-        assert np.allclose(cov, cov.T), 'non symmetric covariance'
-        assert (np.diag(self.cov) >= 0).all(), 'negative covariance'
-
+        self.n = n
+        self.mu = mu
+        self.cov = cov
         self.__cov_det = None
         self.__cov_inv = None
 
+        if _fast:
+            return
+
+        self.n = int(self.n)
+        self.mu = np.atleast_1d(self.mu)
+        self.cov = np.atleast_2d(self.cov)
+
+        assert self.n > 0, 'n must be positive'
+        assert len(self.mu.shape) == 1, 'mu must be 1d'
+        assert np.allclose(self.cov, self.cov.T), 'non symmetric covariance'
+        assert (np.diag(self.cov) >= 0).all(), 'negative covariance'
         assert self.d == self.cov.shape[0] == self.cov.shape[1], \
             'dim mismatch: mu and covar'
 
@@ -149,7 +153,7 @@ class FeatStat:
               lambda_othr * (othr.cov + np.outer(othr.mu, othr.mu))
         cov -= np.outer(mu, mu)
 
-        return FeatStat(n, mu, cov)
+        return FeatStat(n, mu, cov, _fast=True)
 
     __radd__ = __add__
 
