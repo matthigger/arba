@@ -48,7 +48,7 @@ class FeatStat:
                 self.__cov_inv = np.linalg.pinv(self.cov)
         return self.__cov_inv
 
-    def __init__(self, n, mu, cov):
+    def __init__(self, n, mu, cov, _fast=False):
         # defaults to 'empty' set of features
         self.n = n
         self.mu = mu

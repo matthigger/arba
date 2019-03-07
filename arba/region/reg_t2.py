@@ -73,6 +73,11 @@ class RegionT2(Region):
         # number of observations per group
         n, m = [fs.n for fs in self.fs_dict.values()]
 
+        # # number of observations per group is number of voxels
+        # # kludge: invalid pval if n=m=1, f_stat diverges with 0 in denominator
+        # n = max(len(self), 2)
+        # m = n
+
         # compute f stat
         f_stat = self.t2 * n * m / (n + m)
         f_stat *= (n + m - p - 1) / (p * (n + m - 2))

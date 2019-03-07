@@ -83,6 +83,12 @@ def ordinal(n):
 
 def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
                 f_back=None, verbose=True, label_dict=None):
+    # plot region masks
+    ref = next(iter(ft_dict.values())).ref
+    for reg_idx, reg in enumerate(reg_list):
+        f = f_out.parent / f'mask_arba_{reg_idx}.nii.gz'
+        PointCloud(reg.pc_ijk, ref=ref).to_mask().to_nii(f)
+
     # load data
     grp_data_dict = {grp: ft.load_data(verbose=verbose)
                      for grp, ft in ft_dict.items()}
@@ -121,18 +127,18 @@ def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
 
 
 if __name__ == '__main__':
-    from pnl_data.set.sz import folder
+    from pnl_data.set.hcp_100 import folder
     from mh_pytools import file
 
-    _folder = folder / 'arba_cv_HC-SCZ_fa-md'
+    _folder = folder / 'arba_cv_MF_FA-MD'
     folder_save = _folder / 'save'
 
     ft_dict = file.load(folder_save / 'ft_dict_.p.gz')
     sg_arba_test_sig = file.load(folder_save / 'sg_arba_test_sig.p.gz')
     f_out = _folder / 'arba_sig_regions.pdf'
-    f_back = _folder / 'HC_fa_.nii.gz'
-    feat_x = 'fa'
-    feat_y = 'md'
+    f_back = _folder / 'M_FA_.nii.gz'
+    feat_x = 'FA'
+    feat_y = 'MD'
 
     # plot only sig regions, label with pvalue
     reg_list = sg_arba_test_sig.nodes

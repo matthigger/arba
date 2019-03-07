@@ -9,7 +9,7 @@ from mh_pytools.parallel import run_par_fnc
 
 def save_fig(f_out):
     fig = plt.gcf()
-    fig.set_size_inches(10, 7)
+    fig.set_size_inches(14, 7)
 
     with PdfPages(str(f_out)) as pdf:
         pdf.savefig(fig, bbox_inches='tight', pad_inches=0)
@@ -39,14 +39,26 @@ def make_plots(folder, label):
         mask = None
 
     # size v pval
+    fig, ax = plt.subplots(1, 2)
     plot.size_v_pval(sg=tree_hist_resolved,
                      mask=mask,
                      reg_highlight=reg_highlight,
                      dict_highlight={'linewidths': 3,
                                      'edgecolors': 'k'},
                      log_x=True,
-                     log_y=True)
-    save_fig(f_out=folder_image / f'size_vs_pval{label}.pdf')
+                     log_y=True,
+                     min_reg_size=5,
+                     ax=ax[0])
+    plot.size_v_wt2(sg=tree_hist_resolved,
+                    mask=mask,
+                    reg_highlight=reg_highlight,
+                    dict_highlight={'linewidths': 3,
+                                    'edgecolors': 'k'},
+                    log_x=True,
+                    log_y=True,
+                     min_reg_size=5,
+                    ax=ax[1])
+    save_fig(f_out=folder_image / f'size_vs_x_{label}.pdf')
 
 
 if __name__ == '__main__':
@@ -54,18 +66,20 @@ if __name__ == '__main__':
 
     from pnl_data.set.hcp_100 import folder
 
-    folder = folder / '_r2_correction_vox'
+    folder = folder / 'vox_sbj_72_FA_min_var'
 
     dict_highlight = {'linewidths': 2,
                       'edgecolors': 'k'}
     par_flag = True
 
     arg_list = []
-    s_folder_glob = '*t2*effect*'
+    s_folder_glob = '*t2*effect0'
     for _folder in folder.glob(s_folder_glob):
         for _file in _folder.glob('**/save/sg_hist*'):
             __folder = _file.parent
             label = _file.name.split('.')[0].replace('sg_hist', '')
+            if 'seg' not in label:
+                continue
             arg_list.append({'folder': __folder,
                              'label': label})
 
