@@ -5,7 +5,7 @@ from .feat_stat import FeatStat, FeatStatSingle, FeatStatEmpty
 from .reg import Region
 
 
-class RegionT2(Region):
+class RegionT2Ward(Region):
     """ computes MSE error of representing T-sq per voxel by a single value
 
     Attributes:
@@ -17,6 +17,12 @@ class RegionT2(Region):
         self._t2 = None
         self._pval = None
         self._sq_error = None
+
+        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0)),
+        # this is critical for computation of ward_sq_error
+        fs0, fs1 = self.fs_dict.values()
+        self.cov_pooled = (fs0.n * fs0.cov +
+                           fs1.n * fs1.cov) / (fs0.n + fs1.n)
 
         if len(self) == 1:
             self.t2_fs = FeatStatSingle(mu=self.t2)
@@ -37,7 +43,7 @@ class RegionT2(Region):
         return self._t2
 
     def get_t2(self):
-        """ t squared distance between groups
+        """ (unweighted) t squared distance between groups
 
         t2(pop_1, pop_0) = (u_1 - u_0)^T sig ^ -1 (u_1 - u_0)
 
@@ -48,11 +54,7 @@ class RegionT2(Region):
 
         mu_diff = fs0.mu - fs1.mu
 
-        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0))
-        cov = (fs0.n * fs0.cov +
-               fs1.n * fs1.cov) / (fs0.n + fs1.n)
-
-        return mu_diff @ np.linalg.inv(cov) @ mu_diff
+        return mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
 
     @property
     def pval(self):
@@ -88,7 +90,26 @@ class RegionT2(Region):
         return pval
 
     @property
-    def sq_error(self):
+    def ward_sq_error(self):
+        """ the squared error of representing each grp by its own mean
+
+        let us index an observation by i, so we have {x_i, r_i, \omega_i} where
+        x_i is the feature, r_i is the region it belongs to and \omega_i is the
+        class
+
+        ward_sq_error = sum_i || x_i - \mu_{r_i, \omega_i}||^2
+                      = ...
+                      = sum_r Tr(cov_pooled) * (\sum_{j} N_{r \omega_j})
+
+        where N_{r, \omega_j} is the number of observations of region r in grp
+        \omega_j
+        """
+
+        n = sum(fs.n for fs in self.fs_dict.values())
+        return np.trace(self.cov_pooled) * n
+
+    @property
+    def t2_sq_error(self):
         """ squared error of t2 per voxel represented as whole region t2
 
         define:
@@ -97,12 +118,12 @@ class RegionT2(Region):
 
         then, let x_i represent the t2 stat at voxel i
 
-        sq_error = sum_i (x_i - self.t2)^2
-                 = sum_i (x_i - (self.t2_fs.mu + delta))^2
-                 = ... complete the square ...
-                 = self.t2_fs.n * (self.t2_fs.cov + delta ^ 2)
+        t2_sq_error = sum_i (x_i - self.t2)^2
+                   = sum_i (x_i - (self.t2_fs.mu + delta))^2
+                   = ... complete the square ...
+                   = self.t2_fs.n * (self.t2_fs.cov + delta ^ 2)
 
-        rather than store voxel wise t2 stats to compute sq_error, we store
+        rather than store voxel wise t2 stats to compute t2_sq_error, we store
         their summary statistics n, mu and cov.  above equality shows how
         sufficient to get sq_error
         """
@@ -112,10 +133,16 @@ class RegionT2(Region):
         return self._sq_error
 
     @staticmethod
-    def get_error(reg_1, reg_2, reg_union=None):
+    def get_ward_error(reg_0, reg_1, reg_union=None):
         if reg_union is None:
-            reg_union = reg_1 + reg_2
-        return reg_union.sq_error - reg_1.sq_error - reg_2.sq_error
+            reg_union = reg_0 + reg_1
+        return reg_union.ward_sq_error - reg_0.ward_sq_error - reg_1.ward_sq_error
+
+    @staticmethod
+    def get_t2_error(reg_0, reg_1, reg_union=None):
+        if reg_union is None:
+            reg_union = reg_0 + reg_1
+        return reg_union.sq_error - reg_0.t2_sq_error - reg_1.t2_sq_error
 
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:

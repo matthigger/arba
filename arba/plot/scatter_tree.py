@@ -56,7 +56,7 @@ def size_v_error(*args, **kwargs):
     ylabel = 'MSE in t2 from vox to cluster'
 
     def get_error(reg):
-        return reg.sq_error / len(reg)
+        return reg.t2_sq_error / len(reg)
 
     return scatter_tree(*args, fnc=get_error, ylabel=ylabel, **kwargs)
 

@@ -6,7 +6,7 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionWard, RegionT2, FeatStatEmpty
+from ..region import RegionT2Ward, FeatStatEmpty
 from ..space import get_ref, PointCloud
 
 
@@ -17,9 +17,9 @@ class SegGraph(nx.Graph):
 
     @property
     def error(self):
-        return sum(reg.sq_error for reg in self.nodes)
+        return sum(reg.t2_sq_error for reg in self.nodes)
 
-    def __init__(self, obj, file_tree_dict, ijk_set=None, _add_nodes=True,
+    def __init__(self, file_tree_dict, ijk_set=None, _add_nodes=True,
                  **kwargs):
         """
 
@@ -34,12 +34,7 @@ class SegGraph(nx.Graph):
         super().__init__()
 
         # get appropriate region constructor
-        obj_dict = {'ward': RegionWard,
-                    't2': RegionT2}
-        if obj in obj_dict.values():
-            self.reg_type = obj
-        else:
-            self.reg_type = obj_dict[obj.lower()]
+        self.reg_type = RegionT2Ward
 
         # store file_tree_dict
         self.file_tree_dict = file_tree_dict

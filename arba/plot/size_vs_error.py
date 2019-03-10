@@ -9,7 +9,7 @@ def size_vs_error(sg_hist):
 
     for pg, _, _ in sg_hist:
         size.append(len(pg))
-        error.append(sum(r.sq_error for r in pg.nodes))
+        error.append(sum(r.t2_sq_error for r in pg.nodes))
 
     sns.set()
     plt.plot(size, error, label='error')
@@ -29,7 +29,7 @@ def size_vs_error(sg_hist):
 
 
 def size_vs_error_normed(sg_hist, n_max=np.inf):
-    size_error_dict = {len(pg): pg.sq_error for pg, _, _ in sg_hist}
+    size_error_dict = {len(pg): pg.t2_sq_error for pg, _, _ in sg_hist}
 
     max_err = max(size_error_dict.values())
 
