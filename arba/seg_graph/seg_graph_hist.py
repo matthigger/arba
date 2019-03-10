@@ -97,12 +97,14 @@ class SegGraphHistory(SegGraph):
         if isinstance(node, tuple):
             ijk_set = {node}
         else:
-            ijk_set = {n for n in nx.predecessors(self.tree_hist, node)
+            ijk_set = {n for n in self.tree_hist.predecessors(node)
                        if isinstance(n, tuple)}
         return PointCloud(ijk_set, ref=self.ref)
 
     def resolve_reg_iter(self, node):
         pc = self.resolve_space(node)
+        if not len(pc):
+            raise RuntimeError('resolved node contains no space')
         for ijk in pc:
             # build dictionary of feature statistics per group
             fs_dict = {grp: self.file_tree_dict[grp].ijk_fs_dict[ijk]
