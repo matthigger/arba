@@ -73,6 +73,11 @@ class RegionT2(Region):
         # number of observations per group
         n, m = [fs.n for fs in self.fs_dict.values()]
 
+        # # number of observations per group is number of voxels
+        # # kludge: invalid pval if n=m=1, f_stat diverges with 0 in denominator
+        # n = max(len(self), 2)
+        # m = n
+
         # compute f stat
         f_stat = self.t2 * n * m / (n + m)
         f_stat *= (n + m - p - 1) / (p * (n + m - 2))
@@ -92,8 +97,8 @@ class RegionT2(Region):
 
         then, let x_i represent the t2 stat at voxel i
 
-        sq_error = \sum_i (x_i - self.t2)^2
-                 = \sum_i (x_i - (self.t2_fs.mu + delta))^2
+        sq_error = sum_i (x_i - self.t2)^2
+                 = sum_i (x_i - (self.t2_fs.mu + delta))^2
                  = ... complete the square ...
                  = self.t2_fs.n * (self.t2_fs.cov + delta ^ 2)
 

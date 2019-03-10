@@ -435,7 +435,7 @@ class FileTree:
             f_nii_list += list(self.sbj_feat_file_tree[sbj].values())
 
         # build mask
-        mask = np.stack(Mask.from_nii(f_nii) for f_nii in f_nii_list)
+        mask = np.stack((Mask.from_nii(f_nii) for f_nii in f_nii_list))
         mask = np.mean(mask.astype(bool), axis=0) >= p
 
         return Mask(mask, ref=get_ref(f_nii_list[0]))

@@ -1,8 +1,8 @@
+import time
 from copy import deepcopy
 
 import networkx as nx
 import numpy as np
-import time
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
@@ -42,8 +42,7 @@ class SegGraphHistory(SegGraph):
             reg_sum: region which was just added to SegGraph (or None on 1st)
         """
         # init SegGraph
-        leaf_set = set(n for n in self.tree_hist
-                       if not nx.ancestors(self.tree_hist, n))
+        leaf_set = set(n for n in self.tree_hist if isinstance(n, tuple))
         sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
                       ijk_set=leaf_set)
 
@@ -98,12 +97,14 @@ class SegGraphHistory(SegGraph):
         if isinstance(node, tuple):
             ijk_set = {node}
         else:
-            ijk_set = {n for n in nx.ancestors(self.tree_hist, node)
-                       if not nx.ancestors(self.tree_hist, n)}
+            ijk_set = {n for n in self.tree_hist.predecessors(node)
+                       if isinstance(n, tuple)}
         return PointCloud(ijk_set, ref=self.ref)
 
     def resolve_reg_iter(self, node):
         pc = self.resolve_space(node)
+        if not len(pc):
+            raise RuntimeError('resolved node contains no space')
         for ijk in pc:
             # build dictionary of feature statistics per group
             fs_dict = {grp: self.file_tree_dict[grp].ijk_fs_dict[ijk]
@@ -134,10 +135,13 @@ class SegGraphHistory(SegGraph):
 
         return sg_hist
 
-    def resolve_hist(self):
+    def resolve_hist(self, verbose=False):
         """ returns a copy of tree_hist where each node is replaced by region
 
         NOTE: for large tree_hist, this will use a lot of memory
+
+        Args:
+            verbose (bool): toggles cmd line output
 
         Returns:
             node_reg_dict (dict): keys are nodes, values are regions
@@ -152,7 +156,10 @@ class SegGraphHistory(SegGraph):
         node_reg_dict = {next(iter(reg.pc_ijk)): reg for reg in pg.nodes}
 
         # build non leaf entries of node_reg_dict
-        for _, node, reg in pg_res_iter:
+        tqdm_dict = {'disable': not verbose,
+                     'total': len(self.tree_hist.nodes) / 2,
+                     'desc': 'resolve per reg in history (approx)'}
+        for _, node, reg in tqdm(pg_res_iter, **tqdm_dict):
             node_reg_dict[node] = reg
 
         # map nodes

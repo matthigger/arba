@@ -79,12 +79,13 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
-                 log_x=True, log_y=True, txt_fnc=None):
+                 log_x=True, log_y=True, txt_fnc=None, min_reg_size=1):
     if cmap is None:
         cmap = matplotlib.cm.coolwarm
 
     if ax is None:
         fig, ax = plt.subplots(1, 1)
+    plt.sca(ax)
 
     sns.set()
     if dict_highlight is None:
@@ -98,6 +99,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
     node_pos = dict()
     if reg_list is None:
         reg_list = list(sg.nodes)
+    reg_list = [reg for reg in reg_list if len(reg) >= min_reg_size]
     reg_list = set(reg_list) | set(reg_highlight)
 
     for reg in reg_list:
