@@ -3,9 +3,9 @@ import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
 import pnl_data
-from mh_pytools import file
-from arba.plot.scatter_tree import size_v_t2, size_v_pval
+from arba.plot.scatter_tree import size_v_pval, scatter_tree
 from arba.space import Mask
+from mh_pytools import file
 
 # param
 alpha = .05
@@ -32,11 +32,18 @@ def print_fig(f_out):
         plt.close()
 
 
-f_out = folder / 'toy_size_v_t2.pdf'
-cb = size_v_t2(tree_hist_resolved, mask=mask,
-               reg_highlight=reg_highlight)
-plt.ylabel('T-squared(r)')
+f_out = folder / 'toy_size_v_mean_effect.pdf'
+ylabel = 'Mean Feature\n(Effect Group)'
+
+
+def get_mean_pop1(reg):
+    return reg.fs_dict['pop1'].mu[0]
+
+
+cb = scatter_tree(tree_hist_resolved, mask=mask, ylabel=ylabel,
+                  fnc=get_mean_pop1, reg_highlight=reg_highlight, log_y=False)
 cb.remove()
+plt.ylim((-1, 3))
 print_fig(f_out)
 
 f_out = folder / 'toy_size_v_pval.pdf'
