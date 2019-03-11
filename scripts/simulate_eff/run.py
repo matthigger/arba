@@ -1,33 +1,35 @@
 from collections import defaultdict
 
+import numpy as np
+
 from arba.plot import plot_performance
 from arba.seg_graph import FileTree
 from arba.simulate import simulator
-from arba.space import Mask
 from mh_pytools import file
 from pnl_data.set.hcp_100 import get_name, folder
 
 #####################################################################
-# t2_list = np.logspace(-1, 1, 9)
-t2_list = [1]
+t2_list = np.logspace(-1, 1, 9)
+# t2_list = [1]
 
-num_vox = [250]
+num_vox = [250] * 15
 # num_vox = np.geomspace(10, 5000, num=11).astype(int)
 # num_vox = list(num_vox) * 100
 x_axis = 'T-squared'
 
 active_rad = 5
-feat_list = ['FA']
-par_flag = False
+feat_list = ['FA', 'MD']
+par_flag = True
 effect_shape = 'cube'  # either 'cube' or 'min_var'
-tfce_num_perm = 200
+tfce_num_perm = 100
+tfce_flag = False
+vba_flag = False
 
 s_feat = '-'.join(feat_list)
-folder_out = folder / 'result' / f'tbss_init_test'
+folder_out = folder / 'result' / f'ward_test_cube_det'
 folder_out.mkdir(exist_ok=True, parents=True)
 
-folder_data = folder / 'to_100307_tbss'
-f_mask = folder_data / 'mean_FA_skel.nii.gz'
+folder_data = folder / 'to_100307_low_res'
 #####################################################################
 # build file_tree
 sbj_feat_file_tree = defaultdict(dict)
@@ -39,14 +41,14 @@ for feat in feat_list:
             continue
         sbj_feat_file_tree[get_name(f.stem)][feat] = f
 
-mask = Mask.from_nii(f_mask)
-file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree, mask=mask)
+file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
 
 #####################################################################
 # init simulator
 sim = simulator.Simulator(file_tree=file_tree, folder=folder_out,
                           par_flag=par_flag, effect_shape=effect_shape,
-                          tfce_num_perm=tfce_num_perm)
+                          tfce_num_perm=tfce_num_perm, tfce_flag=tfce_flag,
+                          vba_flag=vba_flag)
 
 # build effects
 sim.build_effect_list(num_vox=num_vox)
