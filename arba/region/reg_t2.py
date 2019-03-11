@@ -91,22 +91,31 @@ class RegionT2Ward(Region):
 
     @property
     def ward_sq_error(self):
-        """ the squared error of representing each grp by its own mean
+        """ the weighted sum of the determinants of pooled covar matrices
 
-        let us index an observation by i, so we have {x_i, r_i, \omega_i} where
-        x_i is the feature, r_i is the region it belongs to and \omega_i is the
-        class
+        let us index an observation by i, so we have {x_i, r_i, omega_i} where
+        x_i is the feature vector, r_i is the region it belongs to and omega_i
+        is the group (e.g. Schizophrenia or Healthy)
 
-        ward_sq_error = sum_i || x_i - \mu_{r_i, \omega_i}||^2
+        segmentation_ML = arg max P({x_i|r_i, omega_i}_i)
+                        = ...independence, normality, equal grp covariance ...
+                        = sum_r N_r |cov_pooled_r|
+
+        so we define:
+
+        ward_sq_error = N_r |cov_pooled_r|
+
+        where N_r is number of observations in region r.
+
+        a similar objective (not implemented):
+
+        ward_sq_error = sum_i || x_i - mu_{r_i, omega_i}||^2
                       = ...
-                      = sum_r Tr(cov_pooled) * (\sum_{j} N_{r \omega_j})
-
-        where N_{r, \omega_j} is the number of observations of region r in grp
-        \omega_j
+                      = sum_r  N_r tr(cov_pooled_r)
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.trace(self.cov_pooled) * n
+        return np.linalg.det(self.cov_pooled) * n
 
     @property
     def t2_sq_error(self):
