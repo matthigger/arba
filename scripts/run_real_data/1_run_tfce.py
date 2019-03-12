@@ -1,5 +1,3 @@
-import shutil
-
 import numpy as np
 
 from arba.simulate.tfce import permute_tfce
@@ -16,8 +14,6 @@ ft_dict = file.load(folder / 'save' / 'ft_dict_.p.gz')
 
 # build folder
 folder_tfce = folder / 'tfce'
-if folder_tfce.exists():
-    shutil.rmtree(str(folder_tfce))
 folder_tfce.mkdir(exist_ok=True)
 
 # build data, mask, split and affine
@@ -33,6 +29,7 @@ mask = ft0.mask
 # from arba.space import PointCloud
 # from skimage.morphology import binary_dilation
 # import random
+#
 # pc = PointCloud.from_mask(mask)
 # i, j, k = random.choice(list(pc))
 # _mask = np.zeros(mask.shape)
@@ -45,4 +42,4 @@ mask = ft0.mask
 tfce_t2, max_tfce_t2, pval = permute_tfce(x=x, mask=mask, split=split, n=n,
                                           par_flag=par_flag, verbose=verbose,
                                           folder=folder_tfce,
-                                          affine=affine)
+                                          affine=affine, additive=True)
