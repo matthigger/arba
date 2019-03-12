@@ -7,8 +7,11 @@ import tempfile
 
 import nibabel as nib
 import numpy as np
+from tqdm import tqdm
 
+from arba.region import FeatStat, FeatStatSingle
 from arba.space import PointCloud
+from mh_pytools.parallel import run_par_fnc
 
 
 def get_temp_file(*args, **kwargs):
@@ -17,65 +20,94 @@ def get_temp_file(*args, **kwargs):
     return pathlib.Path(f)
 
 
-def prep_files(ft_tuple, f_data=None, **kwargs):
+def compute_t2_per_ijk(ijk, x, sbj_cmp_list):
+    num_sbj = x.shape[0]
+    t2 = np.empty(num_sbj)
+
+    fs = FeatStat.from_array(x.T)
+    for sbj_idx, (sbj_cmp_bool, sbj_x) in enumerate(zip(sbj_cmp_list, x)):
+        # compare to all but self
+        _fs = fs
+        if sbj_cmp_bool:
+            _fs -= FeatStatSingle(sbj_x)
+
+        # compute t_sq
+        delta = sbj_x - _fs.mu
+        t2[sbj_idx] = np.sqrt(delta @ _fs.cov_inv @ delta)
+
+    return ijk, t2
+
+
+def prep_files(ft_dict, f_data=None, grp_cmp_list=None, par_flag=False,
+               **kwargs):
     """ build nifti of input data
 
     tfce requires a data cube [i, j, k, sbj_idx].  this function writes such
     a nifti file.
 
     Args:
-        ft_tuple (tuple): two FileTree objects, the first defines the compare
-                          group (defines mu and cov in computation of
-                          t squared distance)
+        ft_dict (dict): keys are grp labels, values are file_trees
+        grp_cmp_list (list): list of grp labels in comparison set
+        par_flag (bool): toggles parallel computation
 
     Returns:
         f_data (Path): output file of nifti cube
         sbj_idx_dict (dict): keys are sbj, values are idx in datacube
     """
-    ft0, ft1 = ft_tuple
-    assert ft0.ref == ft1.ref, 'space mismatch'
-    assert not set(ft0.sbj_list) & set(ft1.sbj_list), 'case overlap'
+    grp_list = sorted(ft_dict.keys())
+
+    if grp_cmp_list is None:
+        grp_cmp_list = grp_list
+
+    grp0 = grp_list[0]
+    for grp in grp_list[1:]:
+        ft0 = ft_dict[grp0]
+        ft = ft_dict[grp]
+        assert ft0.ref == ft.ref, 'space mismatch'
+        assert not set(ft0.sbj_list) & set(ft.sbj_list), 'case overlap'
+        assert np.allclose(ft0.mask.shape, ft.mask.shape), 'shape mismatch'
+        assert np.allclose(ft0.mask, ft.mask), 'mask mistmatch'
 
     # get mask
-    assert np.allclose(ft0.mask, ft1.mask), 'mask mistmatch'
-    mask = ft0.mask
+    mask = ft_dict[grp0].mask
 
     # build mapping of sbj to idx
-    sbj_list = ft0.sbj_list + ft1.sbj_list
+    sbj_list = list()
+    for grp in grp_list:
+        sbj_list += ft_dict[grp].sbj_list
     sbj_idx_dict = {sbj: idx for idx, sbj in enumerate(sbj_list)}
 
     # build data cube
-    ft0.load(load_data=True, load_ijk_fs=False)
-    ft1.load(load_data=True, load_ijk_fs=False)
-    x = np.concatenate((ft0.data, ft1.data), axis=3)
-    ft0.unload()
-    ft1.unload()
+    for ft in ft_dict.values():
+        ft.load(load_data=True, load_ijk_fs=False)
+    data_list = [ft_dict[grp].data for grp in grp_list]
+    x = np.concatenate(data_list, axis=3)
+    for ft in ft_dict.values():
+        ft.unload()
 
-    # apply mask
-    assert np.allclose(mask.shape, x.shape[:3]), 'mask shape mismatch'
+    # build sbj_cmp_idx
+    sbj_cmp_set = set().union(*[ft_dict[grp].sbj_list for grp in grp_cmp_list])
+    sbj_cmp_list = [sbj in sbj_cmp_set for sbj in sbj_list]
+
+    # prepare arguments
+    arg_list = list()
+    for ijk in PointCloud.from_mask(mask):
+        i, j, k = ijk
+        _x = x[i, j, k, :, :]
+        arg_list.append({'ijk': ijk, 'x': _x, 'sbj_cmp_list': sbj_cmp_list})
 
     # compute t-squared per voxel (across entire population)
     t2 = np.zeros(x.shape[:4])
-    for i, j, k in PointCloud.from_mask(mask):
-
-        _x = x[i, j, k, :, :]
-        for sbj_idx, sbj_x in enumerate(_x):
-            # compare to all but self
-            # sbj_cmp_idx = np.ones(len(sbj_list)).astype(bool)
-            # compare to all in first grp except self
-            sbj_cmp_idx = np.concatenate((np.ones(len(ft0)),
-                                          np.zeros(len(ft1)))).astype(bool)
-            sbj_cmp_idx[sbj_idx] = 0
-
-            # get stats
-            _x_cmp = _x[sbj_cmp_idx, :]
-            mu = np.mean(_x_cmp, axis=0)
-            cov = np.atleast_2d(np.cov(_x_cmp.T))
-            cov_inv = np.linalg.pinv(cov)
-
-            # compute t_sq
-            delta = sbj_x - mu
-            t2[i, j, k, sbj_idx] = np.sqrt(delta @ cov_inv @ delta)
+    if par_flag:
+        res = run_par_fnc(compute_t2_per_ijk, arg_list=arg_list)
+        for ijk, _t2 in res:
+            i, j, k = ijk
+            t2[i, j, k, :] = _t2
+    else:
+        for d in tqdm(arg_list, desc='compute t2 per ijk'):
+            ijk, _t2 = compute_t2_per_ijk(**d)
+            i, j, k = ijk
+            t2[i, j, k, :] = _t2
 
     # ensure all t2 are positive
     _mask = np.broadcast_to(mask.T, t2.T.shape).T
@@ -98,7 +130,7 @@ def prep_files(ft_tuple, f_data=None, **kwargs):
     img_mask = nib.Nifti1Image(mask.astype(np.uint8), affine=ft0.ref.affine)
     img_mask.to_filename(str(f_mask))
 
-    return f_data, f_mask, sbj_idx_dict
+    return f_data, f_mask, sbj_idx_dict, grp_list
 
 
 def run_tfce(f_data, nm, folder, num_perm=5000, f_mask=None, verbose=False):
@@ -156,11 +188,11 @@ def run_tfce(f_data, nm, folder, num_perm=5000, f_mask=None, verbose=False):
     return f_pval_list
 
 
-def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
+def compute_tfce(ft_dict, alpha=.05, folder=None, **kwargs):
     """ computes tfce by calling randomise
 
     Args:
-        ft_tuple (tuple): two FileTree objects
+        ft_dict (dict): keys are grp labels, values are file_trees
         alpha (float): family wise error rate
         folder (str or Path): folder to put files
 
@@ -171,10 +203,10 @@ def compute_tfce(ft_tuple, alpha=.05, folder=None, **kwargs):
         folder = pathlib.Path(tempfile.mkdtemp())
 
     # prep data cube
-    f_data, f_mask, _ = prep_files(ft_tuple, **kwargs)
+    f_data, f_mask, _, grp_list = prep_files(ft_dict, **kwargs)
 
     # run tfce
-    nm = tuple(len(ft) for ft in ft_tuple)
+    nm = tuple(len(ft_dict[grp]) for grp in grp_list)
     kwargs['f_data'] = f_data
     f_pval_list = run_tfce(folder=folder, f_mask=f_mask, nm=nm,
                            **kwargs)
