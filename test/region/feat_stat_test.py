@@ -26,6 +26,14 @@ def test_add():
     assert (fs0 + fs1) == fs_sum, 'error add random'
 
 
+def test_sub():
+    x_ab, fs_ab = rand_fs(n=20, d=2)
+    fs_a = FeatStat.from_array(x_ab[:, :10])
+    fs_b = FeatStat.from_array(x_ab[:, 10:])
+
+    assert (fs_ab - fs_a) == fs_b, 'error sub random'
+
+
 def test_scale():
     # original data
     x = np.random.normal(0, 1, size=(3, 10))

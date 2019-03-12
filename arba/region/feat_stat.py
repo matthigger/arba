@@ -158,22 +158,20 @@ class FeatStat:
     __radd__ = __add__
 
     def __sub__(self, othr):
-        raise NotImplementedError
+
+        lambda_othr = othr.n / self.n
+        lambda_out = 1 - lambda_othr
         n = self.n - othr.n
-        lambda_self = self.n / n
-        lambda_othr = othr.n / n
         assert n > 0, 'invalid subtraction: not enough observations in other'
 
-        mu = self.n * lambda_self - \
-             othr.n * lambda_othr
+        mu = (self.mu - (lambda_othr * othr.mu)) / lambda_out
 
-        cov = lambda_self * (self.cov + np.outer(self.mu, self.mu)) - \
-              lambda_othr * (othr.cov + np.outer(othr.mu, othr.mu))
+        cov = ((self.cov + np.outer(self.mu, self.mu)) -
+               (othr.cov + np.outer(othr.mu, othr.mu)) * lambda_othr)
+        cov *= 1 / lambda_out
         cov -= np.outer(mu, mu)
 
-        assert (np.diag(cov) >= 0).all(), 'invalid subtraction'
-
-        return FeatStat(n, mu, cov)
+        return FeatStat(n, mu, cov, _fast=True)
 
     def __reduce_ex__(self, *args, **kwargs):
         self.reset()
