@@ -97,7 +97,7 @@ class FeatStat:
         return FeatStat.from_array(np.atleast_2d(x))
 
     @staticmethod
-    def from_array(x, obs_greater_dim=None):
+    def from_array(x, obs_greater_dim=None, _fast=False):
         """
 
         Args:
@@ -123,8 +123,9 @@ class FeatStat:
 
         cov = np.cov(x, ddof=0)
         if len(cov.shape) > 1:
-            assert (np.linalg.eig(cov)[0] >= 0).all(), 'non positive covariance'
-        fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov)
+            assert (np.linalg.eig(cov)[0] >= 0).all(), \
+                'non positive covariance'
+        fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov, _fast=False)
         return fs
 
     def __repr__(self):
