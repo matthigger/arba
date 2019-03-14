@@ -127,18 +127,18 @@ def plot_report(reg_list, ft_dict, f_out, feat_x, feat_y, f_mask=None,
 
 
 if __name__ == '__main__':
-    from pnl_data.set.hcp_100 import folder
+    from pnl_data.set.sz import folder
     from mh_pytools import file
 
-    _folder = folder / 'arba_cv_MF_FA-MD'
+    _folder = folder / 'arba_cv_HC-SCZ_fat-fw_wm_skel'
     folder_save = _folder / 'save'
 
     ft_dict = file.load(folder_save / 'ft_dict_.p.gz')
     sg_arba_test_sig = file.load(folder_save / 'sg_arba_test_sig.p.gz')
     f_out = _folder / 'arba_sig_regions.pdf'
-    f_back = _folder / 'M_FA_.nii.gz'
-    feat_x = 'FA'
-    feat_y = 'MD'
+    f_back = _folder / 'HC_fat_.nii.gz'
+    feat_x = 'fat'
+    feat_y = 'fw'
 
     # plot only sig regions, label with pvalue
     reg_list = sg_arba_test_sig.nodes
