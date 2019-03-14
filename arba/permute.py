@@ -1,11 +1,10 @@
+import os
 import pathlib
-import tempfile
 from abc import ABC, abstractmethod
 from bisect import bisect_right
 
 import nibabel as nib
 import numpy as np
-from sklearn.externals import joblib
 from tqdm import tqdm
 
 from arba.space import PointCloud
@@ -88,7 +87,7 @@ class Permute(ABC):
             split_list = self.sample_splits(n, **kwargs)
 
             # run splits (permutation sampling from null hypothesis)
-            self.run_split_max_multi(x, split_list, **kwargs)
+            self.run_split_max_multi(x=x, split_list=split_list, **kwargs)
 
         # determine sig
         stat_volume, pval = self.determine_sig(x)
@@ -158,39 +157,46 @@ class Permute(ABC):
 
         return split_list
 
-    def run_split_max_multi(self, x, split_list, par_flag=False, verbose=False,
+    def run_split_max_multi(self, split_list, x=None, f_x=None, par_flag=False,
+                            verbose=False,
                             **kwargs):
         """ runs many splits, potentially in parallel"""
 
-        if par_flag:
-            arg_list = list()
+        if not par_flag:
+            assert (x is None) != (f_x is None), 'either x xor f_x required'
 
-            # https://stackoverflow.com/questions/24406937/scikit-learn-joblib-bug-multiprocessing-pool-self-value-out-of-range-for-i-fo
-            f = tempfile.NamedTemporaryFile().name
-            joblib.dump(x, f)
-            x = joblib.load(f, mmap_mode='r+')
+            if f_x is not None:
+                x = file.load(f_x)
 
-            num_cpu = min(parallel.num_cpu, len(split_list))
-            idx = np.linspace(0, len(split_list), num=num_cpu + 1).astype(int)
-            for cpu_idx in range(num_cpu):
-                # only verbose on last cpu
-                _verbose = verbose and (cpu_idx == num_cpu - 1)
-
-                arg_list.append({'x': x,
-                                 'split_list': split_list[idx[cpu_idx]:
-                                                          idx[cpu_idx + 1]],
-                                 'par_flag': False,
-                                 'verbose': _verbose})
-            res = parallel.run_par_fnc(fnc='run_split_max_multi', obj=self,
-                                       arg_list=arg_list, verbose=verbose)
-            for _split_stat_dict in res:
-                self.split_stat_dict.update(_split_stat_dict)
-        else:
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
                 self.split_stat_dict[split] = self.run_split_max(x, split)
 
+            return self.split_stat_dict
+
+        arg_list = list()
+
+        assert x is not None, 'x required in parallel mode'
+        f_x = file.save(x)
+
+        num_cpu = min(parallel.num_cpu, len(split_list))
+        idx = np.linspace(0, len(split_list), num=num_cpu + 1).astype(int)
+        for cpu_idx in range(num_cpu):
+            # only verbose on last cpu
+            _verbose = verbose and (cpu_idx == num_cpu - 1)
+
+            arg_list.append({'f_x': f_x,
+                             'split_list': split_list[idx[cpu_idx]:
+                                                      idx[cpu_idx + 1]],
+                             'par_flag': False,
+                             'verbose': _verbose})
+        res = parallel.run_par_fnc(fnc='run_split_max_multi', obj=self,
+                                   arg_list=arg_list, verbose=verbose)
+        for _split_stat_dict in res:
+            self.split_stat_dict.update(_split_stat_dict)
+
+        os.remove(str(f_x))
         return self.split_stat_dict
 
     def run_split_max(self, x, split):
@@ -204,6 +210,8 @@ class Permute(ABC):
     @abstractmethod
     def run_split(self, x, split):
         """ returns a volume of statistics per some method
+
+        NOTE: in multiprocessing x is a memmap which can only be read from
 
         Args:
             x (np.array): (space0, space1, space2, num_sbj, num_feat)

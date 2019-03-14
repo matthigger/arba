@@ -1,10 +1,9 @@
-from arba.seg_graph import FileTree
 from arba.simulate.tfce import PermuteTFCE
 from mh_pytools import file
 from pnl_data.set.sz import folder
 
 folder = folder / 'arba_cv_HC-FES_fat-fw_wm_skel'
-n = 12
+n = 5
 verbose = True
 par_flag = True
 
@@ -16,28 +15,29 @@ folder_tfce.mkdir(exist_ok=True)
 
 print(f'folder_tfce: {folder_tfce}')
 
-# make a smaller test case
-from arba.space import PointCloud
-from skimage.morphology import binary_dilation
-import random
-import numpy as np
+# # make a smaller test case
+# from arba.space import PointCloud
+# from skimage.morphology import binary_dilation
+# import random
+# import numpy as np
+# from arba.seg_graph import FileTree
+#
+# mask = next(iter(ft_dict.values())).mask
+# pc = PointCloud.from_mask(mask)
+# i, j, k = random.choice(list(pc))
+# _mask = np.zeros(mask.shape)
+# _mask[i, j, k] = 1
+# for _ in range(5):
+#     _mask = binary_dilation(_mask)
+# mask = np.logical_and(mask, _mask)
+# for ft in ft_dict.values():
+#     ft.mask = mask
 
-mask = next(iter(ft_dict.values())).mask
-pc = PointCloud.from_mask(mask)
-i, j, k = random.choice(list(pc))
-_mask = np.zeros(mask.shape)
-_mask[i, j, k] = 1
-for _ in range(5):
-    _mask = binary_dilation(_mask)
-mask = np.logical_and(mask, _mask)
-for ft in ft_dict.values():
-    ft.mask = mask
-
-n_sbj = 50
-for grp, ft in ft_dict.items():
-    sbj_feat_file_tree = dict(list(ft.sbj_feat_file_tree.items())[:n_sbj])
-    ft_dict[grp] = FileTree(sbj_feat_file_tree, mask=mask)
-
+# n_sbj = 50
+# for grp, ft in ft_dict.items():
+#     sbj_feat_file_tree = dict(list(ft.sbj_feat_file_tree.items())[:n_sbj])
+#     ft_dict[grp] = FileTree(sbj_feat_file_tree, mask=mask)
+#
 # run
 perm_tfce = PermuteTFCE(ft_dict, folder=folder_tfce)
 perm_tfce.run(n=n, verbose=verbose, par_flag=par_flag, folder=folder_tfce)
