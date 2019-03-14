@@ -2,11 +2,11 @@ import numpy as np
 
 from arba.simulate.tfce import permute_tfce
 from mh_pytools import file
-from pnl_data.set.hcp_100 import folder
+from pnl_data.set.sz import folder
 
 alpha = .05
-folder = folder / 'arba_cv_MF_FA-MD'
-n = 5000
+folder = folder / 'arba_cv_HC-FES_fat-fw_wm_skel'
+n = 500
 verbose = True
 par_flag = True
 
@@ -15,6 +15,8 @@ ft_dict = file.load(folder / 'save' / 'ft_dict_.p.gz')
 # build folder
 folder_tfce = folder / 'tfce'
 folder_tfce.mkdir(exist_ok=True)
+
+print(f'folder_tfce: {folder_tfce}')
 
 # build data, mask, split and affine
 ft0, ft1 = ft_dict.values()
