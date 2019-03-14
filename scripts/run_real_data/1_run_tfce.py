@@ -1,11 +1,12 @@
+from arba.seg_graph import FileTree
 from arba.simulate.tfce import PermuteTFCE
 from mh_pytools import file
 from pnl_data.set.sz import folder
 
 folder = folder / 'arba_cv_HC-FES_fat-fw_wm_skel'
-n = 10
+n = 12
 verbose = True
-par_flag = False
+par_flag = True
 
 ft_dict = file.load(folder / 'save' / 'ft_dict_.p.gz')
 
@@ -31,6 +32,11 @@ for _ in range(5):
 mask = np.logical_and(mask, _mask)
 for ft in ft_dict.values():
     ft.mask = mask
+
+n_sbj = 50
+for grp, ft in ft_dict.items():
+    sbj_feat_file_tree = dict(list(ft.sbj_feat_file_tree.items())[:n_sbj])
+    ft_dict[grp] = FileTree(sbj_feat_file_tree, mask=mask)
 
 # run
 perm_tfce = PermuteTFCE(ft_dict, folder=folder_tfce)

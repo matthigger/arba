@@ -1,12 +1,15 @@
+import pathlib
+import tempfile
 from abc import ABC, abstractmethod
 from bisect import bisect_right
 
 import nibabel as nib
 import numpy as np
+from sklearn.externals import joblib
 from tqdm import tqdm
 
 from arba.space import PointCloud
-from mh_pytools import file
+from mh_pytools import file, parallel
 
 
 class Permute(ABC):
@@ -58,11 +61,11 @@ class Permute(ABC):
         if folder is not None:
             f = folder / self.f_save
             if not f.exists():
-                raise FileNotFoundError(f'previous splits not found: {f}')
+                return
             last_self = file.load(f)
 
             # check that file trees are identical
-            assert self.ft_tuple == last_self.ft_tuple
+            assert self.ft_tuple == last_self.ft_tuple, 'previous splits invalid'
 
             # use old split_stat_dict
             self.split_stat_dict = last_self.split_stat_dict
@@ -72,6 +75,7 @@ class Permute(ABC):
 
         Args:
             n (int): number of permutations
+            folder (str or Path): saves output
         """
         # no need to repeat a split which is already done
         n = max(n - len(self.split_stat_dict), 0)
@@ -99,7 +103,7 @@ class Permute(ABC):
 
     def save(self, folder, label_x_dict=None):
         """ saves output images in a folder"""
-        file.save(self, folder / self.f_save)
+        file.save(self, pathlib.Path(folder) / self.f_save)
 
         if label_x_dict is None:
             return
@@ -154,17 +158,40 @@ class Permute(ABC):
 
         return split_list
 
-    def run_split_max_multi(self, x, splits, par_flag=False, verbose=False,
+    def run_split_max_multi(self, x, split_list, par_flag=False, verbose=False,
                             **kwargs):
         """ runs many splits, potentially in parallel"""
 
         if par_flag:
-            raise NotImplementedError
+            arg_list = list()
+
+            # https://stackoverflow.com/questions/24406937/scikit-learn-joblib-bug-multiprocessing-pool-self-value-out-of-range-for-i-fo
+            f = tempfile.NamedTemporaryFile().name
+            joblib.dump(x, f)
+            x = joblib.load(f, mmap_mode='r+')
+
+            num_cpu = min(parallel.num_cpu, len(split_list))
+            idx = np.linspace(0, len(split_list), num=num_cpu + 1).astype(int)
+            for cpu_idx in range(num_cpu):
+                # only verbose on last cpu
+                _verbose = verbose and (cpu_idx == num_cpu - 1)
+
+                arg_list.append({'x': x,
+                                 'split_list': split_list[idx[cpu_idx]:
+                                                          idx[cpu_idx + 1]],
+                                 'par_flag': False,
+                                 'verbose': _verbose})
+            res = parallel.run_par_fnc(fnc='run_split_max_multi', obj=self,
+                                       arg_list=arg_list, verbose=verbose)
+            for _split_stat_dict in res:
+                self.split_stat_dict.update(_split_stat_dict)
         else:
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute max stat per split'}
-            for split in tqdm(splits, **tqdm_dict):
+            for split in tqdm(split_list, **tqdm_dict):
                 self.split_stat_dict[split] = self.run_split_max(x, split)
+
+        return self.split_stat_dict
 
     def run_split_max(self, x, split):
         """ runs a single split, returns max stat """
