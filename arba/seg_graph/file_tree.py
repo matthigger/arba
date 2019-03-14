@@ -229,6 +229,24 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
+    def __eq__(self, other):
+        if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
+            return False
+
+        if self.ref != other.ref:
+            return False
+
+        if self.mask != other.mask:
+            return False
+
+        if self.add_hist_list != other.add_hist_list:
+            return False
+
+        if self.scale != other.scale:
+            return False
+
+        return True
+
     def __init__(self, sbj_feat_file_tree, mask=None, ref=None,
                  feat_list=None):
         # init

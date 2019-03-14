@@ -3,6 +3,7 @@ from bisect import bisect_right
 
 import nibabel as nib
 import numpy as np
+from tqdm import tqdm
 
 from arba.space import PointCloud
 from mh_pytools import file
@@ -23,10 +24,10 @@ class Permute(ABC):
     Attributes:
         grp_tuple (tuple): labels of each file tree
         ft_tuple (tuple): FileTrees of data
-        folder (Path): path to output
         split_stat_dict (dict): keys are splits, values are maximum stats under
                                 that split
     """
+    f_save = 'permute.p.gz'
 
     @property
     def split(self):
@@ -35,6 +36,14 @@ class Permute(ABC):
                           np.ones(len(ft1))))
 
     def __init__(self, ft_dict, folder=None):
+        """
+
+        Args:
+            ft_dict (dict): keys are grp labels, values are FileTree
+            folder (str or Path): path where previous permutation were run (on
+                                  same ft_dict).  allows one to pick up where
+                                  they left off if they want to extend n
+        """
         (grp0, ft0), (grp1, ft1) = sorted(ft_dict.items())
 
         assert ft0.mask == ft1.mask, 'space mismatch'
@@ -44,10 +53,19 @@ class Permute(ABC):
         self.grp_tuple = (grp0, grp1)
         self.pc = PointCloud.from_mask(ft0.mask)
 
+        self.split_stat_dict = dict()
+
         if folder is not None:
-            raise NotImplementedError('not sure how to do this just yet')
-        else:
-            self.split_stat_dict = dict()
+            f = folder / self.f_save
+            if not f.exists():
+                raise FileNotFoundError(f'previous splits not found: {f}')
+            last_self = file.load(f)
+
+            # check that file trees are identical
+            assert self.ft_tuple == last_self.ft_tuple
+
+            # use old split_stat_dict
+            self.split_stat_dict = last_self.split_stat_dict
 
     def run(self, n=5000, folder=None, **kwargs):
         """ runs permutation testing
@@ -58,12 +76,12 @@ class Permute(ABC):
         # no need to repeat a split which is already done
         n = max(n - len(self.split_stat_dict), 0)
 
+        # load data
+        x = self.load_data(**kwargs)
+
         if n > 0:
             # build list of splits
             split_list = self.sample_splits(n, **kwargs)
-
-            # load data
-            x = self.load_data(**kwargs)
 
             # run splits (permutation sampling from null hypothesis)
             self.run_split_max_multi(x, split_list, **kwargs)
@@ -81,7 +99,7 @@ class Permute(ABC):
 
     def save(self, folder, label_x_dict=None):
         """ saves output images in a folder"""
-        file.save(self, folder / 'permute.p.gz')
+        file.save(self, folder / self.f_save)
 
         if label_x_dict is None:
             return
@@ -136,13 +154,16 @@ class Permute(ABC):
 
         return split_list
 
-    def run_split_max_multi(self, x, splits, par_flag=False, **kwargs):
+    def run_split_max_multi(self, x, splits, par_flag=False, verbose=False,
+                            **kwargs):
         """ runs many splits, potentially in parallel"""
 
         if par_flag:
             raise NotImplementedError
         else:
-            for split in splits:
+            tqdm_dict = {'disable': not verbose,
+                         'desc': 'compute max stat per split'}
+            for split in tqdm(splits, **tqdm_dict):
                 self.split_stat_dict[split] = self.run_split_max(x, split)
 
     def run_split_max(self, x, split):

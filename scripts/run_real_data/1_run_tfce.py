@@ -1,5 +1,3 @@
-import shutil
-
 from arba.simulate.tfce import PermuteTFCE
 from mh_pytools import file
 from pnl_data.set.sz import folder
@@ -13,7 +11,6 @@ ft_dict = file.load(folder / 'save' / 'ft_dict_.p.gz')
 
 # build folder
 folder_tfce = folder / 'tfce'
-shutil.rmtree(str(folder_tfce))
 folder_tfce.mkdir(exist_ok=True)
 
 print(f'folder_tfce: {folder_tfce}')
@@ -36,5 +33,5 @@ for ft in ft_dict.values():
     ft.mask = mask
 
 # run
-perm_tfce = PermuteTFCE(ft_dict)
+perm_tfce = PermuteTFCE(ft_dict, folder=folder_tfce)
 perm_tfce.run(n=n, verbose=verbose, par_flag=par_flag, folder=folder_tfce)
