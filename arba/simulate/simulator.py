@@ -11,7 +11,6 @@ from tqdm import tqdm
 from mh_pytools import file
 from mh_pytools import parallel
 from .effect import Effect
-from .tfce import compute_tfce
 from ..seg_graph import run_arba_cv, run_arba_permute
 from ..space import PointCloud, sample_mask, sample_mask_min_var
 
@@ -200,6 +199,7 @@ class Simulator:
         folder_tfce = folder / 'tfce'
         folder_tfce.mkdir(exist_ok=True)
         f_sig = folder_tfce / self.s_mask_sig.format(method='tfce')
+        raise NotImplementedError
         _, f_sig_list = compute_tfce((ft0, ft1), alpha=self.alpha,
                                      folder=folder_tfce,
                                      f_data=folder_tfce / 't2.nii.gz',

@@ -1,47 +1,40 @@
-import numpy as np
+import shutil
 
-from arba.simulate.tfce import permute_tfce
+from arba.simulate.tfce import PermuteTFCE
 from mh_pytools import file
 from pnl_data.set.sz import folder
 
-alpha = .05
 folder = folder / 'arba_cv_HC-FES_fat-fw_wm_skel'
-n = 500
+n = 10
 verbose = True
-par_flag = True
+par_flag = False
 
 ft_dict = file.load(folder / 'save' / 'ft_dict_.p.gz')
 
 # build folder
 folder_tfce = folder / 'tfce'
+shutil.rmtree(str(folder_tfce))
 folder_tfce.mkdir(exist_ok=True)
 
 print(f'folder_tfce: {folder_tfce}')
 
-# build data, mask, split and affine
-ft0, ft1 = ft_dict.values()
+# make a smaller test case
+from arba.space import PointCloud
+from skimage.morphology import binary_dilation
+import random
+import numpy as np
+
+mask = next(iter(ft_dict.values())).mask
+pc = PointCloud.from_mask(mask)
+i, j, k = random.choice(list(pc))
+_mask = np.zeros(mask.shape)
+_mask[i, j, k] = 1
+for _ in range(5):
+    _mask = binary_dilation(_mask)
+mask = np.logical_and(mask, _mask)
 for ft in ft_dict.values():
-    ft.load(verbose=verbose, par_flag=par_flag, load_ijk_fs=False)
-x = np.concatenate((ft0.data, ft1.data), axis=3)
-split = np.hstack((np.zeros(len(ft0)), np.ones(len(ft1))))
-affine = ft0.ref.affine
-mask = ft0.mask
+    ft.mask = mask
 
-# # make a smaller test case
-# from arba.space import PointCloud
-# from skimage.morphology import binary_dilation
-# import random
-#
-# pc = PointCloud.from_mask(mask)
-# i, j, k = random.choice(list(pc))
-# _mask = np.zeros(mask.shape)
-# _mask[i, j, k] = 1
-# for _ in range(8):
-#     _mask = binary_dilation(_mask)
-# mask = np.logical_and(mask, _mask)
-
-# run tfce
-tfce_t2, max_tfce_t2, pval = permute_tfce(x=x, mask=mask, split=split, n=n,
-                                          par_flag=par_flag, verbose=verbose,
-                                          folder=folder_tfce,
-                                          affine=affine, additive=True)
+# run
+perm_tfce = PermuteTFCE(ft_dict)
+perm_tfce.run(n=n, verbose=verbose, par_flag=par_flag)

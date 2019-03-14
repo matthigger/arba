@@ -48,10 +48,3 @@ def ft_tuple(var=1, eff=10, shape=(10, 10, 10), shape_eff=(4, 5, 6), n_null=10,
     ft1 = get_file_tree(eff=eff, n=n_effect, label='effect')
 
     return ft0, ft1
-
-
-def test_compute_tfce(ft_tuple):
-    """ runs a dummy tfce """
-
-    folder, f_sig_list = compute_tfce(ft_tuple)
-
