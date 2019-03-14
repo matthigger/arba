@@ -33,7 +33,7 @@ class SegGraphHistory(SegGraph):
     def __iter__(self):
         """ returns SegGraph throughout the reduce_to() process
 
-        NOTE: each yield returns the same object, this method calls combine()
+        NOTE: each yield returns the same object, this method calls merge()
         as was done in tree_hist ...
 
         Yields:
@@ -43,8 +43,7 @@ class SegGraphHistory(SegGraph):
         """
         # init SegGraph
         leaf_set = set(n for n in self.tree_hist if isinstance(n, tuple))
-        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
-                      ijk_set=leaf_set)
+        sg = SegGraph(ft_dict=self.ft_dict, ijk_set=leaf_set)
 
         yield sg, None, None
 
@@ -54,12 +53,12 @@ class SegGraphHistory(SegGraph):
         # node_reg_dict contains a
         node_reg_dict = {next(iter(reg.pc_ijk)): reg for reg in sg.nodes}
         for node in node_list:
-            # lookup which regions to combine
+            # lookup which regions to merge
             node_tuple = tuple(self.tree_hist.predecessors(node))
             reg_tuple = [node_reg_dict[node] for node in node_tuple]
 
-            # combine
-            reg_sum = sg.combine(reg_tuple)
+            # merge
+            reg_sum = sg.merge(reg_tuple)
 
             # update node_reg_dict
             for n in node_tuple:
@@ -92,11 +91,12 @@ class SegGraphHistory(SegGraph):
             self.reg_node_dict[reg] = ijk
             self.node_pval_dict[ijk] = reg.pval
 
-        # init tree_hist with leafs. other nodes added in combine(), no promise
-        # that all leafs called in combine()
+        # init tree_hist with leafs. other nodes added in merge(), no promise
+        # that all leafs called in merge()
         self.tree_hist.add_nodes_from(self.node_pval_dict.keys())
 
     def resolve_space(self, node):
+        """ identifies point_cloud associated with a node in tree_hist """
         node_set = {node}
         ijk_set = set()
         while node_set:
@@ -108,13 +108,16 @@ class SegGraphHistory(SegGraph):
         return PointCloud(ijk_set, ref=self.ref)
 
     def resolve_reg_iter(self, node):
+        """ gets iterator of region per ijk associated with node in tree_hist
+        """
+
         pc = self.resolve_space(node)
         if not len(pc):
             raise RuntimeError('resolved node contains no space')
         for ijk in pc:
             # build dictionary of feature statistics per group
-            fs_dict = {grp: self.file_tree_dict[grp].ijk_fs_dict[ijk]
-                       for grp in self.file_tree_dict.keys()}
+            fs_dict = {grp: self.ft_dict[grp].ijk_fs_dict[ijk]
+                       for grp in self.ft_dict.keys()}
 
             # build pc
             pc = PointCloud({ijk}, ref=self.ref)
@@ -122,17 +125,18 @@ class SegGraphHistory(SegGraph):
             yield RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
 
     def resolve_reg(self, node):
+        """ gets region associated with node in tree_hist """
         return sum(self.resolve_reg_iter(node))
 
-    def from_file_tree_dict(self, file_tree_dict):
-        sg_hist = super().from_file_tree_dict(file_tree_dict)
+    def from_ft_dict(self, ft_dict):
+        sg_hist = super().from_ft_dict(ft_dict)
 
         # copy fields from self
         sg_hist.n_combine = self.n_combine
         sg_hist.tree_hist = deepcopy(self.tree_hist)
         sg_hist.err_max = self.err_max
 
-        # update reg_node_dict and node_pval_dict to new file_tree_dict
+        # update reg_node_dict and node_pval_dict to new ft_dict
         node_reg_dict, _ = sg_hist.resolve_hist()
         sg_hist.reg_node_dict = {node_reg_dict[n]: n
                                  for n in self.reg_node_dict.values()}
@@ -175,9 +179,9 @@ class SegGraphHistory(SegGraph):
 
         return node_reg_dict, tree_hist_resolve
 
-    def combine(self, reg_tuple):
+    def merge(self, reg_tuple):
         """ record combination in tree_hist """
-        reg_sum = super().combine(reg_tuple)
+        reg_sum = super().merge(reg_tuple)
 
         # get new node
         reg_sum_node = self.n_combine
@@ -200,39 +204,6 @@ class SegGraphHistory(SegGraph):
         assert len(self.nodes) == len(self.reg_node_dict), 'reg_node_dict err'
 
         return reg_sum
-
-    def match(self, ijk_set):
-        """ given a set of ijk, returns the corresponding node (if it exists)
-
-        we choose an arbitrary ijk in ijk_set (a leaf in tree_hist).  we follow
-        edges in the tree until cover equals a leaf not in ijk_set
-        """
-
-        raise NotImplementedError('not tested')
-
-        # init a leaf_set
-        leaf_set = set(n for n in self.tree_hist.nodes
-                       if not nx.ancestors(self.tree_hist, n))
-
-        # init node and ijk_cover
-        node = next(iter(ijk_set))
-        ijk_cover = set(nx.ancestors(self.tree_hist, node)) | {node}
-        ijk_cover &= leaf_set
-
-        while True:
-            if ijk_cover - ijk_set:
-                # node doesnt exist
-                raise RuntimeError('no matching node found')
-
-            elif not ijk_set - ijk_cover:
-                # node found (node_cover == ijk_set)
-                return node
-
-            # go along outward edge
-            node_next = list(self.tree_hist.successors(node))
-            assert len(node_next) == 1, 'non tree tree_hist ...'
-            node = node_next[0]
-            ijk_cover = set(nx.ancestors(self.tree_hist, node)) & leaf_set
 
     def _cut_greedy_min(self, node_val_dict):
         """ gets SegGraph of disjoint reg which minimize val
@@ -286,8 +257,7 @@ class SegGraphHistory(SegGraph):
         """
 
         # init output seg graph
-        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
-                      _add_nodes=False)
+        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
 
         # get spanning, disjoint and minimal pval node_list
         node_pval_dict = {n: p for n, p in self.node_pval_dict.items()
@@ -333,7 +303,7 @@ class SegGraphHistory(SegGraph):
         Args:
             num_reg_stop (int): number of unique regions @ stop
             edge_per_step (float): (0, 1) how many edges (of those remaining)
-                                   to combine in each step.  if not passed 1
+                                   to merge in each step.  if not passed 1
                                    edge is combined at all steps.
             verbose (bool): toggles cmd line output
             update_period (float): how often command line updates are given in
@@ -364,7 +334,7 @@ class SegGraphHistory(SegGraph):
                     desc='combining edges',
                     disable=not verbose)
 
-        # combine edges until only n regions left
+        # merge edges until only n regions left
         len_init = len(self)
         last_update = time.time()
         n = 1
@@ -382,10 +352,10 @@ class SegGraphHistory(SegGraph):
             edge_list, _err_list = self._get_min_n_edges(n)
             err_list += _err_list
 
-            # combine them
+            # merge them
             reg_list = list()
             for reg_set in edge_list:
-                reg_list.append(self.combine(reg_set))
+                reg_list.append(self.merge(reg_set))
 
             # recompute err of new edges to all neighbors of newly combined reg
             edge_list = list()

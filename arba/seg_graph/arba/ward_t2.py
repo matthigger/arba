@@ -42,8 +42,8 @@ def run_arba_cv(ft_dict, folder=None, verbose=False, alpha=.05, **kwargs):
     sg_arba_seg = sg_hist_seg.cut_greedy_sig(alpha=alpha)
 
     # swap data source for test data
-    sg_arba_test = sg_arba_seg.from_file_tree_dict(ft_dict_test)
-    sg_hist_test = sg_hist_seg.from_file_tree_dict(ft_dict_test)
+    sg_arba_test = sg_arba_seg.from_ft_dict(ft_dict_test)
+    sg_hist_test = sg_hist_seg.from_ft_dict(ft_dict_test)
 
     # determine which regions are sig
     sg_arba_test_sig = sg_arba_test.get_sig(alpha=alpha)

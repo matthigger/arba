@@ -216,12 +216,12 @@ class Simulator:
 
         sg_hist_seg = get_f(folder, 'sg_hist_seg.p.gz')
         sg_vba_test, _, _ = next(iter(sg_hist_seg))
-        sg_vba = sg_vba_test.from_file_tree_dict(ft_dict)
+        sg_vba = sg_vba_test.from_ft_dict(ft_dict)
         sg_dict = {'vba': sg_vba}
 
         if self.f_rba is not None:
             sg_dict['rba'] = copy.deepcopy(sg_vba)
-            sg_dict['rba'].combine_by_reg(self.f_rba)
+            sg_dict['rba'].merge_by_atlas(self.f_rba)
 
         # output masks of detected volumes
         for method, sg in sg_dict.items():

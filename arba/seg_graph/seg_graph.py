@@ -6,75 +6,67 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionT2Ward, FeatStatEmpty
+from ..region import RegionT2Ward
 from ..space import get_ref, PointCloud
 
 
 class SegGraph(nx.Graph):
-    @property
-    def ref(self):
-        return next(iter(self.file_tree_dict.values())).ref
+    """ segmentation graph, stores and merges region objects as a graph
 
-    @property
-    def error(self):
-        return sum(reg.t2_sq_error for reg in self.nodes)
+    each region object describes the statistics of populations within some area
+    (see RegionWardT2)
 
-    def __init__(self, file_tree_dict, ijk_set=None, _add_nodes=True,
-                 **kwargs):
+    Attributes:
+        ft_dict (dict): keys are grp labels, values are FileTree
+    """
+
+    def __init__(self, ft_dict, _add_nodes=True, **kwargs):
         """
 
         Args:
-            obj (str): either 'ward' or 't2' (can also pass class, useful if
-                       being called programatically)
-            file_tree_dict (dict): keys are grp, values are FileTree
-            ijk_set (set): restricts construction of nodes to this set of ijk
+            ft_dict (dict): keys are grp, values are FileTree
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
         super().__init__()
 
-        # get appropriate region constructor
-        self.reg_type = RegionT2Ward
-
-        # store file_tree_dict
-        self.file_tree_dict = file_tree_dict
+        # store ft_dict
+        self.ft_dict = ft_dict
 
         # check that all file trees have same ref
-        ref_list = [ft.ref for ft in file_tree_dict.values()]
-        if any(ref_list[0] != ref for ref in ref_list[1:]):
-            raise AttributeError('ref space mismatch')
+        ft0, ft1 = ft_dict.values()
+        assert ft0.ref == ft1.ref, 'ref space mismatch in file_tree'
+        assert np.allclose(ft0.mask, ft1.mask), 'mask mismatch in file_tree'
 
-        # ensure file_tree is loaded
-        for ft in file_tree_dict.values():
+        # load file_trees
+        for ft in ft_dict.values():
             if not ft.ijk_fs_dict.keys():
-                ft.load()
+                ft.load(load_ijk_fs=True, load_data=False, **kwargs)
 
-        if not _add_nodes:
-            return
+        if _add_nodes:
+            self._add_nodes()
+            self._connect_neighbors(**kwargs)
 
-        # get ijk_set, intersection of all ijk in ft
-        if ijk_set is None:
-            ijk_set = (set(ft.ijk_fs_dict.keys()) for ft in
-                       file_tree_dict.values())
-            ijk_set = set.intersection(*ijk_set)
+    def _add_nodes(self):
+        ft = next(iter(self.ft_dict.values()))
+        mask = ft.mask
+        pc = PointCloud.from_mask(mask)
 
         # build regions
-        for ijk in ijk_set:
+        for ijk in pc:
             # space region occupies
-            pc_ijk = PointCloud({tuple(ijk)}, ref=ref_list[0])
+            pc_ijk = PointCloud({tuple(ijk)}, ref=ft.ref)
 
             # statistics of features in region
             fs_dict = dict()
-            for grp, ft in file_tree_dict.items():
+            for grp, ft in self.ft_dict.items():
                 fs_dict[grp] = ft.ijk_fs_dict[ijk]
 
             # build and store in graph
-            reg = self.reg_type(pc_ijk=pc_ijk, fs_dict=fs_dict)
+            reg = RegionT2Ward(pc_ijk=pc_ijk, fs_dict=fs_dict)
             self.add_node(reg)
 
-        self.connect_neighbors(**kwargs)
-
-    def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
+    def _connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
         """ adds edge between each neighboring region """
         # build ijk_reg_map, maps ijk to a corresponding region
         ijk_reg_map = dict()
@@ -91,14 +83,14 @@ class SegGraph(nx.Graph):
                 if ijk1 in ijk_reg_map.keys():
                     self.add_edge(reg0, ijk_reg_map[ijk1])
 
-    def from_file_tree_dict(self, file_tree_dict):
-        # build map of old regions to new (those from new file_tree_dict)
-        reg_map = {reg: reg.from_file_tree_dict(file_tree_dict)
+    def from_ft_dict(self, ft_dict):
+        """ builds copy of self, maps each region via ft_dict """
+        # build map of old regions to new (those from new ft_dict)
+        reg_map = {reg: reg.from_ft_dict(ft_dict)
                    for reg in self.nodes}
 
         # init new SegGraph
-        sg = type(self)(obj=self.reg_type, file_tree_dict=file_tree_dict,
-                        _add_nodes=False)
+        sg = type(self)(file_tree_dict=ft_dict, _add_nodes=False)
 
         # add edges which mirror original
         new_edges = ((reg_map[r0], reg_map[r1]) for r0, r1 in self.edges)
@@ -108,6 +100,7 @@ class SegGraph(nx.Graph):
         return sg
 
     def to_nii(self, f_out, ref, **kwargs):
+        """ saves nifti image """
         # load reference image
         ref = get_ref(ref)
         if ref.shape is None:
@@ -154,8 +147,8 @@ class SegGraph(nx.Graph):
 
         return x
 
-    def combine(self, reg_tuple):
-        """ combines multiple regions into one
+    def merge(self, reg_tuple):
+        """ combines neighboring regions
 
         Args:
             reg_tuple (iter): iterator of regions to be combined
@@ -185,10 +178,10 @@ class SegGraph(nx.Graph):
 
         return reg_sum
 
-    def combine_by_reg(self, f_region, verbose=False):
-        """ combines regions which share an idx in f_region (some parcellation)
+    def merge_by_atlas(self, f_region, verbose=False):
+        """ builds atlas region by merging regions per voxel
 
-        note: regions must all be single voxel at outset
+        Note: regions must all be single voxel at outset
         """
 
         # find ijk_reg_dict, keys are ijk (tuple), values are reg they are in
@@ -223,44 +216,12 @@ class SegGraph(nx.Graph):
         if verbose:
             print(f'missing {len(ijk_missing)} regions (voxels)?')
 
-        # combine
+        # merge
         reg_new_dict = dict()
         for reg_idx, reg_list in tqdm(reg_idx_reg_dict.items(),
                                       desc='combining',
                                       disable=not verbose):
-            reg_new_dict[reg_idx] = self.combine(reg_list)
-
-    def harmonize_via_add(self, apply=True):
-        """ adds, uniformly, to each grp to ensure same average over whole reg
-
-        note: the means meet at the weighted average of their means (more
-        observations => smaller movement)
-
-        Returns:
-            mu_offset_dict (dict): keys are grp, values are offsets of average
-        """
-
-        # add together root nodes
-        fs_dict = defaultdict(FeatStatEmpty)
-        for reg in self.nodes:
-            for grp, fs in reg.fs_dict.items():
-                fs_dict[grp] += fs
-
-        # sum different groups
-        fs_all = sum(fs_dict.values())
-
-        # build mu_offset_dict
-        mu_offset_dict = {grp: fs_all.mu - fs.mu for grp, fs in
-                          fs_dict.items()}
-
-        # add to all regions
-        if apply:
-            for r in self.nodes:
-                for grp, mu in mu_offset_dict.items():
-                    r.fs_dict[grp].mu += mu
-                r.reset()
-
-        return mu_offset_dict
+            reg_new_dict[reg_idx] = self.merge(reg_list)
 
     def get_sig(self, alpha=.05, method='holm', _reg_pval_dict=None):
         """ returns a SegGraph containing only significant regions in self
@@ -275,9 +236,8 @@ class SegGraph(nx.Graph):
         """
 
         # init seg graph
-        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
-                      _add_nodes=False)
-        sg.file_tree_dict = self.file_tree_dict
+        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
+        sg.ft_dict = self.ft_dict
 
         # if self is empty, return empty SegGraph
         if not self.nodes:

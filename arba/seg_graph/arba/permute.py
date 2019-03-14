@@ -144,8 +144,7 @@ def get_sig(sg, max_t2_list, alpha=.05):
             reg_list.append(reg)
 
     # build seg graph
-    sg_sig = SegGraph(obj=sg.reg_type, file_tree_dict=sg.file_tree_dict,
-                      _add_nodes=False)
+    sg_sig = SegGraph(ft_dict=sg.ft_dict, _add_nodes=False)
     sg_sig.add_nodes_from(reg_list)
 
     return sg_sig

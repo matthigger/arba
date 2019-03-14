@@ -17,8 +17,8 @@ class SegGraphT2(SegGraphHistory):
             ijk = next(iter(reg.pc_ijk))
             self.node_t2_dict[ijk] = reg.t2 * len(reg)
 
-    def combine(self, reg_tuple):
-        reg_sum = super().combine(reg_tuple)
+    def merge(self, reg_tuple):
+        reg_sum = super().merge(reg_tuple)
 
         # record t2 of newest region
         node_sum = self.reg_node_dict[reg_sum]
@@ -36,8 +36,7 @@ class SegGraphT2(SegGraphHistory):
         node_list = self._cut_greedy_min(node_val_dict=node_neg_t2_dict)
 
         # build seg graph
-        sg = SegGraph(obj=self.reg_type, file_tree_dict=self.file_tree_dict,
-                      _add_nodes=False)
+        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
         reg_list = [self.resolve_reg(n) for n in node_list]
         sg.add_nodes_from(reg_list)
 
