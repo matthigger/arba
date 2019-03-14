@@ -19,7 +19,7 @@ class RegionT2Ward(Region):
         self._sq_error = None
 
         # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0)),
-        # this is critical for computation of ward_sq_error
+        # this is critical for computation of sq_error_det
         fs0, fs1 = self.fs_dict.values()
         self.cov_pooled = (fs0.n * fs0.cov +
                            fs1.n * fs1.cov) / (fs0.n + fs1.n)
@@ -90,7 +90,7 @@ class RegionT2Ward(Region):
         return pval
 
     @property
-    def ward_sq_error(self):
+    def sq_error_det(self):
         """ the weighted sum of the determinants of pooled covar matrices
 
         let us index an observation by i, so we have {x_i, r_i, omega_i} where
@@ -103,19 +103,28 @@ class RegionT2Ward(Region):
 
         so we define:
 
-        ward_sq_error = N_r |cov_pooled_r|
+        sq_error_det = N_r |cov_pooled_r|
 
         where N_r is number of observations in region r.
-
-        a similar objective (not implemented):
-
-        ward_sq_error = sum_i || x_i - mu_{r_i, omega_i}||^2
-                      = ...
-                      = sum_r  N_r tr(cov_pooled_r)
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
         return np.linalg.det(self.cov_pooled) * n
+
+    @property
+    def sq_error_tr(self):
+        """ the weighted sum of the trace of pooled covar matrices
+
+        (see doc in sq_error_det for notation)
+
+        sq_error_tr = sum_i || x_i - mu_{r_i, omega_i}||^2
+                    = ...
+                    = sum_r  N_r tr(cov_pooled_r)
+        """
+
+        n = sum(fs.n for fs in self.fs_dict.values())
+        return np.trace(self.cov_pooled) * n
+
 
     @property
     def t2_sq_error(self):
@@ -142,10 +151,16 @@ class RegionT2Ward(Region):
         return self._sq_error
 
     @staticmethod
-    def get_ward_error(reg_0, reg_1, reg_union=None):
+    def get_error_det(reg_0, reg_1, reg_union=None):
         if reg_union is None:
             reg_union = reg_0 + reg_1
-        return reg_union.ward_sq_error - reg_0.ward_sq_error - reg_1.ward_sq_error
+        return reg_union.sq_error_det - reg_0.sq_error_det - reg_1.sq_error_det
+
+    @staticmethod
+    def get_error_tr(reg_0, reg_1, reg_union=None):
+        if reg_union is None:
+            reg_union = reg_0 + reg_1
+        return reg_union.sq_error_tr - reg_0.sq_error_tr - reg_1.sq_error_tr
 
     @staticmethod
     def get_t2_error(reg_0, reg_1, reg_union=None):

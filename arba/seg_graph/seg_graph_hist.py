@@ -81,7 +81,7 @@ class SegGraphHistory(SegGraph):
         self.err_max = err_max
         self.obj_fnc = obj_fnc
         if self.obj_fnc is None:
-            self.obj_fnc = RegionT2Ward.get_ward_error
+            self.obj_fnc = RegionT2Ward.get_error_tr
 
         # init reg_node_dict, node_pval_dict
         self.reg_node_dict = dict()
