@@ -37,4 +37,4 @@ for ft in ft_dict.values():
 
 # run
 perm_tfce = PermuteTFCE(ft_dict)
-perm_tfce.run(n=n, verbose=verbose, par_flag=par_flag)
+perm_tfce.run(n=n, verbose=verbose, par_flag=par_flag, folder=folder_tfce)

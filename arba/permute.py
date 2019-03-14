@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from bisect import bisect_right
 
+import nibabel as nib
 import numpy as np
 
 from arba.space import PointCloud
+from mh_pytools import file
 
 
 class Permute(ABC):
@@ -71,9 +73,23 @@ class Permute(ABC):
 
         # save if folder passed
         if folder is not None:
-            self.save(stat_volume, pval)
+            label_x_dict = {'stat_volume': stat_volume,
+                            'pval': pval}
+            self.save(folder, label_x_dict)
 
         return stat_volume, pval
+
+    def save(self, folder, label_x_dict=None):
+        """ saves output images in a folder"""
+        file.save(self, folder / 'permute.p.gz')
+
+        if label_x_dict is None:
+            return
+
+        affine = self.ft_tuple[0].ref.affine
+        for label, x in label_x_dict.items():
+            img = nib.Nifti1Image(x, affine)
+            img.to_filename(str(folder / f'{label}.nii.gz'))
 
     def load_data(self, **kwargs):
         """ get data matrix """
