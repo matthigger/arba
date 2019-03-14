@@ -25,7 +25,7 @@ def pval(reg):
 
 
 def sq_error(reg):
-    return reg.sq_error[0] / len(reg)
+    return reg.t2_sq_error[0] / len(reg)
 
 
 def obj(reg):

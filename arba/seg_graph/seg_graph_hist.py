@@ -7,7 +7,7 @@ from sortedcontainers import SortedList
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import RegionT2
+from ..region import RegionT2Ward
 from ..space import PointCloud
 
 
@@ -72,13 +72,16 @@ class SegGraphHistory(SegGraph):
         self._err_edge_list = SortedList()
         return super().__reduce_ex__(*args, **kwargs)
 
-    def __init__(self, *args, err_max=np.inf, **kwargs):
+    def __init__(self, *args, err_max=np.inf, obj_fnc=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.n_combine = 0
         self.tree_hist = nx.DiGraph()
         self._err_edge_list = SortedList()
         self.err_max = err_max
+        self.obj_fnc = obj_fnc
+        if self.obj_fnc is None:
+            self.obj_fnc = RegionT2Ward.get_ward_error
 
         # init reg_node_dict, node_pval_dict
         self.reg_node_dict = dict()
@@ -94,11 +97,14 @@ class SegGraphHistory(SegGraph):
         self.tree_hist.add_nodes_from(self.node_pval_dict.keys())
 
     def resolve_space(self, node):
-        if isinstance(node, tuple):
-            ijk_set = {node}
-        else:
-            ijk_set = {n for n in self.tree_hist.predecessors(node)
-                       if isinstance(n, tuple)}
+        node_set = {node}
+        ijk_set = set()
+        while node_set:
+            x = node_set.pop()
+            if isinstance(x, tuple):
+                ijk_set.add(x)
+            else:
+                node_set |= set(self.tree_hist.predecessors(x))
         return PointCloud(ijk_set, ref=self.ref)
 
     def resolve_reg_iter(self, node):
@@ -113,7 +119,7 @@ class SegGraphHistory(SegGraph):
             # build pc
             pc = PointCloud({ijk}, ref=self.ref)
 
-            yield RegionT2(pc_ijk=pc, fs_dict=fs_dict)
+            yield RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
 
     def resolve_reg(self, node):
         return sum(self.resolve_reg_iter(node))
@@ -454,6 +460,6 @@ class SegGraphHistory(SegGraph):
         tqdm_dict = {'desc': 'compute error per edge',
                      'disable': not verbose}
         for reg_pair in tqdm(edge_list, **tqdm_dict):
-            error = reg_pair[0].get_error(*reg_pair)
+            error = self.obj_fnc(*reg_pair)
             if error < self.err_max:
                 self._err_edge_list.add((error, reg_pair))

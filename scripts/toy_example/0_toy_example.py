@@ -14,7 +14,7 @@ feat_var = 1
 shape = (4, 4, 1)
 # average feature for bottom, top of image in each population
 pop_mu_bt_dict = {'pop0': (0, 0),
-                  'pop1': (3, 0)}
+                  'pop1': (2, 0)}
 folder = pnl_data.folder_data / 'arba_toy_ex'
 shutil.rmtree(str(folder))
 folder.mkdir(exist_ok=True)
@@ -60,4 +60,4 @@ mask = Mask(np.ones(shape), ref=ref)
 
 # run arba
 run_arba_cv(ft_dict, mask=mask, folder=folder, alpha=alpha, harmonize=False,
-            verbose=True)
+            verbose=True, scale_equalize=False)

@@ -36,7 +36,7 @@ class Simulator:
 
     def __init__(self, folder, file_tree, p_effect=.5, effect_shape='min_var',
                  verbose=True, par_flag=True, f_rba=None, tfce_num_perm=5000,
-                 alpha=.05):
+                 alpha=.05, tfce_flag=True, vba_flag=True):
         self.folder = pathlib.Path(folder)
         if self.folder.exists():
             shutil.rmtree(self.folder)
@@ -54,6 +54,8 @@ class Simulator:
 
         # comparison parameters
         self.f_rba = f_rba
+        self.tfce_flag = tfce_flag
+        self.vba_flag = vba_flag
         self.tfce_num_perm = tfce_num_perm
         self.alpha = alpha
 
@@ -107,7 +109,7 @@ class Simulator:
         else:
             mask_list = list()
             for d in tqdm(arg_list, **tqdm_dict):
-                mask_list.append(sample_mask(**d))
+                mask_list.append(fnc_sample_mask(**d))
 
         # build effects (such that their locations are constant across t2)
         self.effect_list = list()
@@ -259,8 +261,10 @@ class Simulator:
         return (t2_round, effect_size), method_ss_dict
 
     def _run_effect_comparison(self, folder):
-        self.run_tfce(folder)
-        self.run_vba_rba(folder)
+        if self.tfce_flag:
+            self.run_tfce(folder)
+        if self.vba_flag:
+            self.run_vba_rba(folder)
         return self.get_performance(folder)
 
     def run_effect_comparison(self):
