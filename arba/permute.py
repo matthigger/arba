@@ -28,6 +28,7 @@ class Permute(ABC):
         ft_tuple (tuple): FileTrees of data
         split_stat_dict (dict): keys are splits, values are maximum stats under
                                 that split
+        pc (PointCloud): all active voxels
     """
     f_save = 'permute.p.gz'
 
