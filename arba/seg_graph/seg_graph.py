@@ -45,7 +45,7 @@ class SegGraph(nx.Graph):
 
         if _add_nodes:
             self._add_nodes()
-            self._connect_neighbors(**kwargs)
+            self.connect_neighbors(**kwargs)
 
     def _add_nodes(self):
         ft = next(iter(self.ft_dict.values()))
@@ -66,7 +66,7 @@ class SegGraph(nx.Graph):
             reg = RegionT2Ward(pc_ijk=pc_ijk, fs_dict=fs_dict)
             self.add_node(reg)
 
-    def _connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
+    def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
         """ adds edge between each neighboring region """
         # build ijk_reg_map, maps ijk to a corresponding region
         ijk_reg_map = dict()
@@ -90,7 +90,7 @@ class SegGraph(nx.Graph):
                    for reg in self.nodes}
 
         # init new SegGraph
-        sg = type(self)(file_tree_dict=ft_dict, _add_nodes=False)
+        sg = type(self)(ft_dict=ft_dict, _add_nodes=False)
 
         # add edges which mirror original
         new_edges = ((reg_map[r0], reg_map[r1]) for r0, r1 in self.edges)

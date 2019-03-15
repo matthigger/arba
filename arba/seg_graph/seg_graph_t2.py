@@ -18,10 +18,10 @@ class SegGraphT2(SegGraphHistory):
             self.node_t2_dict[ijk] = reg.t2 * len(reg)
 
     def merge(self, reg_tuple):
+        node_sum = len(self.merge_record)
         reg_sum = super().merge(reg_tuple)
 
         # record t2 of newest region
-        node_sum = self.reg_node_dict[reg_sum]
         self.node_t2_dict[node_sum] = reg_sum.t2 * len(reg_sum)
 
         return reg_sum

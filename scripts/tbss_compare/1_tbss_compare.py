@@ -70,9 +70,9 @@ save_fig(f_out=f_size_v_pval)
 # plot report of all nominated regions (denote those which are sig)
 f_report_out = folder_out / 'nominated_regions_test.pdf'
 feat_x, feat_y = sorted(
-    next(iter(sg_arba_test.file_tree_dict.values())).feat_list)
+    next(iter(sg_arba_test.ft_dict.values())).feat_list)
 label_dict = {reg: 'not significant ,' for reg in sg_arba_test.nodes}
 label_dict.update({reg: 'SIGNIFICANT ,' for reg in sg_arba_test_sig.nodes})
-plot_report(reg_list=sg_arba_test.nodes, ft_dict=sg_arba_test.file_tree_dict,
+plot_report(reg_list=sg_arba_test.nodes, ft_dict=sg_arba_test.ft_dict,
             f_out=f_report_out, f_back=f_back, feat_x=feat_x, feat_y=feat_y,
             label_dict=label_dict)

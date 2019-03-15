@@ -113,32 +113,32 @@ if __name__ == '__main__':
 
     num_leafs = 5
     folder = folder / 'arba_cv_MF_FA-MD' / 'save'
-    f_tree_hist_reg = folder / 'tree_hist_reg.p.gz'
+    f_tree_hist_reg = folder / 'tree_hist.p.gz'
     fnc_x = len
     fnc_y = obj
     fnc_color = pval
     f_out = folder.parent / f'{fnc_x.__name__}_{fnc_y.__name__}_{fnc_color.__name__}.pdf'
 
     if f_tree_hist_reg.exists():
-        tree_hist_reg = file.load(f_tree_hist_reg)
+        tree_hist = file.load(f_tree_hist_reg)
         print('done load')
     else:
         # computationally expensive, save for reruns
         sg_hist_seg = file.load(folder / 'sg_hist_seg.p.gz')
-        node_reg_dict, tree_hist_reg = sg_hist_seg.resolve_hist(verbose=True)
-        file.save(tree_hist_reg, f_tree_hist_reg)
+        tree_hist, node_reg_dict = sg_hist_seg.merge_record.resolve_hist(verbose=True)
+        file.save(tree_hist, f_tree_hist_reg)
         print('done save')
 
     # subsample num_leafs
     node_set = set()
-    leaf_set = [r for r in tree_hist_reg.nodes if len(r) == 1]
+    leaf_set = [r for r in tree_hist.nodes if len(r) == 1]
     random.seed(1)
     for leaf in random.choices(leaf_set, k=num_leafs):
         node_set.add(leaf)
-        node_set |= nx.descendants(tree_hist_reg, leaf)
+        node_set |= nx.descendants(tree_hist, leaf)
 
     # plot
-    scatter_tree_two(tree_hist_reg,
+    scatter_tree_two(tree_hist,
                      fnc_x=fnc_x, fnc_y=fnc_y, fnc_color=fnc_color,
                      logx=True, logy=True, nodelist=node_set,
                      verbose=True, f_out=f_out)

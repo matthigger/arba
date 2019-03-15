@@ -13,13 +13,13 @@ class Region:
         self.pc_ijk = pc_ijk
         self.fs_dict = fs_dict
 
-    def from_file_tree_dict(self, file_tree_dict, pc_ijk=None):
+    def from_ft_dict(self, ft_dict, pc_ijk=None):
         if pc_ijk is None:
             pc_ijk = self.pc_ijk
 
         r_list = list()
         for ijk in pc_ijk:
-            fs_dict = {grp: file_tree_dict[grp].ijk_fs_dict[ijk]
+            fs_dict = {grp: ft_dict[grp].ijk_fs_dict[ijk]
                        for grp in self.fs_dict.keys()}
             r = type(self)(pc_ijk={ijk}, fs_dict=fs_dict)
             r_list.append(r)

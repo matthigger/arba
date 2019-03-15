@@ -74,7 +74,7 @@ if __name__ == '__main__':
     f = '/home/mu584/dropbox_pnl/data/hcp_100/vox_sbj_72_FA-MD_min_var/t2_4_1.0E+00_effect0/arba_cv/save/sg_hist_seg.p.gz'
     sg_hist_seg = file.load(f)
 
-    _, tree_hist = sg_hist_seg.resolve_hist()
+    tree_hist, _ = sg_hist_seg.resolve_hist()
     # scatter_topo_cov_det(tree_hist)
     def fnc(reg):
         fs0, fs1 = reg.fs_dict.values()

@@ -13,10 +13,10 @@ folder = pnl_data.folder_data / 'arba_toy_ex'
 
 # load
 sg_hist = file.load(folder / 'save' / 'sg_hist_seg.p.gz')
-_, tree_hist_resolved = sg_hist.resolve_hist()
+tree_hist, _ = sg_hist.merge_record.resolve_hist(ft_dict=sg_hist.ft_dict)
 sg_arba = sg_hist.cut_greedy_sig(alpha=alpha)
 region_spaces = list(reg.pc_ijk for reg in sg_arba.nodes)
-reg_highlight = [reg for reg in tree_hist_resolved.nodes
+reg_highlight = [reg for reg in tree_hist.nodes
                  if reg.pc_ijk in region_spaces]
 mask = Mask.from_nii(folder / 'mask_effect.nii.gz')
 
@@ -40,14 +40,14 @@ def get_mean_pop1(reg):
     return reg.fs_dict['pop1'].mu[0]
 
 
-cb = scatter_tree(tree_hist_resolved, mask=mask, ylabel=ylabel,
+cb = scatter_tree(tree_hist, mask=mask, ylabel=ylabel,
                   fnc=get_mean_pop1, reg_highlight=reg_highlight, log_y=False)
 cb.remove()
 plt.ylim((-1, 3))
 print_fig(f_out)
 
 f_out = folder / 'toy_size_v_pval.pdf'
-size_v_pval(tree_hist_resolved, mask=mask, reg_highlight=reg_highlight,
+size_v_pval(tree_hist, mask=mask, reg_highlight=reg_highlight,
             mask_label='% region with effect')
 plt.ylabel('\'p-value\'')
 print_fig(f_out)

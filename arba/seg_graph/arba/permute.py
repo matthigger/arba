@@ -33,7 +33,7 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
                         load_data=True, **kwargs)
 
     # build sg_hist
-    sg_hist = SegGraphT2(file_tree_dict=ft_dict)
+    sg_hist = SegGraphT2(ft_dict=ft_dict)
 
     # reduce
     sg_hist.reduce_to(1, verbose=verbose, **kwargs)
@@ -94,7 +94,7 @@ def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
 def _run_permute(ft_dict, **kwargs):
     """ runs """
     # build sg_t2
-    sg_t2 = SegGraphT2(file_tree_dict=ft_dict)
+    sg_t2 = SegGraphT2(ft_dict=ft_dict)
 
     # reduce
     sg_t2.reduce_to(1, verbose=False, **kwargs)

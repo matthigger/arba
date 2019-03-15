@@ -33,7 +33,7 @@ def run_arba_cv(ft_dict, folder=None, verbose=False, alpha=.05, **kwargs):
               **kwargs)
 
     # build sg_hist_seg
-    sg_hist_seg = SegGraphHistory(obj='ward', file_tree_dict=ft_dict_seg)
+    sg_hist_seg = SegGraphHistory(obj='ward', ft_dict=ft_dict_seg)
 
     # reduce
     sg_hist_seg.reduce_to(1, verbose=verbose, **kwargs)

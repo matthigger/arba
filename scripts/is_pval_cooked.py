@@ -22,7 +22,7 @@ def build_and_reduce(model, num_sbj_per_grp, folder):
                                             folder=_folder)
 
     # build and reduce a seg_graph
-    sg_hist = SegGraphHistory(obj='t2', file_tree_dict=ft_dict)
+    sg_hist = SegGraphHistory(obj='t2', ft_dict=ft_dict)
     sg_hist.reduce_to(1, verbose=verbose)
     return sg_hist
 
