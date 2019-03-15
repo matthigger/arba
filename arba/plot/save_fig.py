@@ -17,3 +17,5 @@ def save_fig(f_out=None, fig=None, size_inches=(9, 6)):
         plt.gcf().set_size_inches(*size_inches)
         pdf.savefig(fig, bbox_inches='tight')
         plt.close()
+
+    return f_out
