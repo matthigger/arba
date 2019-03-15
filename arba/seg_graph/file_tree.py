@@ -162,8 +162,8 @@ class FileTree:
             mu_offset_dict (dict): keys are file tree, values are offset needed
         """
         # compute average feature
-        ft_fs_dict = {ft: ft.sum_feat_stat(mask, verbose) for ft in ft_tuple}
-        fs_average = sum(ft_fs_dict.values())
+        fs_tuple = tuple(ft.sum_feat_stat(mask, verbose) for ft in ft_tuple)
+        fs_average = sum(fs_tuple)
 
         # compute scale
         scale = np.diag(np.diag(fs_average.cov) ** (-.5))
