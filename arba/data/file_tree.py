@@ -58,7 +58,7 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, fnc_list=None):
+    def __init__(self, sbj_feat_file_tree, fnc_list=None, mask=None, pc=None):
         self.sbj_feat_file_tree = sbj_feat_file_tree
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
         feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
@@ -70,8 +70,14 @@ class FileTree:
         if fnc_list is None:
             self.fnc_list = list()
 
-        self.mask = None
-        self.pc = None
+        assert (mask is None) or (pc is None), 'nand(mask, pc) required'
+        self.mask = mask
+        self.pc = pc
+        if self.mask is not None:
+            self.pc = PointCloud.from_mask(mask)
+        if pc is not None:
+            self.mask = pc.to_mask()
+
         self.fs = None
         self.data = None
         self.f_data = None
@@ -107,8 +113,9 @@ class FileTree:
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
         # get pc, mask
-        self.mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-        self.pc = PointCloud.from_mask(self.mask)
+        if self.mask is None or self.pc is None:
+            self.mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
+            self.pc = PointCloud.from_mask(self.mask)
 
         # apply all fnc
         for fnc in self.fnc_list:
@@ -123,7 +130,6 @@ class FileTree:
         x.flush()
         self.data = np.memmap(self.f_data, dtype='float32', mode='r',
                               shape=shape)
-        return self
 
     def unload(self):
         # delete memory map file
