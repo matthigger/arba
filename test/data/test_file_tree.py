@@ -1,4 +1,3 @@
-import os
 import string
 
 import pytest
@@ -62,7 +61,7 @@ def test_all(file_tree):
     mask = Mask(np.ones(file_tree.ref.shape), ref=file_tree.ref)
     pc = PointCloud.from_mask(mask)
 
-    with file_tree:
+    with file_tree.loaded():
         # check space
         assert file_tree.mask == mask, 'invalid mask after load'
         assert file_tree.pc == pc, 'invalid pc after load'

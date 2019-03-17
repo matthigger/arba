@@ -1,5 +1,7 @@
+import os
 import pathlib
 import tempfile
+from contextlib import contextmanager
 
 import nibabel as nib
 import numpy as np
@@ -10,7 +12,7 @@ from ..space import get_ref, Mask, PointCloud
 
 def check_loaded(fnc):
     def wrapped(self, *args, **kwargs):
-        assert self.data is not None, 'FileTree must be loaded to call'
+        assert self.is_loaded, 'FileTree must be loaded to call'
         return fnc(self, *args, **kwargs)
 
     return wrapped
@@ -42,6 +44,10 @@ class FileTree:
     """
 
     @property
+    def is_loaded(self):
+        return self.data is not None
+
+    @property
     def num_sbj(self):
         return len(self.sbj_feat_file_tree)
 
@@ -70,7 +76,23 @@ class FileTree:
         self.data = None
         self.f_data = None
 
-    def __enter__(self):
+    @contextmanager
+    def loaded(self):
+        """ provides context manager with loaded data
+
+        note: we only load() and unload() if the object was previously not
+        loaded.  otherwise we're all set, no need to do it again.
+        """
+        was_loaded = self.is_loaded
+        if not was_loaded:
+            self.load()
+        try:
+            yield self
+        finally:
+            if not was_loaded:
+                self.unload()
+
+    def load(self):
         """ loads data, applies fnc in self.fnc_list
         """
         # build memmap file
@@ -103,15 +125,11 @@ class FileTree:
                               shape=shape)
         return self
 
-    def __exit__(self, err_type, value, traceback):
-        # reset attributes which must be loaded
-        self.mask = None
-        self.pc = None
-        self.fs = None
+    def unload(self):
+        # delete memory map file
+        os.remove(str(self.f_data))
         self.data = None
         self.f_data = None
-
-        # delete memory map file
 
     @check_loaded
     def get_data_subset(self, sbj_list=None):
