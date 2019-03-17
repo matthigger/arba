@@ -11,7 +11,7 @@ from ..space import get_ref, Mask, PointCloud
 def check_loaded(fnc):
     def wrapped(self, *args, **kwargs):
         assert self.data is not None, 'FileTree must be loaded to call'
-        return fnc(*args, **kwargs)
+        return fnc(self, *args, **kwargs)
 
     return wrapped
 
@@ -120,7 +120,8 @@ class FileTree:
         raise NotImplementedError
 
     @check_loaded
-    def to_nii(self, fnc=None, feat=None, sbj_list=None, f_out=None):
+    def to_nii(self, fnc=None, feat=None, sbj_list=None, f_out=None,
+               back=0):
         """ writes data to a nii file
 
         Args:
@@ -128,11 +129,44 @@ class FileTree:
             feat : some feature in feat_list, if passed, fnc returns mean feat
             sbj_list (list): list of sbj to include, if None all sbj used
             f_out (str or Path): output nii file
+            back (float): background value
 
         Returns:
             f_out (Path): nii file out
         """
-        raise NotImplementedError
+        # get f_out
+        if f_out is None:
+            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+
+        # get sbj_bool
+        sbj_bool = self.sbj_list_to_bool(sbj_list)
+
+        # build img
+        if fnc is not None:
+            # build based on custom fnc
+            x = back * np.ones(self.ref.shape)
+            for i, j, k in self.pc:
+                x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
+        else:
+            # build based on mean feature
+            feat_idx = self.feat_list.index(feat)
+            x = np.mean(self.data[:, :, :, sbj_bool, feat_idx], axis=3)
+
+        # write to file
+        img = nib.Nifti1Image(x, affine=self.ref.affine)
+        img.to_filename(str(f_out))
+
+        return pathlib.Path(f_out)
+
+    def sbj_list_to_bool(self, sbj_list=None):
+        if sbj_list is None:
+            return np.ones(self.num_sbj).astype(bool)
+
+        sbj_set = set(sbj_list)
+        return np.array(sbj in sbj_set for sbj in self.sbj_list)
+
+    def sbj_bool_to_list(self, sbj_bool):
+        return [sbj for b, sbj in zip(sbj_bool, self.sbj_list) if b]
 
 
 def scale_normalize(ft):

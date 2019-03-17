@@ -78,3 +78,7 @@ def test_all(file_tree):
         fs = FeatStat.from_array(_data.T)
         assert np.allclose(fs.mu, 0), 'data not centered'
         assert np.allclose(np.diag(fs.cov), 1), 'data not unit scale'
+
+        f_out = file_tree.to_nii(feat='A')
+        ref = get_ref(f_out)
+        assert ref == file_tree.ref, 'ref mismatch'
