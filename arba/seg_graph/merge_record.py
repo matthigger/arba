@@ -1,7 +1,7 @@
 import networkx as nx
 
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward
+from ..region import RegionT2Ward, FeatStat
 from ..space import PointCloud
 
 
@@ -121,28 +121,38 @@ class MergeRecord(nx.DiGraph):
 
         return node_sum
 
-    def resolve_node(self, node, ft_dict):
+    def resolve_node(self, node, file_tree, grp_sbj_dict):
         """ gets the region associated with the node from the file_trees given
 
         Args:
             node (int): node
-            ft_dict (dict): keys are grp labels, values are FileTree
+            file_tree (FileTree): file tree
+            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
 
         Returns:
             reg (RegionWardT2): region
         """
 
         pc = self.get_pc(node)
+
+        # constrain to relevant data
+        mask = pc.to_mask()
+        data = file_tree.data[mask, :, :]
+
         fs_dict = dict()
-        for grp, ft in ft_dict.items():
-            fs_dict[grp] = sum(ft.ijk_fs_dict[ijk] for ijk in pc)
+        for grp, sbj_list in grp_sbj_dict.items():
+            sbj_bool = file_tree.sbj_list_to_bool(sbj_list)
+            x = data[:, sbj_bool, :]
+            x = x.reshape((-1, file_tree.d), order='F')
+            fs_dict[grp] = FeatStat.from_array(x.T)
         return RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
 
-    def get_iter_sg(self, ft_dict):
+    def get_iter_sg(self, file_tree, grp_sbj_dict):
         """ iterator over seg_graph which undergoes recorded merge operations
 
         Args:
-            ft_dict (dict): keys are grp labels, values are FileTree
+            file_tree (FileTree): file tree
+            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
 
         Yields:
             seg_graph (SegGraph): build from ft_hist
@@ -150,19 +160,13 @@ class MergeRecord(nx.DiGraph):
             reg_last (tuple): the old regions which were merged since last
         """
 
-        pc = PointCloud(self.leaf_ijk_dict.values(), ref=self.ref)
-        ft0, ft1 = ft_dict.values()
-        assert ft0.ref == ft1.ref, 'ft_dict doesnt have matching ref'
-        assert ft0.ref == pc.ref, 'ft_dict doesnt match ref of merge_record'
-        assert ft0.mask == ft1.mask, 'ft_dict doesnt have matching masks'
-        assert PointCloud.from_mask(ft0.mask) == pc, 'ft_dict mask mismatch'
-
         # init seg graph
-        sg = SegGraph(ft_dict=ft_dict, _add_nodes=False)
+        sg = SegGraph(file_tree=file_tree, grp_sbj_dict=grp_sbj_dict,
+                      _add_nodes=False)
 
         # init node_reg_dict
-        node_reg_dict = {node: self.resolve_node(node, ft_dict) for node in
-                         self.leaf_ijk_dict.keys()}
+        node_reg_dict = {node: self.resolve_node(node, file_tree, grp_sbj_dict)
+                         for node in self.leaf_ijk_dict.keys()}
 
         # add leafs to sg
         sg.add_nodes_from(node_reg_dict.values())
@@ -190,17 +194,18 @@ class MergeRecord(nx.DiGraph):
 
             node_new += 1
 
-    def get_node_reg_dict(self, ft_dict):
-        """ maps each node to a region per ft_dict
+    def get_node_reg_dict(self, file_tree, grp_sbj_dict):
+        """ maps each node to a region per file_tree, grp_sbj_dict
 
         Args:
-            ft_dict (dict): keys are grp labels, values are FileTree
+            file_tree (FileTree): file tree
+            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
 
         Returns:
             node_reg_dict (dict): keys are nodes, values are regions
         """
 
-        iter_sg = self.get_iter_sg(ft_dict)
+        iter_sg = self.get_iter_sg(file_tree, grp_sbj_dict)
 
         sg, _, _ = next(iter_sg)
 
@@ -215,19 +220,20 @@ class MergeRecord(nx.DiGraph):
 
         return node_reg_dict
 
-    def resolve_hist(self, ft_dict):
+    def resolve_hist(self, file_tree, grp_sbj_dict):
         """ returns a copy of tree_hist where each node is replaced by region
 
         NOTE: for large tree_hist, this will use a lot of memory
 
         Args:
-            ft_dict (dict): keys are grp labels, values are FileTree
+            file_tree (FileTree): file tree
+            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
 
         Returns:
             tree_hist (nx.DiGraph): each node replaced with resolved version
             node_reg_dict (dict): keys are nodes, values are regions
         """
-        node_reg_dict = self.get_node_reg_dict(ft_dict)
+        node_reg_dict = self.get_node_reg_dict(file_tree, grp_sbj_dict)
         tree_hist = nx.relabel_nodes(self,
                                      mapping=node_reg_dict,
                                      copy=True)
