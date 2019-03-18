@@ -177,10 +177,14 @@ class Permute(ABC):
             pval (np.array): (space0, space1, space2) pval (corrected)
         """
 
-    def determine_sig(self, split):
+    def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
-        # get stat volume of original
-        stat_volume = self.run_split(split)
+        assert (split is None) != (stat_volume is None), \
+            'split xor stat_volume'
+
+        if stat_volume is None:
+            # get stat volume of original
+            stat_volume = self.run_split(split)
 
         # build array of pval
         # https://stats.stackexchange.com/questions/109207/p-values-equal-to-0-in-permutation-test

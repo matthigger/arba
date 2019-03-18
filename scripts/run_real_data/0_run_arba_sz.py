@@ -1,34 +1,33 @@
+import pathlib
+import tempfile
 from collections import defaultdict
 
-from arba.seg_graph import FileTree, run_arba_cv
+import numpy as np
+
+from arba.data import FileTree, scale_normalize
+from arba.seg_graph import PermuteARBA
 from arba.space import Mask
 from pnl_data.set.sz import folder, people
 
-# arba params
-alpha = .05
 feat_tuple = ('fat', 'fw')
 grp_tuple = ('HC', 'SCZ')
-
-# run params
-par_flag = True
+n = 100
 verbose = True
+par_flag = True
 
-# output folder
-s_feat = '-'.join(feat_tuple)
-s_grp = '-'.join(grp_tuple)
-folder_out = folder / f'arba_cv_{s_grp}_{s_feat}_wm_skel'
-folder_out.mkdir(exist_ok=True)
+# build folder
+folder_arba = pathlib.Path(tempfile.mkdtemp(suffix='_arba'))
+folder_arba.mkdir(exist_ok=True)
 
+print(f'folder_arba: {folder_arba}')
+
+# load mask
 folder_data = folder / 'low_res'
-
 f_mask = folder_data / 'fat' / 'fat_skel_point5.nii.gz'
 mask = Mask.from_nii(f_mask)
 
-print(f'folder_out: {folder_out}')
-print(f'folder_data: {folder_data}')
-
 # get files per feature
-grp_sbj_feat_file_tree = defaultdict(lambda: defaultdict(dict))
+sbj_feat_file_tree = defaultdict(dict)
 for p in people:
     if p.grp not in grp_tuple:
         continue
@@ -40,12 +39,38 @@ for p in people:
         f = folder_data / feat.lower() / f'{p}_{feat}.nii.gz'
         if not f.exists():
             raise FileNotFoundError(f)
-        grp_sbj_feat_file_tree[p.grp][p][feat] = f
+        sbj_feat_file_tree[p][feat] = f
 
-# build file tree dict
-ft_dict = {grp: FileTree(sbj_feat_file_tree)
-           for grp, sbj_feat_file_tree in grp_sbj_feat_file_tree.items()}
+# # limit sbjs to 10 per population
+# sbj0 = [sbj for sbj in sbj_feat_file_tree.keys() if sbj.grp == grp_tuple[0]][:10]
+# sbj1 = [sbj for sbj in sbj_feat_file_tree.keys() if sbj.grp == grp_tuple[1]][:10]
+# sbj_limit = sbj0 + sbj1
+# sbj_feat_file_tree = {sbj: d for sbj, d in sbj_feat_file_tree.items()
+#                       if sbj in sbj_limit}
 
-# run arba
-run_arba_cv(ft_dict=ft_dict, folder=folder_out, verbose=verbose, alpha=alpha,
-            par_flag=par_flag, mask=mask)
+file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree, mask=mask,
+                     fnc_list=[scale_normalize])
+split = np.array([sbj.grp == grp_tuple[1] for sbj in file_tree.sbj_list])
+
+# # make a smaller test case
+# from skimage.morphology import binary_dilation
+# import random
+# import numpy as np
+# from arba.space import PointCloud
+#
+# i, j, k = random.choice(list(file_tree.pc))
+# _mask = np.zeros(file_tree.ref.shape)
+# _mask[i, j, k] = 1
+# for _ in range(10):
+#     _mask = binary_dilation(_mask)
+# file_tree.mask = np.logical_and(file_tree.mask, _mask)
+# file_tree.pc = PointCloud.from_mask(file_tree.mask)
+
+# file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree, mask=mask,
+#                      fnc_list=[scale_normalize])
+# split = np.array([sbj.grp == grp_tuple[1] for sbj in file_tree.sbj_list])
+
+# run
+perm_tfce = PermuteARBA(file_tree, folder=folder_arba)
+perm_tfce.run(split, n=n, folder=folder_arba, verbose=verbose,
+              par_flag=par_flag)
