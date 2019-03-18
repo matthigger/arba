@@ -187,7 +187,7 @@ class FileTree:
             return np.ones(self.num_sbj).astype(bool)
 
         sbj_set = set(sbj_list)
-        return np.array(sbj in sbj_set for sbj in self.sbj_list)
+        return np.array([sbj in sbj_set for sbj in self.sbj_list])
 
     def sbj_bool_to_list(self, sbj_bool):
         return [sbj for b, sbj in zip(sbj_bool, self.sbj_list) if b]
