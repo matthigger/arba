@@ -45,8 +45,8 @@ class PermuteARBA(Permute):
 
         return sg_hist
 
-    def run_split_max(self, split):
-        return self.run_split(split).max_t2
+    def run_split_max(self, split, **kwargs):
+        return split, self.run_split(split).max_t2
 
     def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""

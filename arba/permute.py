@@ -4,7 +4,7 @@ from bisect import bisect_right
 
 import nibabel as nib
 import numpy as np
-from scipy.misc import comb
+from scipy.special import comb
 from tqdm import tqdm
 
 from mh_pytools import file, parallel
@@ -128,49 +128,41 @@ class Permute(ABC):
         return split_list
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
-                            **kwargs):
+                            effect_split_dict=None):
         """ runs many splits, potentially in parallel"""
 
-        if not par_flag:
+        if par_flag:
+            arg_list = list()
+            for split in split_list:
+                arg_list.append({'split': split,
+                                 'verbose': False,
+                                 'effect_split_dict': effect_split_dict})
+            res = parallel.run_par_fnc(fnc='run_split_max', obj=self,
+                                       arg_list=arg_list, verbose=verbose)
+            for split, max_stat in res:
+                self.split_stat_dict[split] = max_stat
+        else:
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
-                self.split_stat_dict[split] = self.run_split_max(split)
-
-            return self.split_stat_dict
-
-        arg_list = list()
-
-        num_cpu = min(parallel.num_cpu, len(split_list))
-        idx = np.linspace(0, len(split_list), num=num_cpu + 1).astype(int)
-        for cpu_idx in range(num_cpu):
-            # only verbose on last cpu
-            _verbose = verbose and (cpu_idx == num_cpu - 1)
-
-            arg_list.append({'split_list': split_list[idx[cpu_idx]:
-                                                      idx[cpu_idx + 1]],
-                             'par_flag': False,
-                             'verbose': _verbose})
-        res = parallel.run_par_fnc(fnc='run_split_max_multi', obj=self,
-                                   arg_list=arg_list, verbose=verbose)
-        for _split_stat_dict in res:
-            self.split_stat_dict.update(_split_stat_dict)
+                _, self.split_stat_dict[split] = self.run_split_max(split)
 
         return self.split_stat_dict
 
-    def run_split_max(self, split):
+    def run_split_max(self, split, **kwargs):
         """ runs a single split, returns max stat """
-        stat_volume = self.run_split(split)
+        stat_volume = self.run_split(split, **kwargs)
 
-        return stat_volume[self.file_tree.mask].max()
+        return split, stat_volume[self.file_tree.mask].max()
 
     @abstractmethod
-    def run_split(self, split):
+    def run_split(self, split, effect_split_dict):
         """ returns a volume of statistics per some method
 
         Args:
             split (tuple): (num_sbj), split[i] describes which class the i-th
                            sbj belongs to in this split
+            effect_split_dict (dict): keys are effects, values are splits
 
         Returns:
             stat_volume (np.array): (space0, space1, space2) stats
