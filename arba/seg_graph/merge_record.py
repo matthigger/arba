@@ -1,7 +1,7 @@
 import networkx as nx
 
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward, FeatStat
+from ..region import RegionT2Ward
 from ..space import PointCloud
 
 
@@ -135,16 +135,10 @@ class MergeRecord(nx.DiGraph):
 
         pc = self.get_pc(node)
 
-        # constrain to relevant data
-        mask = pc.to_mask()
-        data = file_tree.data[mask, :, :]
-
         fs_dict = dict()
         for grp, sbj_list in grp_sbj_dict.items():
-            sbj_bool = file_tree.sbj_list_to_bool(sbj_list)
-            x = data[:, sbj_bool, :]
-            x = x.reshape((-1, file_tree.d), order='F')
-            fs_dict[grp] = FeatStat.from_array(x.T)
+            fs_dict[grp] = sum(file_tree.get_fs(ijk, sbj_list=sbj_list)
+                               for ijk in pc)
         return RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
 
     def get_iter_sg(self, file_tree, grp_sbj_dict):
