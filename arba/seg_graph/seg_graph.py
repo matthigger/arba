@@ -6,7 +6,7 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionT2Ward, FeatStat
+from ..region import RegionT2Ward
 from ..space import PointCloud
 
 
@@ -48,13 +48,11 @@ class SegGraph(nx.Graph):
         for ijk in self.file_tree.pc:
             # space region occupies
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
-            i, j, k = ijk
 
             # statistics of features in region
             fs_dict = dict()
             for grp, sbj_bool in grp_sbj_bool.items():
-                x = self.file_tree.data[i, j, k, sbj_bool, :]
-                fs_dict[grp] = FeatStat.from_array(x.T)
+                fs_dict[grp] = self.file_tree.get_fs(ijk, sbj_bool=sbj_bool)
 
             # build and store in graph
             reg = RegionT2Ward(pc_ijk=pc_ijk, fs_dict=fs_dict)

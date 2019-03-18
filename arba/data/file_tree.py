@@ -41,6 +41,8 @@ class FileTree:
         pc (PointCloud): point cloud of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
+
+        split_effect_dict (dict): keys are split, values are effect
     """
 
     @property
@@ -81,6 +83,31 @@ class FileTree:
         self.fs = None
         self.data = None
         self.f_data = None
+
+        self.split_effect_dict = None
+
+    @check_loaded
+    def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
+
+        # get sbj_bool
+        assert not ((sbj_list is not None) and (sbj_bool is not None)), \
+            'nand(sbj_list, sbj_bool) required'
+        if sbj_bool is None:
+            sbj_bool = self.sbj_list_to_bool(sbj_list)
+
+        # build fs
+        i, j, k = ijk
+        x = self.data[i, j, k, :, :]
+
+        # apply effect
+        if self.split_effect_dict is not None:
+            # copy array
+            x = np.array(x)
+            for split, effect in self.split_effect_dict.items():
+                x[split, :] += effect.mean
+
+        x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+        return FeatStat.from_array(x.T)
 
     @contextmanager
     def loaded(self):
@@ -191,6 +218,24 @@ class FileTree:
 
     def sbj_bool_to_list(self, sbj_bool):
         return [sbj for b, sbj in zip(sbj_bool, self.sbj_list) if b]
+
+    def __eq__(self, other):
+        if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
+            return False
+
+        if self.ref != other.ref:
+            return False
+
+        if self.mask != other.mask:
+            return False
+
+        if self.scale != other.scale:
+            return False
+
+        if self.fnc_list != other.fnc_list:
+            return False
+
+        return True
 
 
 def scale_normalize(ft):
