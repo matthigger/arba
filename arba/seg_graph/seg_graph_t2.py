@@ -1,3 +1,5 @@
+import numpy as np
+
 from .seg_graph import SegGraph
 from .seg_graph_hist import SegGraphHistory
 
@@ -48,3 +50,33 @@ class SegGraphT2(SegGraphHistory):
         sg.add_nodes_from(reg_list)
 
         return sg
+
+    def get_max_t2_array(self):
+        """ returns volume of max t2 per voxel
+
+        Returns:
+            max_t2 (array): maximum t2 observed per each voxel
+        """
+
+        # serves as set of all voxels which haven't seen a value yet
+        ijk_set = set(self.file_tree.pc)
+
+        # sort regions by decreasing t2
+        node_list = sorted(self.node_t2_dict.keys(), key=self.node_t2_dict.get,
+                           reverse=True)
+
+        # build array
+        max_t2 = np.zeros(shape=self.file_tree.ref.shape)
+        while ijk_set:
+            # get space of region with max t2 value
+            n = node_list.pop(0)
+            pc = self.merge_record.get_pc(n)
+
+            # record
+            for i, j, k in pc & ijk_set:
+                max_t2[i, j, k] = self.node_t2_dict[n]
+
+                # remove pc from ijk_set
+                ijk_set.remove((i, j, k))
+
+        return max_t2

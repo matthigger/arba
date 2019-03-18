@@ -51,12 +51,8 @@ class PermuteARBA(Permute):
     def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
 
-        def get_t2(reg):
-            return len(reg) * reg.t2
-
         # get volume of stat
         sg_hist = self.run_split(split, full_t2=True)
-        sg_max_t2 = sg_hist.cut_greedy_t2()
-        stat_volume = sg_max_t2.to_array(fnc=get_t2, background=0)
+        max_t2 = sg_hist.get_max_t2_array()
 
-        return super().determine_sig(stat_volume=stat_volume)
+        return super().determine_sig(stat_volume=max_t2)
