@@ -80,7 +80,7 @@ class SegGraphHistory(SegGraph):
 
         return node_list
 
-    def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
+    def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=False,
                   update_period=10, verbose_dbg=False, **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
