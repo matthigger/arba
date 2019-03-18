@@ -21,7 +21,7 @@ class SegGraphT2(SegGraphHistory):
             self.node_t2_dict[node] = reg.t2 * len(reg)
 
     def merge(self, reg_tuple):
-        node_sum = len(self.merge_record)
+        node_sum = len(self.merge_record.nodes)
         reg_sum = super().merge(reg_tuple)
 
         # record t2 of newest region
@@ -57,26 +57,11 @@ class SegGraphT2(SegGraphHistory):
         Returns:
             max_t2 (array): maximum t2 observed per each voxel
         """
+        node_list = self._cut_greedy_min(node_val_dict=self.node_t2_dict)
 
-        # serves as set of all voxels which haven't seen a value yet
-        ijk_set = set(self.file_tree.pc)
-
-        # sort regions by decreasing t2
-        node_list = sorted(self.node_t2_dict.keys(), key=self.node_t2_dict.get,
-                           reverse=True)
-
-        # build array
-        max_t2 = np.zeros(shape=self.file_tree.ref.shape)
-        while ijk_set:
-            # get space of region with max t2 value
-            n = node_list.pop(0)
-            pc = self.merge_record.get_pc(n)
-
-            # record
-            for i, j, k in pc & ijk_set:
-                max_t2[i, j, k] = self.node_t2_dict[n]
-
-                # remove pc from ijk_set
-                ijk_set.remove((i, j, k))
-
+        max_t2 = np.zeros(self.file_tree.ref.shape)
+        for n in node_list:
+            mask = self.merge_record.get_pc(n).to_mask()
+            max_t2[mask] = self.node_t2_dict[n]
+            
         return max_t2
