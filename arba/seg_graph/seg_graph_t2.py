@@ -15,7 +15,8 @@ class SegGraphT2(SegGraphHistory):
         self.node_t2_dict = dict()
         for reg in self.nodes:
             ijk = next(iter(reg.pc_ijk))
-            self.node_t2_dict[ijk] = reg.t2 * len(reg)
+            node = self.merge_record.ijk_leaf_dict[ijk]
+            self.node_t2_dict[node] = reg.t2 * len(reg)
 
     def merge(self, reg_tuple):
         node_sum = len(self.merge_record)
@@ -36,8 +37,14 @@ class SegGraphT2(SegGraphHistory):
         node_list = self._cut_greedy_min(node_val_dict=node_neg_t2_dict)
 
         # build seg graph
-        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
-        reg_list = [self.resolve_reg(n) for n in node_list]
+        sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
+                      _add_nodes=False)
+        reg_list = list()
+        for n in node_list:
+            reg = self.merge_record.resolve_node(n,
+                                                 file_tree=self.file_tree,
+                                                 grp_sbj_dict=self.grp_sbj_dict)
+            reg_list.append(reg)
         sg.add_nodes_from(reg_list)
 
         return sg

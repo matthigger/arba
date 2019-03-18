@@ -6,8 +6,8 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionT2Ward
-from ..space import get_ref, PointCloud
+from ..region import RegionT2Ward, FeatStat
+from ..space import PointCloud
 
 
 class SegGraph(nx.Graph):
@@ -17,50 +17,44 @@ class SegGraph(nx.Graph):
     (see RegionWardT2)
 
     Attributes:
-        ft_dict (dict): keys are grp labels, values are FileTree
+        file_tree (FileTree): file tree
+        grp_sbj_dict (dict): keys are grp labels, values are list of sbj
     """
 
-    def __init__(self, ft_dict, _add_nodes=True, **kwargs):
+    def __init__(self, file_tree, grp_sbj_dict, _add_nodes=True, **kwargs):
         """
 
         Args:
-            ft_dict (dict): keys are grp, values are FileTree
+            file_tree (FileTree): file tree
+            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
         super().__init__()
-
-        # store ft_dict
-        self.ft_dict = ft_dict
-
-        # check that all file trees have same ref
-        ft0, ft1 = ft_dict.values()
-        assert ft0.ref == ft1.ref, 'ref space mismatch in file_tree'
-        assert np.allclose(ft0.mask, ft1.mask), 'mask mismatch in file_tree'
-
-        # load file_trees
-        for ft in ft_dict.values():
-            if not ft.ijk_fs_dict.keys():
-                ft.load(load_ijk_fs=True, load_data=False, **kwargs)
+        self.file_tree = file_tree
+        self.grp_sbj_dict = grp_sbj_dict
 
         if _add_nodes:
-            self._add_nodes()
-            self.connect_neighbors(**kwargs)
+            with file_tree.loaded():
+                self._add_nodes()
+                self.connect_neighbors(**kwargs)
 
     def _add_nodes(self):
-        ft = next(iter(self.ft_dict.values()))
-        mask = ft.mask
-        pc = PointCloud.from_mask(mask)
+        grp_sbj_bool = dict()
+        for grp, sbj_list in self.grp_sbj_dict.items():
+            grp_sbj_bool[grp] = self.file_tree.sbj_list_to_bool(sbj_list)
 
         # build regions
-        for ijk in pc:
+        for ijk in self.file_tree.pc:
             # space region occupies
-            pc_ijk = PointCloud({tuple(ijk)}, ref=ft.ref)
+            pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
+            i, j, k = ijk
 
             # statistics of features in region
             fs_dict = dict()
-            for grp, ft in self.ft_dict.items():
-                fs_dict[grp] = ft.ijk_fs_dict[ijk]
+            for grp, sbj_bool in grp_sbj_bool.items():
+                x = self.file_tree.data[i, j, k, sbj_bool, :]
+                fs_dict[grp] = FeatStat.from_array(x.T)
 
             # build and store in graph
             reg = RegionT2Ward(pc_ijk=pc_ijk, fs_dict=fs_dict)
@@ -83,39 +77,18 @@ class SegGraph(nx.Graph):
                 if ijk1 in ijk_reg_map.keys():
                     self.add_edge(reg0, ijk_reg_map[ijk1])
 
-    def from_ft_dict(self, ft_dict):
-        """ builds copy of self, maps each region via ft_dict """
-        # build map of old regions to new (those from new ft_dict)
-        reg_map = {reg: reg.from_ft_dict(ft_dict)
-                   for reg in self.nodes}
-
-        # init new SegGraph
-        sg = type(self)(ft_dict=ft_dict, _add_nodes=False)
-
-        # add edges which mirror original
-        new_edges = ((reg_map[r0], reg_map[r1]) for r0, r1 in self.edges)
-        sg.add_edges_from(new_edges)
-        sg.add_nodes_from(reg_map.values())
-
-        return sg
-
-    def to_nii(self, f_out, ref, **kwargs):
+    def to_nii(self, f_out, **kwargs):
         """ saves nifti image """
-        # load reference image
-        ref = get_ref(ref)
-        if ref.shape is None:
-            raise AttributeError('ref must have shape')
-
         # build array
-        x = self.to_array(shape=ref.shape, **kwargs)
+        x = self.to_array(shape=self.file_tree.ref.shape, **kwargs)
 
         # save
-        img_out = nib.Nifti1Image(x, ref.affine)
+        img_out = nib.Nifti1Image(x, self.file_tree.ref.affine)
         img_out.to_filename(str(f_out))
 
         return img_out
 
-    def to_array(self, fnc=None, fnc_include=None, shape=None, background=0):
+    def to_array(self, fnc=None, fnc_include=None, background=0):
         """ constructs array of mean feature per region """
         if fnc is None:
             if fnc_include is not None:
@@ -132,11 +105,10 @@ class SegGraph(nx.Graph):
         else:
             reg_list = list(filter(fnc_include, self.nodes))
 
-        if shape is None:
-            shape = reg_list[0].pc_ijk.ref.shape
+        shape = self.file_tree.ref.shape
 
-        if set().intersection(*[r.pc_ijk for r in self]):
-            raise AttributeError('non disjoint regions found')
+        assert (not set().intersection(*[r.pc_ijk for r in self])), \
+            'non disjoint regions found'
 
         # build output array
         x = np.zeros(shape) * background
@@ -236,8 +208,8 @@ class SegGraph(nx.Graph):
         """
 
         # init seg graph
-        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
-        sg.ft_dict = self.ft_dict
+        sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
+                      _add_nodes=False)
 
         # if self is empty, return empty SegGraph
         if not self.nodes:

@@ -17,53 +17,31 @@ class SegGraphHistory(SegGraph):
 
     Attributes:
         merge_record (MergeRecord)
+        max_t2 (float): max t2 stat
         _err_edge_list (SortedList): tuples of (error, (reg0, reg1)) associated
                                      with joining reg0, reg1
-
-        todo: rm the two attributes below, move history into merge_record
-        reg_node_dict (dict): keys are regions in self.nodes (from SegGraph,
-                              note this is not the full history) values are
-                              nodes in merge_record
-        node_pval_dict (dict): keys are nodes, values are pval.  contains full
-                               history
     """
 
     def __init__(self, *args, obj_fnc=None, **kwargs):
         super().__init__(*args, **kwargs)
-
-        ft = next(iter(self.ft_dict.values()))
-        self.merge_record = MergeRecord(ft.mask, ref=ft.ref)
+        self.merge_record = MergeRecord(self.file_tree.mask,
+                                        ref=self.file_tree.ref)
+        self.max_t2 = max(len(r) * r.t2 for r in self)
 
         self.obj_fnc = obj_fnc
         self._err_edge_list = None
         if self.obj_fnc is None:
             self.obj_fnc = RegionT2Ward.get_error_tr
 
-        # init reg_node_dict, node_pval_dict
-        self.reg_node_dict = dict()
-        self.node_pval_dict = dict()
-        for reg in self.nodes:
-            assert len(reg) == 1, 'invalid region, must be a single voxel'
-            ijk = next(iter(reg.pc_ijk))
-            self.reg_node_dict[reg] = ijk
-            node = self.merge_record.ijk_leaf_dict[ijk]
-            self.node_pval_dict[node] = reg.pval
-
-    def from_ft_dict(self, ft_dict):
-        sg_hist = super().from_ft_dict(ft_dict)
-        sg_hist.merge_record = self.merge_record
-
-        return sg_hist
-
     def merge(self, reg_tuple):
         """ record combination in merge_record """
-        node_sum = len(self.merge_record)
         self.merge_record.merge(reg_tuple=reg_tuple)
 
         reg_sum = super().merge(reg_tuple)
 
-        self.reg_node_dict[reg_sum] = node_sum
-        self.node_pval_dict[node_sum] = reg_sum.pval
+        _t2 = len(reg_sum) * reg_sum.t2
+        if _t2 > self.max_t2:
+            self.max_t2 = _t2
 
         return reg_sum
 
@@ -101,63 +79,6 @@ class SegGraphHistory(SegGraph):
                 node_covered |= nx.ancestors(self.merge_record, n)
 
         return node_list
-
-    def cut_greedy_sig(self, alpha=.05):
-        """ gets SegGraph of disjoint reg with min pval such that all are sig
-
-        significance is under Bonferonni (equiv Holm if all sig)
-
-        this is achieved by greedily adding region of min pval to seg_graph so
-        long as resultant seg_graph contains only significant regions.  after
-        each addition, intersecting regions are discarded from search space
-
-        Args:
-            alpha (float): significance threshold
-
-        Returns:
-            sg (SegGraph): all its regions are disjoint and significant
-        """
-
-        # init output seg graph
-        sg = SegGraph(ft_dict=self.ft_dict, _add_nodes=False)
-
-        # get spanning, disjoint and minimal pval node_list
-        node_pval_dict = {n: p for n, p in self.node_pval_dict.items()
-                          if p <= alpha}
-        node_list = self._cut_greedy_min(node_val_dict=node_pval_dict)
-        node_pval_list_sig = [(n, node_pval_dict[n]) for n in node_list]
-
-        # get m_max: max num regions for which all are still `significant'
-        # under holm-bonferonni.
-        # note: it is expected these regions are retested on separate fold
-        m_max = np.inf
-        for idx, (_, pval) in enumerate(node_pval_list_sig):
-            if idx == m_max:
-                break
-            m_current = np.floor(alpha / pval).astype(int) + idx
-            m_max = min(m_current, m_max)
-
-        if m_max < np.inf:
-            # get regions associated with each node
-            node_reg_dict = {n: r for r, n in self.reg_node_dict.items()}
-            reg_list = [node_reg_dict[n]
-                        for n, _ in node_pval_list_sig[:m_max]]
-
-            # add these regions to output seg_graph
-            # note: reg_sig_list is sorted in increasing p value
-            sg.add_nodes_from(reg_list)
-
-            # validate all are sig
-            assert len(sg.get_sig(alpha=alpha, method='holm')) == len(sg), \
-                'not all regions are significant'
-
-        return sg
-
-    def get_sig(self, *args, **kwargs):
-        # compose self.reg_node_dict and self.node_pval_dict
-        _reg_pval_dict = {reg: self.node_pval_dict[n]
-                          for reg, n in self.reg_node_dict.items()}
-        return super().get_sig(*args, _reg_pval_dict=_reg_pval_dict, **kwargs)
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=True,
                   update_period=10, verbose_dbg=False, **kwargs):
