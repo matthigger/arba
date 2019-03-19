@@ -160,7 +160,7 @@ class PermuteBase(ABC):
         return split_list
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
-                            effect_split_dict=None):
+                            effect_split_dict=None, **kwargs):
         """ runs many splits, potentially in parallel"""
 
         if par_flag:

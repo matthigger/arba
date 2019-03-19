@@ -21,7 +21,10 @@ class PermuteARBA(PermuteBase):
 
             merge_record = self.sg_hist.merge_record
             # todo: better way to store effect
-            effect = self.file_tree.split_effect[1]
+            if self.file_tree.split_effect is None:
+                effect_mask = None
+            else:
+                effect_mask = self.file_tree.split_effect[1].mask
 
             sbj_bool_to_list = self.file_tree.sbj_bool_to_list
             not_split = tuple(not (x) for x in split)
@@ -31,10 +34,10 @@ class PermuteARBA(PermuteBase):
             tree_hist, \
             node_reg_dict = merge_record.resolve_hist(self.file_tree,
                                                       grp_sbj_dict)
-            size_v_wt2(tree_hist, mask=effect.mask)
+            size_v_wt2(tree_hist, mask=effect_mask)
             save_fig(f_out=folder / 'size_v_wt2.pdf')
 
-            size_v_t2(tree_hist, mask=effect.mask)
+            size_v_t2(tree_hist, mask=effect_mask)
             save_fig(f_out=folder / 'size_v_t2.pdf')
 
     def _split_to_sg_hist(self, split, full_t2=False):
