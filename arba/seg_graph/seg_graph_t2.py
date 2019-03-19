@@ -32,11 +32,12 @@ class SegGraphT2(SegGraphHistory):
     def cut_greedy_t2(self):
         """ gets SegGraph of disjoint reg with max t2 which covers volume
         """
-        # we 'flip' t2 as _cut_greedy_min() will minimize the given objective
+        # we 'flip' t2 as _cut_greedy() will minimize the given objective
         node_neg_t2_dict = {n: -m for n, m in self.node_t2_dict.items()}
 
         # get disjoint cover of entire volume which greedily maximizes t2
-        node_list = self._cut_greedy_min(node_val_dict=node_neg_t2_dict)
+        node_list = self._cut_greedy(node_val_dict=node_neg_t2_dict,
+                                     max_flag=True)
 
         # build seg graph
         sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
@@ -57,11 +58,12 @@ class SegGraphT2(SegGraphHistory):
         Returns:
             max_t2 (array): maximum t2 observed per each voxel
         """
-        node_list = self._cut_greedy_min(node_val_dict=self.node_t2_dict)
+        node_list = self._cut_greedy(node_val_dict=self.node_t2_dict,
+                                     max_flag=True)
 
         max_t2 = np.zeros(self.file_tree.ref.shape)
         for n in node_list:
             mask = self.merge_record.get_pc(n).to_mask()
             max_t2[mask] = self.node_t2_dict[n]
-            
+
         return max_t2

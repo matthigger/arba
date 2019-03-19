@@ -45,7 +45,7 @@ class SegGraphHistory(SegGraph):
 
         return reg_sum
 
-    def _cut_greedy_min(self, node_val_dict):
+    def _cut_greedy(self, node_val_dict, max_flag=True):
         """ gets SegGraph of disjoint reg which minimize val
 
         NOTE: the resultant node_list covers node_val_dict, ie each node in
@@ -54,12 +54,14 @@ class SegGraphHistory(SegGraph):
         Args:
             node_val_dict (dict): keys are nodes, values are associated values
                                   to be minimized
+            max_flag (bool): toggles max or min
 
         Returns:
              node_list (list): nodes have minimum val, are disjoint
         """
         # sort all nodes
-        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get)
+        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get,
+                                  reverse=max_flag)
 
         # init
         node_covered = set()
