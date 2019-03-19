@@ -122,9 +122,7 @@ class FeatStat:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
-        if len(cov.shape) > 1:
-            assert (np.linalg.eig(cov)[0] >= 0).all(), \
-                'non positive covariance'
+        assert (np.diag(np.atleast_2d(cov)) >= 0).all(), 'non positive covariance'
         fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov, _fast=False)
         return fs
 
