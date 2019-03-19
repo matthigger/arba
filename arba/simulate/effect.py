@@ -149,6 +149,8 @@ class Effect:
         Returns:
             sens (float): percentage of affected voxels detected
             spec (float): percentage of unaffected voxels undetected
+
+        todo: error if estimate has 1's outside of mask
         """
         mask = mask.astype(bool)
         signal = self.mask[mask].astype(bool)

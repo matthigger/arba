@@ -192,7 +192,7 @@ class Simulator:
                     continue
                 method = folder_method.stem
                 pval = nib.load(str(folder_method / 'pval.nii.gz')).get_data()
-                estimate = pval <= alpha
+                estimate = np.logical_and(pval <= alpha, mask)
 
                 sens, spec = effect.get_sens_spec(estimate, mask)
 
