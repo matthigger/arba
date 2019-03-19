@@ -37,13 +37,18 @@ class Simulator:
         self.par_flag = par_flag
         self.active_rad = active_rad
 
-        # split defines who is in the effect grp
+        # split defines who is in the effect grp, fixed for all simulations
         n_effect = int(self.file_tree.num_sbj * p_effect)
         ones_idx = np.random.choice(range(self.file_tree.num_sbj),
                                     size=n_effect,
                                     replace=False)
         self.split = tuple(idx in ones_idx
                            for idx in range(self.file_tree.num_sbj))
+
+        # debug: to rm
+        n_eff = int(self.file_tree.num_sbj / 2)
+        n_no_eff = self.file_tree.num_sbj - n_eff
+        self.split = tuple(([False] * n_eff) + ([True] * n_no_eff))
 
         # comparison parameters
         self.f_rba = f_rba
@@ -116,23 +121,24 @@ class Simulator:
                 e = Effect.from_fs_t2(fs=fs, mask=mask, t2=1)
                 self.effect_list.append(e)
 
-    def run_effect_permute(self, effect, t2, folder=None, **kwargs):
+    def run_effect_permute(self, effect, t2=None, folder=None, **kwargs):
         # get mask of active area
-        mask_active = self.file_tree.mask
         if self.active_rad is not None:
+            mask_active = self.file_tree.mask
+
             # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(self.active_rad)
             mask_active = np.logical_and(mask_eff_dilated, mask_active)
-        pc = PointCloud.from_mask(mask_active)
+
+            self.file_tree.mask = mask_active
+            self.file_tree.pc = PointCloud.from_mask(mask_active)
 
         # set scale of effect
         if t2 is not None:
             effect.t2 = t2
 
         # modify file_tree to specific effect
-        self.file_tree.split_effect_dict = {self.split: effect}
-        self.file_tree.pc = pc
-        self.file_tree.mask = mask_active
+        self.file_tree.split_effect = (self.split, effect)
 
         # sample random split
         if folder is not None:
@@ -143,8 +149,8 @@ class Simulator:
             folder = folder / 'arba_permute'
             folder.mkdir(exist_ok=True)
 
-        permuteARBA = PermuteARBA(self.file_tree)
-        permuteARBA.run(self.split, n=self.num_perm, folder=folder, **kwargs)
+        permute_arba = PermuteARBA(self.file_tree)
+        permute_arba.run(self.split, n=self.num_perm, folder=folder, **kwargs)
 
     def run(self, t2_list):
 

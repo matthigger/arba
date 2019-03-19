@@ -42,7 +42,7 @@ class FileTree:
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
 
-        split_effect_dict (dict): keys are split, values are effect
+        split_effect (tuple): split, effect
     """
 
     @property
@@ -84,7 +84,7 @@ class FileTree:
         self.data = None
         self.f_data = None
 
-        self.split_effect_dict = None
+        self.split_effect = None
 
     @check_loaded
     def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
@@ -100,10 +100,10 @@ class FileTree:
         x = self.data[i, j, k, :, :]
 
         # apply effect
-        if self.split_effect_dict is not None:
-            # copy array
-            x = np.array(x)
-            for split, effect in self.split_effect_dict.items():
+        if self.split_effect is not None:
+            split, effect = self.split_effect
+            if effect.mask[i, j, k]:
+                x = np.array(x)
                 x[split, :] += effect.mean
 
         x = x[sbj_bool, :].reshape((-1, self.d), order='F')
@@ -206,16 +206,14 @@ class FileTree:
             # build based on mean feature
             feat_idx = self.feat_list.index(feat)
             x = self.data[:, :, :, sbj_bool, feat_idx]
-            if self.split_effect_dict is not None:
+            if self.split_effect is not None:
                 x = np.array(x)
-                for split, effect in self.split_effect_dict.items():
-                    # todo: all splits are numpy array
-                    # todo: rename sbj_bool -> split
-                    # index effect into only active sbj
-                    _split = np.array(split)[np.array(sbj_bool)]
-                    if not _split.sum():
-                        # no sbj have effect
-                        continue
+                split, effect = self.split_effect
+                # todo: all splits are numpy array
+                # todo: rename sbj_bool -> split
+                # index effect into only active sbj
+                _split = np.array(split)[np.array(sbj_bool)]
+                if _split.sum():
                     _x = x[effect.mask, :]
                     _x[:, _split] += effect.mean[feat_idx]
                     x[effect.mask, :] = _x

@@ -49,7 +49,7 @@ with file_tree.loaded():
     fs = sum(file_tree.get_fs(ijk) for ijk in pc)
     effect = Effect.from_fs_t2(fs, t2=t2, mask=mask)
 
-    file_tree.split_effect_dict = {split: effect}
+    file_tree.split_effect = (split, effect)
 
     mask_active = mask.dilate(active_rad)
     file_tree.mask = mask_active

@@ -18,12 +18,10 @@ class PermuteARBA(Permute):
 
         if print_tree:
             assert self.sg_hist is not None, 'call determine_sig() first'
-            assert len(self.file_tree.split_effect_dict) == 1, \
-                'effect not identified'
 
             merge_record = self.sg_hist.merge_record
             # todo: better way to store effect
-            effect = next(iter(self.file_tree.split_effect_dict.values()))
+            effect = self.file_tree.split_effect[1]
 
             sbj_bool_to_list = self.file_tree.sbj_bool_to_list
             not_split = tuple(not (x) for x in split)
@@ -51,7 +49,7 @@ class PermuteARBA(Permute):
         Returns:
             sg_hist (SegGraphHistory): reduced as much as possible
         """
-        not_split = (~x for x in split)
+        not_split = tuple(not x for x in split)
         grp_sbj_dict = {'0': self.file_tree.sbj_bool_to_list(split),
                         '1': self.file_tree.sbj_bool_to_list(not_split)}
         if full_t2:
