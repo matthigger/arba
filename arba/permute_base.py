@@ -13,7 +13,7 @@ import seaborn as sns
 from arba.plot import save_fig
 
 
-class Permute(ABC):
+class PermuteBase(ABC):
     """ runs permutation testing to get maximum 'stat' per region
 
     # todo: adaptive mode, run only as many n as needed to ensure sig

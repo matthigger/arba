@@ -1,10 +1,10 @@
-from arba.permute import Permute
+from arba.permute_base import PermuteBase
 from arba.plot import save_fig, size_v_wt2, size_v_t2
 from ..seg_graph_hist import SegGraphHistory
 from ..seg_graph_t2 import SegGraphT2
 
 
-class PermuteARBA(Permute):
+class PermuteARBA(PermuteBase):
     """ runs ARBA permutations
     """
 

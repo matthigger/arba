@@ -2,11 +2,11 @@ import numpy as np
 from tqdm import tqdm
 
 from .compute import apply_tfce
-from ...permute import Permute
+from ...permute_base import PermuteBase
 from ...region import FeatStat
 
 
-class PermuteTFCE(Permute):
+class PermuteTFCE(PermuteBase):
     def __init__(self, *args, h=2, e=.5, c=6, **kwargs):
         super().__init__(*args, **kwargs)
         self.h = h
