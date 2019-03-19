@@ -137,19 +137,8 @@ class Simulator:
         # sample random split
         if folder is not None:
             file.save(effect, folder / 'effect.p.gz')
-
-            if self.print_image:
-                f_out = folder / 'effect.nii.gz'
-                effect.mask.to_nii(f_out=f_out)
-
-                # print mean image per grp per feature
-                not_split = tuple(not x for x in self.split)
-                for feat in self.file_tree.feat_list:
-                    for lbl, split in (('effect', self.split),
-                                       ('ctrl', not_split)):
-                        f_out = folder / f'{feat}_{lbl}.nii.gz'
-                        self.file_tree.to_nii(feat=feat, sbj_bool=split,
-                                              f_out=f_out)
+            f_out = folder / 'effect.nii.gz'
+            effect.mask.to_nii(f_out=f_out)
 
             folder = folder / 'arba_permute'
             folder.mkdir(exist_ok=True)

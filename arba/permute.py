@@ -77,13 +77,27 @@ class Permute(ABC):
         if folder is not None:
             label_x_dict = {'stat_volume': stat_volume,
                             'pval': pval}
-            self.save(folder, label_x_dict)
+            self.save(folder=folder, label_x_dict=label_x_dict, split=split,
+                      **kwargs)
 
         return stat_volume, pval
 
-    def save(self, folder, label_x_dict=None):
+    def save(self, folder, split=None, label_x_dict=None, print_image=True,
+             **kwargs):
         """ saves output images in a folder"""
         file.save(self, pathlib.Path(folder) / self.f_save)
+
+        if print_image:
+            assert split is not None, 'split required if print_image'
+
+            # print mean image per grp per feature
+            not_split = tuple(not x for x in split)
+            for feat in self.file_tree.feat_list:
+                for lbl, split in (('1', split),
+                                   ('0', not_split)):
+                    f_out = folder / f'{feat}_{lbl}.nii.gz'
+                    self.file_tree.to_nii(feat=feat, sbj_bool=split,
+                                          f_out=f_out)
 
         if label_x_dict is None:
             return
