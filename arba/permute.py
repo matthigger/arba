@@ -8,6 +8,9 @@ from scipy.special import comb
 from tqdm import tqdm
 
 from mh_pytools import file, parallel
+import matplotlib.pyplot as plt
+import seaborn as sns
+from arba.plot import save_fig
 
 
 class Permute(ABC):
@@ -85,7 +88,22 @@ class Permute(ABC):
     def save(self, folder, split=None, label_x_dict=None, print_image=True,
              **kwargs):
         """ saves output images in a folder"""
-        file.save(self, pathlib.Path(folder) / self.f_save)
+        folder = pathlib.Path(folder)
+        file.save(self, folder / self.f_save)
+
+        # built plot of stats observed
+        sns.set(font_scale=1.2)
+        stats = np.array(list(self.split_stat_dict.values()))
+        bins = np.geomspace(stats.min(), stats.max(), 100)
+        thresh = np.percentile(stats, 95)
+        plt.hist(stats, bins=bins)
+        plt.gca().set_yscale('log')
+        plt.gca().set_xscale('log')
+        plt.gca().axvline(thresh, color='r', label=f'95%={thresh}')
+        plt.legend()
+        plt.xlabel('max stat across image')
+        plt.ylabel(f'count\n({len(stats)} splits total)')
+        save_fig(folder / 'hist_max_stat.pdf')
 
         if print_image:
             assert split is not None, 'split required if print_image'
