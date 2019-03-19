@@ -172,7 +172,7 @@ class FileTree:
 
     @check_loaded
     def to_nii(self, fnc=None, feat=None, sbj_list=None, f_out=None,
-               back=0):
+               sbj_bool=None, back=0):
         """ writes data to a nii file
 
         Args:
@@ -190,18 +190,36 @@ class FileTree:
             f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
 
         # get sbj_bool
-        sbj_bool = self.sbj_list_to_bool(sbj_list)
+        assert (sbj_list is None) != (sbj_bool is None), \
+            'sbj_list xor sbj_bool'
+        if sbj_bool is None:
+            sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # build img
         if fnc is not None:
             # build based on custom fnc
+            raise NotImplementedError('how does fnc handle effect?')
             x = back * np.ones(self.ref.shape)
             for i, j, k in self.pc:
                 x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
         else:
             # build based on mean feature
             feat_idx = self.feat_list.index(feat)
-            x = np.mean(self.data[:, :, :, sbj_bool, feat_idx], axis=3)
+            x = self.data[:, :, :, sbj_bool, feat_idx]
+            if self.split_effect_dict is not None:
+                x = np.array(x)
+                for split, effect in self.split_effect_dict.items():
+                    # todo: all splits are numpy array
+                    # todo: rename sbj_bool -> split
+                    # index effect into only active sbj
+                    _split = np.array(split)[np.array(sbj_bool)]
+                    if not _split.sum():
+                        # no sbj have effect
+                        continue
+                    _x = x[effect.mask, :]
+                    _x[:, _split] += effect.mean[feat_idx]
+                    x[effect.mask, :] = _x
+            x = np.mean(x, axis=3)
 
         # write to file
         img = nib.Nifti1Image(x, affine=self.ref.affine)

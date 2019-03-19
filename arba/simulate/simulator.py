@@ -22,7 +22,8 @@ class Simulator:
 
     def __init__(self, folder, file_tree, p_effect=.5, effect_shape='min_var',
                  verbose=True, par_flag=True, f_rba=None, num_perm=5000,
-                 alpha=.05, tfce_flag=True, vba_flag=True, active_rad=None):
+                 alpha=.05, tfce_flag=True, vba_flag=True, active_rad=None,
+                 print_image=False):
         self.folder = pathlib.Path(folder)
         if self.folder.exists():
             shutil.rmtree(self.folder)
@@ -50,6 +51,9 @@ class Simulator:
         self.vba_flag = vba_flag
         self.num_perm = num_perm
         self.alpha = alpha
+
+        # output params
+        self.print_image = print_image
 
     def build_effect_list(self, radius=None, num_vox=None, seg_array=None,
                           seed=1):
@@ -133,6 +137,20 @@ class Simulator:
         # sample random split
         if folder is not None:
             file.save(effect, folder / 'effect.p.gz')
+
+            if self.print_image:
+                f_out = folder / 'effect.nii.gz'
+                effect.mask.to_nii(f_out=f_out)
+
+                # print mean image per grp per feature
+                not_split = tuple(not x for x in self.split)
+                for feat in self.file_tree.feat_list:
+                    for lbl, split in (('effect', self.split),
+                                       ('ctrl', not_split)):
+                        f_out = folder / f'{feat}_{lbl}.nii.gz'
+                        self.file_tree.to_nii(feat=feat, sbj_bool=split,
+                                              f_out=f_out)
+
             folder = folder / 'arba_permute'
             folder.mkdir(exist_ok=True)
 
