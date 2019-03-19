@@ -38,8 +38,8 @@ class RegionT2Ward(Region):
         # memoize
         if self._t2 is None:
             self._t2 = self.get_t2()
-        if self._t2 < 0:
-            raise AttributeError('invalid t2')
+            if self._t2 < 0:
+                raise AttributeError('invalid t2')
         return self._t2
 
     def get_t2(self):
