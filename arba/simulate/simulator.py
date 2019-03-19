@@ -1,14 +1,16 @@
 import pathlib
 import random
 import shutil
+from collections import defaultdict
 
+import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
 from mh_pytools import file
 from mh_pytools import parallel
 from .effect import Effect
-from ..seg_graph import FeatStat, PermuteARBA
+from ..seg_graph import PermuteARBA
 from ..space import sample_mask, sample_mask_min_var, PointCloud
 
 
@@ -16,9 +18,6 @@ class Simulator:
     """ manages sampling effects and detecting via methods
     """
 
-    grp_effect = 'EFFECT'
-    grp_null = 'CONTROL'
-    s_mask_sig = 'mask_sig_{method}.nii.gz'
     f_performance = 'performance_stats.p.gz'
 
     def __init__(self, folder, file_tree, p_effect=.5, effect_shape='min_var',
@@ -132,9 +131,13 @@ class Simulator:
         self.file_tree.mask = mask_active
 
         # sample random split
+        if folder is not None:
+            file.save(effect, folder / 'effect.p.gz')
+            folder = folder / 'arba_permute'
+            folder.mkdir(exist_ok=True)
+
         permuteARBA = PermuteARBA(self.file_tree)
-        permuteARBA.run(self.split, n=self.num_perm, folder=folder,
-                        **kwargs)
+        permuteARBA.run(self.split, n=self.num_perm, folder=folder, **kwargs)
 
     def run(self, t2_list):
 
@@ -163,6 +166,31 @@ class Simulator:
         if not self.par_flag:
             for d in tqdm(arg_list, desc=desc, disable=not self.verbose):
                 self.run_effect_permute(**d)
+
+    def get_performance(self, alpha=.05):
+        mask = self.file_tree.mask
+
+        t2size_method_ss_tree = defaultdict(lambda: defaultdict(list))
+
+        for _folder in self.folder.glob('*t2*'):
+            effect = file.load(_folder / 'effect.p.gz')
+            for folder_method in _folder.glob('*'):
+                if not folder_method.is_dir():
+                    continue
+                method = folder_method.stem
+                pval = nib.load(str(folder_method / 'pval.nii.gz')).get_data()
+                estimate = pval <= alpha
+
+                sens, spec = effect.get_sens_spec(estimate, mask)
+
+                t2_size = effect.t2, int(effect.mask.sum())
+                t2size_method_ss_tree[t2_size][method].append((sens, spec))
+
+        # save performance stats
+        f_performance = self.folder / self.f_performance
+        file.save(dict(t2size_method_ss_tree), file=f_performance)
+
+        return f_performance
 
 
 def get_f(folder, f):
