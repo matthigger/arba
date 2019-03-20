@@ -156,7 +156,7 @@ class Simulator:
             permute_tfce.run(self.split, n=self.num_perm, folder=_folder,
                              **kwargs)
 
-    def run(self, t2_list):
+    def run(self, t2_list, **kwargs):
 
         # build arg_list
         arg_list = list()
@@ -173,6 +173,7 @@ class Simulator:
                      'verbose': self.verbose and (not self.par_flag),
                      'folder': folder,
                      'par_flag': False}
+                d.update(kwargs)
                 arg_list.append(d)
 
         # run
@@ -185,8 +186,6 @@ class Simulator:
                 self.run_effect_permute(**d)
 
     def get_performance(self, alpha=.05, print_perf=True):
-        mask = self.file_tree.mask
-
         t2size_method_ss_tree = defaultdict(lambda: defaultdict(list))
 
         for _folder in self.folder.glob('*t2*'):
@@ -195,7 +194,14 @@ class Simulator:
                 if not folder_method.is_dir():
                     continue
                 method = folder_method.stem
-                pval = nib.load(str(folder_method / 'pval.nii.gz')).get_data()
+
+                # mask are all voxels which were examined
+                f_stat = folder_method / 'stat_volume.nii.gz'
+                mask = nib.load(str(f_stat)).get_data().astype(bool)
+
+                # estimate is all pval which are <= alpha
+                f_pval = folder_method / 'pval.nii.gz'
+                pval = nib.load(str(f_pval)).get_data()
                 estimate = np.logical_and(pval <= alpha, mask)
 
                 sens, spec = effect.get_sens_spec(estimate, mask)
@@ -208,8 +214,6 @@ class Simulator:
                     with open(str(f_out), 'w') as f:
                         print(f'sensitivity: {sens:.3f}', file=f)
                         print(f'specificity: {spec:.3f}', file=f)
-
-                continue
 
         # save performance stats
         f_performance = self.folder / self.f_performance
