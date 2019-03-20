@@ -156,6 +156,9 @@ class Effect:
         signal = self.mask[mask].astype(bool)
         estimate = estimate[mask].astype(bool)
 
+        if not estimate.sum():
+            return 0, 1
+
         true_pos = np.count_nonzero(signal & estimate)
         true = np.count_nonzero(signal)
 
