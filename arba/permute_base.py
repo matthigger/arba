@@ -2,15 +2,15 @@ import pathlib
 from abc import ABC, abstractmethod
 from bisect import bisect_right
 
+import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
+import seaborn as sns
 from scipy.special import comb
 from tqdm import tqdm
 
-from mh_pytools import file, parallel
-import matplotlib.pyplot as plt
-import seaborn as sns
 from arba.plot import save_fig
+from mh_pytools import file, parallel
 
 
 class PermuteBase(ABC):
@@ -86,7 +86,7 @@ class PermuteBase(ABC):
         return stat_volume, pval
 
     def save(self, folder, split, label_x_dict=None, print_image=False,
-             save_self=False, print_hist=True, **kwargs):
+             save_self=False, print_hist=False, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
         folder.mkdir(exist_ok=True, parents=True)
@@ -101,11 +101,15 @@ class PermuteBase(ABC):
         if save_self:
             file.save(self, folder / self.f_save)
 
+        f_out = folder / 'thresh.txt'
+        stats = np.array(list(self.split_stat_dict.values()))
+        thresh = np.percentile(stats, 95, interpolation='lower')
+        with open(str(f_out), 'w') as f:
+            print(f'critical stat thresh: {thresh:.3e}', file=f)
+
         # built plot of stats observed
         if print_hist:
             sns.set(font_scale=1.2)
-            stats = np.array(list(self.split_stat_dict.values()))
-            thresh = np.percentile(stats, 95, interpolation='lower')
             plt.hist(stats, bins=100)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
