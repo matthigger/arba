@@ -57,10 +57,18 @@ class FileTree:
     def d(self):
         return len(self.feat_list)
 
+    @property
+    def pc(self):
+        return self._pc
+
+    @property
+    def mask(self):
+        return self._mask
+
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, fnc_list=None, mask=None, pc=None):
+    def __init__(self, sbj_feat_file_tree, fnc_list=None, mask=None):
         self.sbj_feat_file_tree = sbj_feat_file_tree
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
         feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
@@ -72,19 +80,27 @@ class FileTree:
         if fnc_list is None:
             self.fnc_list = list()
 
-        assert (mask is None) or (pc is None), 'nand(mask, pc) required'
-        self.mask = mask
-        self.pc = pc
-        if self.mask is not None:
-            self.pc = PointCloud.from_mask(mask)
-        if pc is not None:
-            self.mask = pc.to_mask()
+        self.__mask = mask
+        self._mask = mask
+        if self.__mask is not None:
+            self._pc = PointCloud.from_mask(self.__mask)
+        else:
+            self._pc = None
 
         self.fs = None
         self.data = None
         self.f_data = None
 
         self.split_effect = None
+
+    def apply_mask(self, mask=None, reset=False):
+        if reset:
+            self._mask = self.__mask
+
+        if mask is not None:
+            self._mask = np.logical_and(self._mask, mask)
+
+        self._pc = PointCloud.from_mask(self._mask)
 
     @check_loaded
     def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
@@ -140,9 +156,8 @@ class FileTree:
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
         # get pc, mask
-        if self.mask is None or self.pc is None:
-            self.mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-            self.pc = PointCloud.from_mask(self.mask)
+        self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
+        self.apply_mask(mask=None, reset=True)
 
         # apply all fnc
         for fnc in self.fnc_list:
