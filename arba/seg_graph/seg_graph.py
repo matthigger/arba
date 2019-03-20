@@ -45,6 +45,7 @@ class SegGraph(nx.Graph):
             grp_sbj_bool[grp] = self.file_tree.sbj_list_to_bool(sbj_list)
 
         # build regions
+        assert self.file_tree.pc, 'no active area found in file_tree'
         for ijk in self.file_tree.pc:
             # space region occupies
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
