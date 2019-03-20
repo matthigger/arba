@@ -10,6 +10,7 @@ from tqdm import tqdm
 from mh_pytools import file
 from mh_pytools import parallel
 from .effect import Effect
+from .tfce import PermuteTFCE
 from ..seg_graph import PermuteARBA
 from ..space import sample_mask, sample_mask_min_var, PointCloud
 
@@ -21,9 +22,9 @@ class Simulator:
     f_performance = 'performance_stats.p.gz'
 
     def __init__(self, folder, file_tree, p_effect=.5, effect_shape='min_var',
-                 verbose=True, par_flag=True, f_rba=None, num_perm=5000,
-                 alpha=.05, tfce_flag=True, vba_flag=True, active_rad=None,
-                 print_image=False):
+                 verbose=True, par_flag=True, num_perm=5000, alpha=.05,
+                 tfce_flag=True, active_rad=None, print_image=False):
+
         self.folder = pathlib.Path(folder)
         if self.folder.exists():
             shutil.rmtree(self.folder)
@@ -51,9 +52,7 @@ class Simulator:
         self.split = tuple(([False] * n_eff) + ([True] * n_no_eff))
 
         # comparison parameters
-        self.f_rba = f_rba
         self.tfce_flag = tfce_flag
-        self.vba_flag = vba_flag
         self.num_perm = num_perm
         self.alpha = alpha
 
@@ -124,14 +123,9 @@ class Simulator:
     def run_effect_permute(self, effect, t2=None, folder=None, **kwargs):
         # get mask of active area
         if self.active_rad is not None:
-            mask_active = self.file_tree.mask
-
-            # only work in a dilated region around the effect
             mask_eff_dilated = effect.mask.dilate(self.active_rad)
-            mask_active = np.logical_and(mask_eff_dilated, mask_active)
 
-            self.file_tree.mask = mask_active
-            self.file_tree.pc = PointCloud.from_mask(mask_active)
+            self.file_tree.apply_mask(mask=mask_eff_dilated, reset=True)
 
         # set scale of effect
         if t2 is not None:
@@ -140,17 +134,27 @@ class Simulator:
         # modify file_tree to specific effect
         self.file_tree.split_effect = (self.split, effect)
 
-        # sample random split
+        # prep folder / save effect
+        _folder = None
         if folder is not None:
             file.save(effect, folder / 'effect.p.gz')
             f_out = folder / 'effect.nii.gz'
             effect.mask.to_nii(f_out=f_out)
 
-            folder = folder / 'arba_permute'
+            _folder = folder / 'arba_permute'
             folder.mkdir(exist_ok=True)
 
+        # run arba
         permute_arba = PermuteARBA(self.file_tree)
-        permute_arba.run(self.split, n=self.num_perm, folder=folder, **kwargs)
+        permute_arba.run(self.split, n=self.num_perm, folder=_folder, **kwargs)
+
+        if self.tfce_flag:
+            # run tfce
+            if folder is not None:
+                _folder = folder / 'tfce'
+            permute_tfce = PermuteTFCE(self.file_tree)
+            permute_tfce.run(self.split, n=self.num_perm, folder=_folder,
+                             **kwargs)
 
     def run(self, t2_list):
 
@@ -180,7 +184,7 @@ class Simulator:
             for d in tqdm(arg_list, desc=desc, disable=not self.verbose):
                 self.run_effect_permute(**d)
 
-    def get_performance(self, alpha=.05):
+    def get_performance(self, alpha=.05, print_perf=True):
         mask = self.file_tree.mask
 
         t2size_method_ss_tree = defaultdict(lambda: defaultdict(list))
@@ -196,8 +200,16 @@ class Simulator:
 
                 sens, spec = effect.get_sens_spec(estimate, mask)
 
-                t2_size = effect.t2, int(effect.mask.sum())
+                t2_size = np.round(effect.t2, 3), int(effect.mask.sum())
                 t2size_method_ss_tree[t2_size][method].append((sens, spec))
+
+                if print_perf:
+                    f_out = folder_method / 'detect_stats.txt'
+                    with open(str(f_out), 'w') as f:
+                        print(f'sensitivity: {sens:.3f}', file=f)
+                        print(f'specificity: {spec:.3f}', file=f)
+
+                continue
 
         # save performance stats
         f_performance = self.folder / self.f_performance
