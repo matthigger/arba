@@ -12,7 +12,7 @@ class PermuteARBA(PermuteBase):
         super().__init__(*args, **kwargs)
         self.sg_hist = None
 
-    def save(self, folder, split, print_tree=True, **kwargs):
+    def save(self, folder, split, print_tree=False, **kwargs):
         """ saves output images in a folder"""
         super().save(folder=folder, split=split, **kwargs)
 

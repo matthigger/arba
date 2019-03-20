@@ -85,26 +85,35 @@ class PermuteBase(ABC):
 
         return stat_volume, pval
 
-    def save(self, folder, split=None, label_x_dict=None, print_image=True,
-             **kwargs):
+    def save(self, folder, split, label_x_dict=None, print_image=False,
+             save_self=False, print_hist=True, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
-        file.save(self, folder / self.f_save)
+        folder.mkdir(exist_ok=True, parents=True)
+
+        if label_x_dict is not None:
+            affine = self.file_tree.ref.affine
+            for label, x in label_x_dict.items():
+                img = nib.Nifti1Image(x, affine)
+                img.to_filename(str(folder / f'{label}.nii.gz'))
+
+        folder = pathlib.Path(folder)
+        if save_self:
+            file.save(self, folder / self.f_save)
 
         # built plot of stats observed
-        sns.set(font_scale=1.2)
-        stats = np.array(list(self.split_stat_dict.values()))
-        thresh = np.percentile(stats, 95, interpolation='lower')
-        plt.hist(stats, bins=100)
-        plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
-        plt.gca().legend()
-        plt.xlabel('max stat across image')
-        plt.ylabel(f'count\n({len(stats)} splits total)')
-        save_fig(folder / 'hist_max_stat.pdf')
+        if print_hist:
+            sns.set(font_scale=1.2)
+            stats = np.array(list(self.split_stat_dict.values()))
+            thresh = np.percentile(stats, 95, interpolation='lower')
+            plt.hist(stats, bins=100)
+            plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
+            plt.gca().legend()
+            plt.xlabel('max stat across image')
+            plt.ylabel(f'count\n({len(stats)} splits total)')
+            save_fig(folder / 'hist_max_stat.pdf')
 
         if print_image:
-            assert split is not None, 'split required if print_image'
-
             # print mean image per grp per feature
             not_split = tuple(not x for x in split)
             for feat in self.file_tree.feat_list:
@@ -113,14 +122,6 @@ class PermuteBase(ABC):
                     f_out = folder / f'{feat}_{lbl}.nii.gz'
                     self.file_tree.to_nii(feat=feat, sbj_bool=split,
                                           f_out=f_out)
-
-        if label_x_dict is None:
-            return
-
-        affine = self.file_tree.ref.affine
-        for label, x in label_x_dict.items():
-            img = nib.Nifti1Image(x, affine)
-            img.to_filename(str(folder / f'{label}.nii.gz'))
 
     def sample_splits(self, n, split, seed=1, **kwargs):
         """ sample splits, ensure none are repeated
