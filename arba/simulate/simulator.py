@@ -141,6 +141,9 @@ class Simulator:
             f_out = folder / 'effect.nii.gz'
             effect.mask.to_nii(f_out=f_out)
 
+            f_out = folder / 'mask_active.nii.gz'
+            self.file_tree.mask.to_nii(f_out=f_out)
+
             _folder = folder / 'arba_permute'
             folder.mkdir(exist_ok=True)
 
@@ -190,14 +193,12 @@ class Simulator:
 
         for _folder in self.folder.glob('*t2*'):
             effect = file.load(_folder / 'effect.p.gz')
+            mask = nib.load(str(_folder / 'mask_active.nii.gz')).get_data()
+
             for folder_method in _folder.glob('*'):
                 if not folder_method.is_dir():
                     continue
                 method = folder_method.stem
-
-                # mask are all voxels which were examined
-                f_stat = folder_method / 'stat_volume.nii.gz'
-                mask = nib.load(str(f_stat)).get_data().astype(bool)
 
                 # estimate is all pval which are <= alpha
                 f_pval = folder_method / 'pval.nii.gz'
