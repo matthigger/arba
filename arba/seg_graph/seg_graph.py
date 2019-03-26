@@ -88,7 +88,7 @@ class SegGraph(nx.Graph):
         return img_out
 
     def to_array(self, fnc=None, fnc_include=None, background=0):
-        """ constructs array of mean feature per region """
+        """ constructs array of region idx """
         if fnc is None:
             if fnc_include is not None:
                 nodes = [reg for reg in self.nodes if fnc_include(reg)]
