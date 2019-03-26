@@ -1,4 +1,9 @@
+import pathlib
+import tempfile
+
 import networkx as nx
+import nibabel as nib
+import numpy as np
 
 from .seg_graph import SegGraph
 from ..region import RegionT2Ward
@@ -233,3 +238,50 @@ class MergeRecord(nx.DiGraph):
                                      copy=True)
 
         return tree_hist, node_reg_dict
+
+    def to_nii(self, f_out, fnc=None, n=100, **kwargs):
+        """ writes a 4d volume with at different granularities
+
+        Args:
+            f_out (str or Path): output file
+            fnc (fnc): accepts region, returns scalar
+            n (int): number of granularities to output.  defaults to 100,
+
+        Returns:
+             f_out (Path): a 4d nii volume, first 3d are space.  the 4th
+             n_list (array): number
+        """
+
+        # get n_list
+        n_init = len(self.ijk_leaf_dict)
+        n_last = len([n for n in self.nodes if not any(self.predecessors(n))])
+        n_list = np.geomspace(n_init, n_last, min(n, n_init - n_last)).astype(
+            int)
+        n_list = sorted(set(n_list), reverse=True)
+
+        # get f_out
+        if f_out is None:
+            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz')
+            f_out = pathlib.Path(f_out)
+
+        # build array
+        shape = (*self.ref.shape, len(n_list))
+        x = np.zeros(shape)
+        n_idx = 0
+        for sg, _, _ in self.get_iter_sg(**kwargs):
+            if len(sg.nodes) == n_list[n_idx]:
+                x[:, :, :, n_idx] = sg.to_array(fnc=fnc)
+                n_idx += 1
+
+        sg_iter = self.get_iter_sg(**kwargs)
+        for n_idx, n in enumerate(n_list):
+            sg, _, _ = next(sg_iter)
+            if len(sg.nodes) != n:
+                continue
+            x[:, :, :, n_idx] = sg.to_array(fnc=fnc)
+
+        # write to nii
+        img = nib.Nifti1Image(x, self.ref.affine)
+        img.to_filename(str(f_out))
+
+        return f_out, n_list
