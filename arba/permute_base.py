@@ -11,6 +11,8 @@ from tqdm import tqdm
 
 from arba.plot import save_fig
 from mh_pytools import file, parallel
+from arba.space import Mask
+from arba.data import plot_feat
 
 
 class PermuteBase(ABC):
@@ -28,6 +30,7 @@ class PermuteBase(ABC):
                                 that split
     """
     f_save = 'permute.p.gz'
+    max_pval_region = .05
 
     def __init__(self, file_tree, folder=None):
         """
@@ -38,7 +41,8 @@ class PermuteBase(ABC):
                                   they left off if they want to extend n
         """
         self.file_tree = file_tree
-
+        self.stat_volume = None
+        self.pval = None
         self.split_stat_dict = dict()
 
         if folder is not None:
@@ -74,48 +78,44 @@ class PermuteBase(ABC):
                 self.run_split_max_multi(split_list=split_list, **kwargs)
 
             # determine sig
-            stat_volume, pval = self.determine_sig(split)
+            self.stat_volume, self.pval = self.determine_sig(split)
 
-        # save if folder passed
-        if folder is not None:
-            label_x_dict = {'stat_volume': stat_volume,
-                            'pval': pval}
-            self.save(folder=folder, label_x_dict=label_x_dict, split=split,
-                      **kwargs)
+            # save if folder passed
+            if folder is not None:
+                self.save(folder=folder, split=split, **kwargs)
 
-        return stat_volume, pval
-
-    def save(self, folder, split, label_x_dict=None, print_image=False,
-             save_self=False, print_hist=False, **kwargs):
+    def save(self, folder, split, print_image=False, save_self=False,
+             print_hist=False, print_region=False, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
         folder.mkdir(exist_ok=True, parents=True)
 
-        if label_x_dict is not None:
-            affine = self.file_tree.ref.affine
-            for label, x in label_x_dict.items():
-                img = nib.Nifti1Image(x, affine)
-                img.to_filename(str(folder / f'{label}.nii.gz'))
+        affine = self.file_tree.ref.affine
+        for label, x in (('pval', self.pval),
+                         ('stat_volume', self.stat_volume)):
+            img = nib.Nifti1Image(x, affine)
+            img.to_filename(str(folder / f'{label}.nii.gz'))
 
         folder = pathlib.Path(folder)
         if save_self:
             file.save(self, folder / self.f_save)
 
         f_out = folder / 'thresh.txt'
-        stats = np.array(list(self.split_stat_dict.values()))
-        thresh = np.percentile(stats, 95, interpolation='lower')
+        stat_sorted = sorted(self.split_stat_dict.values())
+        num_perm = len(stat_sorted)
+        thresh = np.percentile(stat_sorted, 95, interpolation='lower')
         with open(str(f_out), 'w') as f:
             print(f'critical stat thresh: {thresh:.3e}', file=f)
 
         # built plot of stats observed
         if print_hist:
             sns.set(font_scale=1.2)
-            plt.hist(stats, bins=100)
+            plt.hist(stat_sorted, bins=20)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
-            plt.xlabel('max stat across image')
-            plt.ylabel(f'count\n({len(stats)} splits total)')
-            save_fig(folder / 'hist_max_stat.pdf')
+            plt.xlabel(r'Max $T^2(r)$ in Hierarchy')
+            plt.ylabel(f'Count\n(Across {num_perm} Permutations)')
+            save_fig(folder / 'hist_max_stat.pdf', size_inches=(4, 3))
 
         if print_image:
             # print mean image per grp per feature
@@ -126,6 +126,18 @@ class PermuteBase(ABC):
                     f_out = folder / f'{feat}_{lbl}.nii.gz'
                     self.file_tree.to_nii(feat=feat, sbj_bool=split,
                                           f_out=f_out)
+
+        if print_region:
+            stat_descend = sorted(np.unique(self.stat_volume.flatten()),
+                                  reverse=True)
+
+            for reg_idx, reg_stat in enumerate(stat_descend):
+                p = 1 -  bisect_right(stat_sorted, reg_stat) / num_perm
+                if p > self.max_pval_region:
+                    break
+                mask = Mask(self.stat_volume == reg_stat,
+                            ref=self.file_tree.ref)
+                mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
 
     def sample_splits(self, n, split, seed=1, **kwargs):
         """ sample splits, ensure none are repeated
@@ -190,17 +202,15 @@ class PermuteBase(ABC):
         return split, stat_volume[self.file_tree.mask].max()
 
     @abstractmethod
-    def run_split(self, split, effect_split_dict):
+    def run_split(self, split, **kwargs):
         """ returns a volume of statistics per some method
 
         Args:
             split (tuple): (num_sbj), split[i] describes which class the i-th
                            sbj belongs to in this split
-            effect_split_dict (dict): keys are effects, values are splits
 
         Returns:
             stat_volume (np.array): (space0, space1, space2) stats
-            pval (np.array): (space0, space1, space2) pval (corrected)
         """
 
     def determine_sig(self, split=None, stat_volume=None):
