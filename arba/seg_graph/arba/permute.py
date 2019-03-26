@@ -1,5 +1,6 @@
 from arba.permute_base import PermuteBase
-from arba.plot import save_fig, size_v_wt2, size_v_t2
+from arba.plot import save_fig, size_v_wt2
+from arba.space import Mask
 from ..seg_graph_hist import SegGraphHistory
 from ..seg_graph_t2 import SegGraphT2
 
@@ -7,6 +8,7 @@ from ..seg_graph_t2 import SegGraphT2
 class PermuteARBA(PermuteBase):
     """ runs ARBA permutations
     """
+    print_pval_max = .05
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -21,10 +23,12 @@ class PermuteARBA(PermuteBase):
 
             merge_record = self.sg_hist.merge_record
             # todo: better way to store effect
-            if self.file_tree.split_effect is None:
-                effect_mask = None
-            else:
+            if self.file_tree.split_effect is not None:
                 effect_mask = self.file_tree.split_effect[1].mask
+            elif (folder / 'mask_effect.nii.gz').exists():
+                effect_mask = Mask.from_nii(folder / 'mask_effect.nii.gz')
+            else:
+                effect_mask = None
 
             sbj_bool_to_list = self.file_tree.sbj_bool_to_list
             not_split = tuple(not (x) for x in split)
@@ -34,13 +38,11 @@ class PermuteARBA(PermuteBase):
             tree_hist, \
             node_reg_dict = merge_record.resolve_hist(self.file_tree,
                                                       grp_sbj_dict)
-            size_v_wt2(tree_hist, mask=effect_mask)
-            save_fig(f_out=folder / 'size_v_wt2.pdf')
-
-            size_v_t2(tree_hist, mask=effect_mask)
+            size_v_wt2(tree_hist, mask=effect_mask,
+                       mask_label='Effect Volume (%)')
             save_fig(f_out=folder / 'size_v_t2.pdf')
 
-    def _split_to_sg_hist(self, split, full_t2=False):
+    def _split_to_sg_hist(self, split, full_t2=False, **kwargs):
         """ builds sg_hist from a split
 
         Args:
@@ -74,7 +76,7 @@ class PermuteARBA(PermuteBase):
             sg_hist (SegGraphHistory): reduced as much as possible
         """
         sg_hist = self._split_to_sg_hist(split, **kwargs)
-        sg_hist.reduce_to(1)
+        sg_hist.reduce_to(1, **kwargs)
 
         return sg_hist
 

@@ -3,7 +3,6 @@ from tqdm import tqdm
 
 from .compute import apply_tfce
 from ...permute_base import PermuteBase
-from ...region import FeatStat
 
 
 class PermuteTFCE(PermuteBase):
@@ -13,7 +12,7 @@ class PermuteTFCE(PermuteBase):
         self.e = e
         self.c = c
 
-    def run_split(self, split):
+    def run_split(self, split, **kwargs):
         """ returns a volume of tfce enhanced t2 stats
 
         Args:
@@ -36,16 +35,16 @@ class PermuteTFCE(PermuteBase):
         t2 = np.zeros(self.file_tree.ref.shape)
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute t2 per vox'}
-        for i, j, k in tqdm(self.file_tree.pc, **tqdm_dict):
-            # get feat stat of each grp
-            x = self.file_tree.data[i, j, k, :, :]
-            fs0 = FeatStat.from_array(x[split == 0, :].T, _fast=True)
-            fs1 = FeatStat.from_array(x[split == 1, :].T, _fast=True)
+        split_not = tuple([not x for x in split])
+        for ijk in tqdm(self.file_tree.pc, **tqdm_dict):
+            fs0 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split_not)
+            fs1 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split)
 
             # compute t2
             delta = fs0.mu - fs1.mu
             cov_pooled = (fs0.cov * fs0.n +
                           fs1.cov * fs1.cov) / (fs0.n + fs1.n)
+            i, j, k = ijk
             t2[i, j, k] = delta @ np.linalg.inv(cov_pooled) @ delta
 
         return t2
