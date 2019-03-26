@@ -29,8 +29,8 @@ def make_plots(folder, label):
     sg_arba = file.load(f_sg_arba)
 
     region_spaces = list(reg.pc_ijk for reg in sg_arba.nodes)
-    _, tree_hist_resolved = sg_hist.resolve_hist()
-    reg_highlight = [reg for reg in tree_hist_resolved.nodes
+    tree_hist, _ = sg_hist.merge_record.resolve_hist()
+    reg_highlight = [reg for reg in tree_hist.nodes
                      if reg.pc_ijk in region_spaces]
 
     if f_effect.exists():
@@ -40,7 +40,7 @@ def make_plots(folder, label):
 
     # size v pval
     fig, ax = plt.subplots(1, 2)
-    plot.size_v_pval(sg=tree_hist_resolved,
+    plot.size_v_pval(sg=tree_hist,
                      mask=mask,
                      reg_highlight=reg_highlight,
                      dict_highlight={'linewidths': 3,
@@ -49,7 +49,7 @@ def make_plots(folder, label):
                      log_y=True,
                      min_reg_size=5,
                      ax=ax[0])
-    plot.size_v_wt2(sg=tree_hist_resolved,
+    plot.size_v_wt2(sg=tree_hist,
                     mask=mask,
                     reg_highlight=reg_highlight,
                     dict_highlight={'linewidths': 3,

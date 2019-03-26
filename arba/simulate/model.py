@@ -59,7 +59,7 @@ class Model:
     def sample_array(self):
         x = np.ones(self.shape) * np.nan
         for ijk, fs in self.ijk_fs_dict.items():
-            x[ijk] = fs.to_normal().rvs()
+            x[ijk] = fs.to_normal(bessel=False).rvs()
         return x
 
     def sample_nii(self, f_out=None, ref=None):

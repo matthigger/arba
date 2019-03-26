@@ -4,6 +4,6 @@
 /venv/
 /arba/__pycache__/
 *.pyc
-/tmp.py
 *.py.lprof
 /scripts/simulate_eff/run_multi.py
+tmp*.py

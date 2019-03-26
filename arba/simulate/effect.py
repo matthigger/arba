@@ -35,6 +35,9 @@ class Effect:
         t2 (float): t squared distance
         u (np.array): effect direction
     """
+    @property
+    def d(self):
+        return len(self.mean)
 
     @staticmethod
     def from_fs_t2(fs, t2, mask, u=None):
@@ -68,11 +71,11 @@ class Effect:
 
     @property
     def t2(self):
-        return np.sqrt(self.mean @ self.fs.cov_inv @ self.mean)
+        return self.mean @ self.fs.cov_inv @ self.mean
 
     @t2.setter
     def t2(self, val):
-        self.mean *= val / self.t2
+        self.mean *= np.sqrt(val / self.t2)
 
     @property
     def u(self):
@@ -146,10 +149,15 @@ class Effect:
         Returns:
             sens (float): percentage of affected voxels detected
             spec (float): percentage of unaffected voxels undetected
+
+        todo: error if estimate has 1's outside of mask
         """
         mask = mask.astype(bool)
         signal = self.mask[mask].astype(bool)
         estimate = estimate[mask].astype(bool)
+
+        if not estimate.sum():
+            return 0, 1
 
         true_pos = np.count_nonzero(signal & estimate)
         true = np.count_nonzero(signal)

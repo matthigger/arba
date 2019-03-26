@@ -11,7 +11,7 @@ def test_draw_random_u():
 
 @pytest.fixture
 def effect(d=2, t2=5):
-    mean = np.ones(d) * t2 * np.sqrt(1 / d)
+    mean = np.ones(d) * np.sqrt(t2 / d)
     fs = FeatStat(n=10, mu=np.zeros(d), cov=np.eye(d))
     mask = Mask(np.ones((3, 3)))
     effect = Effect(mask=mask, mean=mean, fs=fs)
@@ -24,10 +24,10 @@ def effect(d=2, t2=5):
 def test_u_t2_setter(effect):
     u_old = effect .u
     effect.t2 = 1
-    assert np.isclose(effect .t2, 1), 't2 setter'
-    assert np.allclose(u_old, effect .u), 'u computation error'
+    assert np.isclose(effect.t2, 1), 't2 setter'
+    assert np.allclose(u_old, effect.u), 'u computation error'
 
     u_target = np.array([-1, 1]).astype(float)
     u_target *= 1 / np.linalg.norm(u_target)
     effect.u = u_target
-    assert np.allclose(effect .u, u_target), 'u setter error'
+    assert np.allclose(effect.u, u_target), 'u setter error'

@@ -53,6 +53,11 @@ class Mask(np.ndarray):
 
         return f_out
 
+    def __eq__(self, other):
+        if self.ref != other.ref:
+            return False
+        return not np.logical_xor(self, other).any()
+
     def dilate(self, r):
         x = binary_dilation(self, iterations=r)
         return Mask(x, ref=self.ref)

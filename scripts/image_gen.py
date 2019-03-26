@@ -34,7 +34,7 @@ for grp in ['healthy', 'effect']:
     image_gen = Model(ijk_fs_dict, shape=shape)
     ft_dict[grp] = image_gen.to_file_tree(n=n)
 
-sg_hist = SegGraphHistory(obj=obj, file_tree_dict=ft_dict)
+sg_hist = SegGraphHistory(obj=obj, ft_dict=ft_dict)
 sg_hist.reduce_to(1)
 
 sns.set(font_scale=1.2)

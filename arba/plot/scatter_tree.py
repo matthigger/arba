@@ -49,7 +49,13 @@ def size_v_wt2(*args, **kwargs):
     def get_wt2(reg):
         return reg.t2 * len(reg)
 
-    return scatter_tree(*args, fnc=get_wt2, ylabel=ylabel, **kwargs)
+    out = scatter_tree(*args, fnc=get_wt2, ylabel=ylabel, **kwargs)
+
+    # plt.rc('text', usetex=True)
+    plt.ylabel(r'$T^2(r)$')
+    plt.xlabel(r'Region Size (voxels)')
+
+    return out
 
 
 def size_v_error(*args, **kwargs):
@@ -79,7 +85,14 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
-                 log_x=True, log_y=True, txt_fnc=None, min_reg_size=1):
+                 log_x=True, log_y=True, txt_fnc=None, min_reg_size=1,
+                 reverse_arrow=True):
+
+    if reverse_arrow:
+        sg_backwards = type(sg)()
+        sg_backwards.add_edges_from((n1, n0) for (n0, n1) in sg.edges)
+        sg = sg_backwards
+
     if cmap is None:
         cmap = matplotlib.cm.coolwarm
 

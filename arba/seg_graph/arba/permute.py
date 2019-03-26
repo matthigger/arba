@@ -1,151 +1,96 @@
-import pathlib
-import random
-from bisect import bisect_right
-
-from tqdm import tqdm
-
-from mh_pytools import file
-from mh_pytools.parallel import run_par_fnc
-from .prep import prep_arba
-from ..seg_graph import SegGraph
+from arba.permute_base import PermuteBase
+from arba.plot import save_fig, size_v_wt2
+from arba.space import Mask
+from ..seg_graph_hist import SegGraphHistory
 from ..seg_graph_t2 import SegGraphT2
 
 
-def run_arba_permute(ft_dict, folder=None, verbose=False, alpha=.05,
-                     par_flag=True, seed=1, n_permute=100, **kwargs):
-    """ runs arba (cross validation), optionally saves outputs.
-
-    Args:
-        ft_dict (dict): keys are population labels, values are FileTree
-        folder (str or Path): output folder for experiment, if None will
-                                   not save
-        verbose (bool): toggles command line output
-        alpha (float): false positive rate
-        par_flag (bool): toggles parallel computation
-        seed : seed to initialize permutation testing with
-        n_permute (int): number of permutations
-
-    Returns:
-        sg_arba_test (SegGraph): candidate regions (test data)
+class PermuteARBA(PermuteBase):
+    """ runs ARBA permutations
     """
-    # prep
-    ft_dict = prep_arba(ft_dict, label='full', folder=folder,
-                        load_data=True, **kwargs)
+    print_pval_max = .05
 
-    # build sg_hist
-    sg_hist = SegGraphT2(file_tree_dict=ft_dict)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sg_hist = None
 
-    # reduce
-    sg_hist.reduce_to(1, verbose=verbose, **kwargs)
+    def save(self, folder, split, print_tree=False, **kwargs):
+        """ saves output images in a folder"""
+        super().save(folder=folder, split=split, **kwargs)
 
-    # permutation testing
-    # aggregate data
-    ft0, ft1 = ft_dict.values()
-    ft = ft0 | ft1
+        if print_tree:
+            assert self.sg_hist is not None, 'call determine_sig() first'
 
-    # determine splits
-    n0 = len(ft0)
-    random.seed(seed)
-    desc = 'splitting data'
-    if par_flag:
-        _arg_list = [{'ft': ft, 'n': n0}] * n_permute
-        arg_list = run_par_fnc(_split, _arg_list, desc=desc, verbose=verbose)
-    else:
-        tqdm_dict = {'disable': not verbose,
-                     'desc': desc}
-        arg_list = list()
-        for _ in tqdm(range(n_permute), **tqdm_dict):
-            arg_list.append(_split(ft, n0))
+            merge_record = self.sg_hist.merge_record
+            # todo: better way to store effect
+            if self.file_tree.split_effect is not None:
+                effect_mask = self.file_tree.split_effect[1].mask
+            elif (folder / 'mask_effect.nii.gz').exists():
+                effect_mask = Mask.from_nii(folder / 'mask_effect.nii.gz')
+            else:
+                effect_mask = None
 
-    # run each permutation of the data
-    if par_flag:
-        max_t2_list = run_par_fnc(_run_permute, arg_list, desc='permutation')
-    else:
-        max_t2_list = list()
-        for d in arg_list:
-            max_t2_list.append(_run_permute(**d))
+            sbj_bool_to_list = self.file_tree.sbj_bool_to_list
+            not_split = tuple(not (x) for x in split)
+            grp_sbj_dict = {'ctrl': sbj_bool_to_list(not_split),
+                            'effect': sbj_bool_to_list(split)}
 
-    # determine which regions are sig
-    sg_arba_max_t2 = sg_hist.cut_greedy_t2()
-    sg_arba_sig = get_sig(sg_arba_max_t2, max_t2_list, alpha=alpha)
+            tree_hist, \
+            node_reg_dict = merge_record.resolve_hist(self.file_tree,
+                                                      grp_sbj_dict)
+            size_v_wt2(tree_hist, mask=effect_mask,
+                       mask_label='Effect Volume (%)')
+            save_fig(f_out=folder / 'size_v_t2.pdf')
 
-    # save
-    if folder is not None:
-        folder = pathlib.Path(folder)
-        folder_save = folder / 'save'
-        folder_save.mkdir(exist_ok=True)
+    def _split_to_sg_hist(self, split, full_t2=False, **kwargs):
+        """ builds sg_hist from a split
 
-        file.save(ft_dict, folder_save / 'ft_dict.p.gz')
+        Args:
+            split (tuple): (num_sbj), split[i] describes which class the i-th
+                           sbj belongs to in this split
+            full_t2 (bool): toggles instantiating SegGraphT2, a subclass of
+                            SegGraphHistory which tracks t2 per each node.
 
-        file.save(sg_hist, folder_save / 'sg_hist.p.gz')
-        file.save(sg_arba_max_t2, folder_save / 'sg_arba_max_t2.p.gz')
-        file.save(sg_arba_sig, folder_save / 'sg_arba_sig.p.gz')
+        Returns:
+            sg_hist (SegGraphHistory): reduced as much as possible
+        """
+        not_split = tuple(not x for x in split)
+        grp_sbj_dict = {'0': self.file_tree.sbj_bool_to_list(split),
+                        '1': self.file_tree.sbj_bool_to_list(not_split)}
+        if full_t2:
+            sg_hist = SegGraphT2(file_tree=self.file_tree,
+                                 grp_sbj_dict=grp_sbj_dict)
+        else:
+            sg_hist = SegGraphHistory(file_tree=self.file_tree,
+                                      grp_sbj_dict=grp_sbj_dict)
+        return sg_hist
 
-        # save sig mask
-        ref = next(iter(ft_dict.values())).ref
-        sg_arba_sig.to_nii(folder / 'mask_sig_arba_permute.nii.gz',
-                           ref=ref,
-                           fnc=lambda r: 1,
-                           background=0)
+    def run_split(self, split, **kwargs):
+        """ returns max stat (per vox) across new ARBA hierarchy
 
-    return sg_arba_sig
+        Args:
+            split (tuple): (num_sbj), split[i] describes which class the i-th
+                           sbj belongs to in this splits
 
+        Returns:
+            sg_hist (SegGraphHistory): reduced as much as possible
+        """
+        sg_hist = self._split_to_sg_hist(split, **kwargs)
+        sg_hist.reduce_to(1, **kwargs)
 
-def _run_permute(ft_dict, **kwargs):
-    """ runs """
-    # build sg_t2
-    sg_t2 = SegGraphT2(file_tree_dict=ft_dict)
+        return sg_hist
 
-    # reduce
-    sg_t2.reduce_to(1, verbose=False, **kwargs)
+    def run_split_max(self, split, **kwargs):
+        return split, self.run_split(split).max_t2
 
-    return max(sg_t2.node_t2_dict.values())
+    def determine_sig(self, split=None, stat_volume=None):
+        """ runs on the original case, uses the stats saved to determine sig"""
 
+        # get volume of stat
+        sg_hist = self.run_split(split, full_t2=True)
+        max_t2 = sg_hist.get_max_t2_array()
 
-def _split(ft, n):
-    # split data
-    sbj_set0 = set(random.sample(ft.sbj_list, k=n))
-    ft_tuple = ft.split(sbj_set0=sbj_set0)
+        # store sg_hist of split
+        self.sg_hist = sg_hist
 
-    # rm raw data to save memory (not needed)
-    for _ft in ft_tuple:
-        _ft.data = None
-
-    # build ft_dict, update arg_list
-    d = {'ft_dict': dict(enumerate(ft_tuple))}
-    return d
-
-
-def get_sig(sg, max_t2_list, alpha=.05):
-    """ builds copy of sg containing only significance regions
-
-    # todo: compute confidence intervals using fnc below:
-    # from statsmodels.stats.proportion import proportion_confint
-
-    Args:
-        sg (SegGraph): a seg graph
-        max_t2_list (list): list of bootstrapped max t squared distances
-        alpha (float): false positive rate
-
-    Returns:
-        sg_sig (SegGraph): a seg graph containing only sig regions
-    """
-
-    # prep
-    max_t2_list = sorted(max_t2_list)
-    n = len(max_t2_list)
-
-    # determine which regions are sig
-    reg_list = list()
-    for reg in sg.nodes:
-        # k is the number of permutations for which observed t2 is >= to
-        k = bisect_right(max_t2_list, reg.t2 * len(reg))
-        if (k / n) >= (1 - alpha):
-            reg_list.append(reg)
-
-    # build seg graph
-    sg_sig = SegGraph(obj=sg.reg_type, file_tree_dict=sg.file_tree_dict,
-                      _add_nodes=False)
-    sg_sig.add_nodes_from(reg_list)
-
-    return sg_sig
+        return super().determine_sig(stat_volume=max_t2)
