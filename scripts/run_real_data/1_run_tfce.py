@@ -10,7 +10,7 @@ from arba.space import Mask
 from pnl_data.set.sz import folder, people
 
 feat_tuple = ('fat', 'fw')
-grp_tuple = ('HC', 'SCZ')
+grp_tuple = ('HC', 'FES')
 n = 100
 verbose = True
 par_flag = True

@@ -16,7 +16,7 @@ feat_var = 1
 shape = (4, 4, 1)
 # average feature for bottom, top of image in each population
 pop_mu_bt_dict = {'pop0': (0, 0),
-                  'pop1': (10, 0)}
+                  'pop1': (1, 0)}
 folder = pnl_data.folder_data / 'arba_toy_ex'
 shutil.rmtree(str(folder))
 folder.mkdir(exist_ok=True)
@@ -62,11 +62,21 @@ mask_effect.to_nii(folder / 'mask_effect.nii.gz')
 # build mask
 mask = Mask(np.ones(shape), ref=ref)
 
+
+def fnc_get_pop1_mean(reg):
+    return reg.fs_dict['pop1'].mu[0]
+
+
 # run arba
 with file_tree.loaded():
     permuteARBA = PermuteARBA(file_tree)
     sg_hist = permuteARBA.run_split(split, full_t2=True)
     permuteARBA.run(split, n=100, folder=folder, print_image=True,
-                    print_tree=True)
+                    print_tree=True, print_hist=True, verbose=True)
+
+    f_out = folder / 'merge_record.nii.gz'
+    f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
+                                                file_tree=file_tree,
+                                                grp_sbj_dict=grp_sbj_dict)
 
     print(folder)
