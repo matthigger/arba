@@ -10,9 +10,14 @@ from tqdm import tqdm
 from mh_pytools import file
 from mh_pytools import parallel
 from .effect import Effect
+from .ptfce import PermutePTFCE
 from .tfce import PermuteTFCE
 from ..seg_graph import PermuteARBA
 from ..space import sample_mask, sample_mask_min_var, PointCloud
+
+method_permute_dict = {'arba': PermuteARBA,
+                       'tfce': PermuteTFCE,
+                       'ptfce': PermutePTFCE}
 
 
 class Simulator:
@@ -23,7 +28,7 @@ class Simulator:
 
     def __init__(self, folder, file_tree, p_effect=.5, effect_shape='min_var',
                  verbose=True, par_flag=True, num_perm=5000, alpha=.05,
-                 tfce_flag=True, active_rad=None, print_image=False):
+                 method_list=None, active_rad=None, print_image=False):
 
         self.folder = pathlib.Path(folder)
         if self.folder.exists():
@@ -52,7 +57,9 @@ class Simulator:
         self.split = tuple(([False] * n_eff) + ([True] * n_no_eff))
 
         # comparison parameters
-        self.tfce_flag = tfce_flag
+        if method_list is None:
+            method_list = ['arba']
+        self.method_list = method_list
         self.num_perm = num_perm
         self.alpha = alpha
 
@@ -135,7 +142,6 @@ class Simulator:
         self.file_tree.split_effect = (self.split, effect)
 
         # prep folder / save effect
-        _folder = None
         if folder is not None:
             file.save(effect, folder / 'effect.p.gz')
             f_out = folder / 'effect.nii.gz'
@@ -144,20 +150,14 @@ class Simulator:
             f_out = folder / 'mask_active.nii.gz'
             self.file_tree.mask.to_nii(f_out=f_out)
 
-            _folder = folder / 'arba_permute'
-            folder.mkdir(exist_ok=True)
-
-        # run arba
-        permute_arba = PermuteARBA(self.file_tree)
-        permute_arba.run(self.split, n=self.num_perm, folder=_folder, **kwargs)
-
-        if self.tfce_flag:
-            # run tfce
+        _folder = None
+        for method in self.method_list:
             if folder is not None:
-                _folder = folder / 'tfce'
-            permute_tfce = PermuteTFCE(self.file_tree)
-            permute_tfce.run(self.split, n=self.num_perm, folder=_folder,
-                             **kwargs)
+                _folder = folder / method
+                _folder.mkdir(exist_ok=True, parents=True)
+
+            permute = method_permute_dict[method](self.file_tree)
+            permute.run(self.split, n=self.num_perm, folder=_folder, **kwargs)
 
     def run(self, t2_list, **kwargs):
 
