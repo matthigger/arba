@@ -190,7 +190,9 @@ class PermuteBase(ABC):
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
-                _, self.split_stat_dict[split] = self.run_split_max(split)
+                _, self.split_stat_dict[split] = \
+                    self.run_split_max(split,
+                                       effect_split_dict=effect_split_dict)
 
         return self.split_stat_dict
 
