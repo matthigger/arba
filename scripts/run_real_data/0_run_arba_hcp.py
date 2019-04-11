@@ -8,7 +8,7 @@ from pnl_data.set.hcp_100 import folder, people
 # arba params
 alpha = .05
 feat_tuple = 'FA',
-num_perm = 1000
+num_perm = 10
 
 # run params
 par_flag = True
@@ -16,7 +16,7 @@ verbose = True
 
 # output folder
 s_feat = '-'.join(feat_tuple)
-folder_out = folder / f'arba_cv_MF_{s_feat}'
+folder_out = folder / f'arba_cv_MF_{s_feat}_test'
 folder_out.mkdir(exist_ok=True)
 
 folder_data = folder / 'to_100307_low_res'
@@ -46,7 +46,7 @@ with file_tree.loaded():
                      n=num_perm, print_image=True, save_self=True,
                      print_tree=True, print_hist=True, print_region=True)
 
-    permute_tfce = PermuteTFCE(file_tree)
-    permute_tfce.run(split, par_flag=True, verbose=True,
-                     folder=folder_tfce, n=num_perm, print_image=True,
-                     save_self=True, print_hist=True, print_region=True)
+    # permute_tfce = PermuteTFCE(file_tree)
+    # permute_tfce.run(split, par_flag=True, verbose=True,
+    #                  folder=folder_tfce, n=num_perm, print_image=True,
+    #                  save_self=True, print_hist=True, print_region=True)

@@ -13,7 +13,7 @@ from pnl_data.set.hcp_100 import get_name, folder
 t2_list = np.logspace(-1, 1, 5)
 # t2_list = [1]
 
-num_vox = [250] * 10
+num_vox = [250] * 14
 # num_vox = np.geomspace(10, 5000, num=11).astype(int)
 # num_vox = list(num_vox) * 100
 x_axis = 'T-squared'
@@ -23,12 +23,13 @@ feat_list = ['FA', 'MD']
 par_flag = True
 effect_shape = 'cube'  # either 'cube' or 'min_var'
 num_perm = 1000
-tfce_flag = True
+method_list = ['arba', 'tfce']
 full_brain = True
 
 print_tree = True
 print_image = True
 print_hist = True
+save_self = True
 
 # make output folder
 n = len(t2_list) * len(num_vox)
@@ -69,7 +70,7 @@ file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
 with file_tree.loaded():
     sim = Simulator(file_tree=file_tree, folder=folder_out, par_flag=par_flag,
                     effect_shape=effect_shape, num_perm=num_perm,
-                    tfce_flag=tfce_flag, active_rad=active_rad)
+                    method_list=method_list, active_rad=active_rad)
 
     # build effects
     sim.build_effect_list(num_vox=num_vox)
@@ -79,7 +80,7 @@ with file_tree.loaded():
 
     # run arba
     sim.run(t2_list, print_tree=print_tree, print_image=print_image,
-            print_hist=print_hist)
+            print_hist=print_hist, save_self=save_self)
 
     # run comparison methods
     f_performance = sim.get_performance()
