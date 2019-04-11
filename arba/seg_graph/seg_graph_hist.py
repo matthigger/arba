@@ -18,8 +18,8 @@ class SegGraphHistory(SegGraph):
     Attributes:
         merge_record (MergeRecord)
         max_t2 (float): max t2 stat
-        _err_edge_list (SortedList): tuples of (error, (reg0, reg1)) associated
-                                     with joining reg0, reg1
+        _err_edge_list (SortedList): tuples of (error, (reg_a, reg_b)) associated
+                                     with joining reg_a, reg_b
     """
 
     def __init__(self, *args, obj_fnc=None, **kwargs):

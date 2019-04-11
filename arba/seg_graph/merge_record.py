@@ -4,6 +4,7 @@ import tempfile
 import networkx as nx
 import nibabel as nib
 import numpy as np
+from tqdm import tqdm
 
 from .seg_graph import SegGraph
 from ..region import RegionT2Ward
@@ -239,25 +240,30 @@ class MergeRecord(nx.DiGraph):
 
         return tree_hist, node_reg_dict
 
-    def to_nii(self, f_out, fnc=None, n=100, **kwargs):
+    def to_nii(self, f_out, fnc=None, n=None, n_list=None, verbose=False,
+               **kwargs):
         """ writes a 4d volume with at different granularities
 
         Args:
             f_out (str or Path): output file
             fnc (fnc): accepts region, returns scalar
-            n (int): number of granularities to output.  defaults to 100,
+            n (int): number of granularities to output.  defaults to 100
+            n_list (list): explicitly pass the granularities to output
+            verbose (bool): toggles cmd line output
 
         Returns:
              f_out (Path): a 4d nii volume, first 3d are space.  the 4th
              n_list (array): number
         """
+        assert (n is None) != (n_list is None), 'either xor n_list required'
 
         # get n_list
-        n_init = len(self.ijk_leaf_dict)
-        n_last = len([n for n in self.nodes if not any(self.predecessors(n))])
-        n_list = np.geomspace(n_init, n_last, min(n, n_init - n_last)).astype(
-            int)
-        n_list = sorted(set(n_list), reverse=True)
+        if n_list is None:
+            n_init = len(self.ijk_leaf_dict)
+            n_last = len(
+                [n for n in self.nodes if not any(self.predecessors(n))])
+            n_list = np.geomspace(n_init, n_last, min(n, n_init - n_last))
+        n_list = sorted(set([int(n) for n in n_list]), reverse=True)
 
         # get f_out
         if f_out is None:
@@ -267,17 +273,14 @@ class MergeRecord(nx.DiGraph):
         # build array
         shape = (*self.ref.shape, len(n_list))
         x = np.zeros(shape)
-        n_idx = 0
-        for sg, _, _ in self.get_iter_sg(**kwargs):
-            if len(sg.nodes) == n_list[n_idx]:
-                x[:, :, :, n_idx] = sg.to_array(fnc=fnc)
-                n_idx += 1
-
         sg_iter = self.get_iter_sg(**kwargs)
-        for n_idx, n in enumerate(n_list):
-            sg, _, _ = next(sg_iter)
-            if len(sg.nodes) != n:
-                continue
+        tqdm_dict = {'disable': not verbose,
+                     'desc': 'build img per n',
+                     'total': len(n_list)}
+        sg, _, _ = next(sg_iter)
+        for n_idx, n in tqdm(enumerate(n_list), **tqdm_dict):
+            while len(sg.nodes) != n:
+                sg, _, _ = next(sg_iter)
             x[:, :, :, n_idx] = sg.to_array(fnc=fnc)
 
         # write to nii

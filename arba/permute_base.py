@@ -10,9 +10,8 @@ from scipy.special import comb
 from tqdm import tqdm
 
 from arba.plot import save_fig
-from mh_pytools import file, parallel
 from arba.space import Mask
-from arba.data import plot_feat
+from mh_pytools import file, parallel
 
 
 class PermuteBase(ABC):
@@ -121,10 +120,10 @@ class PermuteBase(ABC):
             # print mean image per grp per feature
             not_split = tuple(not x for x in split)
             for feat in self.file_tree.feat_list:
-                for lbl, split in (('1', split),
-                                   ('0', not_split)):
+                for lbl, _split in (('1', split),
+                                    ('0', not_split)):
                     f_out = folder / f'{feat}_{lbl}.nii.gz'
-                    self.file_tree.to_nii(feat=feat, sbj_bool=split,
+                    self.file_tree.to_nii(feat=feat, sbj_bool=_split,
                                           f_out=f_out)
 
         if print_region:
@@ -132,7 +131,7 @@ class PermuteBase(ABC):
                                   reverse=True)
 
             for reg_idx, reg_stat in enumerate(stat_descend):
-                p = 1 -  bisect_right(stat_sorted, reg_stat) / num_perm
+                p = 1 - bisect_right(stat_sorted, reg_stat) / num_perm
                 if p > self.max_pval_region:
                     break
                 mask = Mask(self.stat_volume == reg_stat,
@@ -191,7 +190,9 @@ class PermuteBase(ABC):
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
-                _, self.split_stat_dict[split] = self.run_split_max(split)
+                _, self.split_stat_dict[split] = \
+                    self.run_split_max(split,
+                                       effect_split_dict=effect_split_dict)
 
         return self.split_stat_dict
 
@@ -233,3 +234,26 @@ class PermuteBase(ABC):
             pval[i, j, k] = 1 - p
 
         return stat_volume, pval
+
+    def get_t2(self, split, verbose=False):
+        """ computes t2 stat per voxel (not scaled) """
+
+        split = np.array(split)
+
+        # build fs per ijk in mask
+        t2 = np.zeros(self.file_tree.ref.shape)
+        tqdm_dict = {'disable': not verbose,
+                     'desc': 'compute t2 per vox'}
+        split_not = tuple([not x for x in split])
+        for ijk in tqdm(self.file_tree.pc, **tqdm_dict):
+            fs0 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split_not)
+            fs1 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split)
+
+            # compute t2
+            delta = fs0.mu - fs1.mu
+            cov_pooled = (fs0.cov * fs0.n +
+                          fs1.cov * fs1.cov) / (fs0.n + fs1.n)
+            i, j, k = ijk
+            t2[i, j, k] = delta @ np.linalg.inv(cov_pooled) @ delta
+
+        return t2
