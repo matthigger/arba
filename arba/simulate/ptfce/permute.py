@@ -7,8 +7,11 @@ import tempfile
 from time import sleep
 
 import nibabel as nib
+import numpy as np
 import psutil
+from tqdm import tqdm
 
+from .compute_smooth import compute_smooth
 from ...permute_base import PermuteBase
 
 f_run_ptfce = pathlib.Path(__file__).parent / 'run_ptfce.R'
@@ -16,7 +19,9 @@ f_run_ptfce = pathlib.Path(__file__).parent / 'run_ptfce.R'
 
 class PermutePTFCE(PermuteBase):
     # memory needed to run each
-    mem_buffer = 8e9
+    mem_buff = 5e9
+    mem_per_run = 24e8
+    Z_MAX = 20
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,7 +42,12 @@ class PermutePTFCE(PermuteBase):
                                                effect_split_dict=effect_split_dict,
                                                **kwargs)
 
+        mem_total = psutil.virtual_memory().available - self.mem_buff
+        n_proc_max = np.floor(mem_total / self.mem_per_run)
         proc_split_file_dict = dict()
+        pbar = tqdm(total=len(split_list),
+                    disable=not verbose,
+                    desc='max ptfce per split')
         while split_list or proc_split_file_dict:
             sleep(1 / check_fs)
 
@@ -53,12 +63,18 @@ class PermutePTFCE(PermuteBase):
                 self.split_stat_dict[split] = max_stat
                 os.remove(str(file))
 
+                # update pbar
+                pbar.update(1)
+
             # remove finished processes
             for proc in proc_to_rm:
                 del proc_split_file_dict[proc]
 
             # no more memory, dont start new job
-            if psutil.virtual_memory().available < self.mem_buffer:
+            if len(proc_split_file_dict) >= n_proc_max:
+                continue
+            mem_available = psutil.virtual_memory().available - self.mem_buff
+            if mem_available < self.mem_per_run:
                 continue
 
             # no more cpu, dont start new job
@@ -66,9 +82,10 @@ class PermutePTFCE(PermuteBase):
                 continue
 
             # start new job
-            split = split_list.pop()
-            proc, file = self._run_split(split)
-            proc_split_file_dict[proc] = split, file
+            if split_list:
+                split = split_list.pop()
+                proc, file = self._run_split(split)
+                proc_split_file_dict[proc] = split, file
 
         return self.split_stat_dict
 
@@ -76,16 +93,33 @@ class PermutePTFCE(PermuteBase):
         # compute t2
         t2 = self.get_t2(split)
 
+        # make it a z score
+        t = np.sqrt(t2)
+
+        # assume that covariance matrix is known (not estimated)
+        z = t
+
+        # https://github.com/spisakt/pTFCE/issues/3
+        z[z > self.Z_MAX] = self.Z_MAX
+
         # write to file
-        img_t2 = nib.Nifti1Image(t2, self.file_tree.ref.affine)
-        f_t2 = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
-        img_t2.to_filename(f_t2)
+        img_z = nib.Nifti1Image(z, self.file_tree.ref.affine)
+        f_z = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+        img_z.to_filename(f_z)
+
+        # compute smoothness via FSL
+        smooth_dict = compute_smooth(f_z=f_z, f_mask=self.f_mask)
+        v = int(smooth_dict['VOLUME'])
+        r = smooth_dict['RESELS']
 
         # apply ptfce
-        f_t2_ptfce = tempfile.NamedTemporaryFile().name
-        cmd = f'Rscript {f_run_ptfce} -i {f_t2} -m {self.f_mask} -o {f_t2_ptfce}'
+        f_z_ptfce = tempfile.NamedTemporaryFile().name
+        cmd = f'Rscript {f_run_ptfce} -i {f_z} -m {self.f_mask} -o {f_z_ptfce} -v {v} -r {r}'
         proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.DEVNULL)
-        return proc, f_t2_ptfce
+
+        # todo: file ending always added in run_ptfce.R, even if already there
+        f_z_ptfce += '.nii.gz'
+        return proc, f_z_ptfce
 
     def run_split(self, split, **kwargs):
         """ returns a volume of tfce enhanced t2 stats
@@ -102,9 +136,6 @@ class PermutePTFCE(PermuteBase):
         proc.kill()
 
         # read in file
-        # kludge: R's dcemriS4 writeNIfTI appends .nii.gz, even if it already
-        # has this suffix
-        f_t2_ptfce += '.nii.gz'
         t2_ptfce = nib.load(f_t2_ptfce).get_data()
 
         return t2_ptfce
