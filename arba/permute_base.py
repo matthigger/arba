@@ -120,10 +120,10 @@ class PermuteBase(ABC):
             # print mean image per grp per feature
             not_split = tuple(not x for x in split)
             for feat in self.file_tree.feat_list:
-                for lbl, split in (('1', split),
-                                   ('0', not_split)):
+                for lbl, _split in (('1', split),
+                                    ('0', not_split)):
                     f_out = folder / f'{feat}_{lbl}.nii.gz'
-                    self.file_tree.to_nii(feat=feat, sbj_bool=split,
+                    self.file_tree.to_nii(feat=feat, sbj_bool=_split,
                                           f_out=f_out)
 
         if print_region:
