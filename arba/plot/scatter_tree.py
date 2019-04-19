@@ -86,8 +86,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
                  log_x=True, log_y=True, txt_fnc=None, min_reg_size=1,
-                 reverse_arrow=True):
-
+                 reverse_arrow=True, alpha=1):
     if reverse_arrow:
         sg_backwards = type(sg)()
         sg_backwards.add_edges_from((n1, n0) for (n0, n1) in sg.edges)
@@ -138,7 +137,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
         sc = nx.draw_networkx_nodes(reg_list, pos=node_pos,
                                     nodelist=reg_list,
                                     node_color=node_color, vmin=0, vmax=1,
-                                    **kwargs)
+                                    alpha=alpha, **kwargs)
 
         return sc
 
