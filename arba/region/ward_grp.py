@@ -7,13 +7,10 @@ from .reg import Region
 class RegionWardGrp(Region):
     """ region object, segmentations constructed to cluster observations
 
-    sq_error_tr: identify segmention which minimizes
-        sum_region sum_i ||x_i - mu_{region, group}||^2
-    where mu_{region, group} is the average observation of the group (e.g. Ill
-    or Healthy) within some region.
+    sq_error_det -> max_likelihood
+    sq_error_tr -> min distance between observation and population means
 
-    sq_error_det: identify segmentation which maximizes likelihood under normal
-    model per group
+    (see methods for detail)
     """
 
     def __init__(self, *args, **kwargs):
@@ -29,10 +26,9 @@ class RegionWardGrp(Region):
 
     @property
     def pval(self):
+        # memoize
         if self._pval is None:
             self._pval = self.get_pval()
-        if np.isnan(self._pval):
-            raise AttributeError('invalid pval')
         return self._pval
 
     @property
@@ -40,12 +36,10 @@ class RegionWardGrp(Region):
         # memoize
         if self._t2 is None:
             self._t2 = self.get_t2()
-            if self._t2 < 0:
-                raise AttributeError('invalid t2')
         return self._t2
 
     def get_t2(self):
-        """ (unweighted) t squared distance between groups
+        """ hotelling t squared distance between groups
 
         t2(pop_1, pop_0) = (u_1 - u_0)^T sig ^ -1 (u_1 - u_0)
 
@@ -55,8 +49,16 @@ class RegionWardGrp(Region):
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
+        quad_term = mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
 
-        return mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
+        scale = (fs0.n * fs1.n) / (fs0.n + fs1.n)
+
+        t2 = scale * quad_term
+
+        if t2 < 0:
+            raise AttributeError('invalid t2')
+
+        return t2
 
     def get_pval(self):
         """ gets pvalue of t squared stat
@@ -66,20 +68,15 @@ class RegionWardGrp(Region):
         # dimensionality of data
         p = next(iter(self.fs_dict.values())).d
 
-        # number of observations per group
+        # compute scale to f stat
         n, m = [fs.n for fs in self.fs_dict.values()]
-
-        # # number of observations per group is number of voxels
-        # # kludge: invalid pval if n=m=1, f_stat diverges with 0 in denominator
-        # n = max(len(self), 2)
-        # m = n
-
-        # compute f stat
-        f_stat = self.t2 * n * m / (n + m)
-        f_stat *= (n + m - p - 1) / (p * (n + m - 2))
+        f_scale = (n + m - p - 1) / (p * (n + m - 2))
 
         # compute pval
-        pval = f.sf(f_stat, dfd=p, dfn=n + m - p - 1)
+        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n + m - p - 1)
+
+        if np.isnan(pval):
+            raise AttributeError('invalid pval')
 
         return pval
 
@@ -87,9 +84,9 @@ class RegionWardGrp(Region):
     def sq_error_det(self):
         """ the weighted sum of the determinants of pooled covar matrices
 
-        let us index an observation by i, so we have {x_i, r_i, omega_i} where
-        x_i is the feature vector, r_i is the region it belongs to and omega_i
-        is the group (e.g. Schizophrenia or Healthy)
+        we have {x_i, r_i, omega_i} where x_i is the feature vector, r_i is the
+        region it belongs to and omega_i is the group (e.g. Schizophrenia or
+        Healthy)
 
         segmentation_ML = arg max P({x_i|r_i, omega_i}_i)
                         = ...independence, normality, equal grp covariance ...
@@ -130,21 +127,3 @@ class RegionWardGrp(Region):
         if reg_union is None:
             reg_union = reg_0 + reg_1
         return reg_union.sq_error_tr - reg_0.sq_error_tr - reg_1.sq_error_tr
-
-    def __add__(self, other):
-        if isinstance(other, type(0)) and other == 0:
-            reg_out = super().__add__(other)
-            return reg_out
-
-        if not isinstance(other, type(self)):
-            raise TypeError
-
-        reg_out = super().__add__(other)
-
-        return reg_out
-
-    __radd__ = __add__
-
-    def reset(self):
-        self._t2 = None
-        self._pval = None
