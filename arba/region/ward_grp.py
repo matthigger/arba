@@ -6,10 +6,15 @@ from .reg import Region
 
 
 class RegionWardGrp(Region):
-    """ computes MSE error of representing T-sq per voxel by a single value
+    """ region object, segmentations constructed to cluster observations
 
-    Attributes:
-        t2_fs (FeatStat): describes set of t2 stats per voxel
+    sq_error_tr: identify segmention which minimizes
+        sum_region sum_i ||x_i - mu_{region, group}||^2
+    where mu_{region, group} is the average observation of the group (e.g. Ill
+    or Healthy) within some region.
+
+    sq_error_det: identify segmentation which maximizes likelihood under normal
+    model per group
     """
 
     def __init__(self, *args, t2_per_vox=None, **kwargs):
@@ -124,7 +129,6 @@ class RegionWardGrp(Region):
 
         n = sum(fs.n for fs in self.fs_dict.values())
         return np.trace(self.cov_pooled) * n
-
 
     @property
     def t2_sq_error(self):
