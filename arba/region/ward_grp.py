@@ -41,9 +41,9 @@ class RegionWardGrp(Region):
     def get_t2(self):
         """ hotelling t squared distance between groups
 
-        t2(pop_1, pop_0) = (u_1 - u_0)^T sig ^ -1 (u_1 - u_0)
+        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T sig^-1 (u_1 - u_0)
 
-        where sig is the pooled covariance and u_i is mean in population_i
+        where sig = pooled covar between groups
         """
 
         fs0, fs1 = self.fs_dict.values()
