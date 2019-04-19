@@ -7,18 +7,27 @@ class RegionWardSbj(RegionWardGrp):
     """ computes t2 according to split covariance model (across sbj and space)
     """
 
-    def __init__(self, *args, sig_sbj=None, data=None, **kwargs):
-        assert (sig_sbj is None) != (data is None), 'either sig_sbj xor data'
+    @staticmethod
+    def from_data(*args, pc_ijk, file_tree, grp_sbj_dict, **kwargs):
+
+        mask = pc_ijk.to_mask()
+        sig_sbj_dict = RegionWardSbj.get_sig_sbj(file_tree, mask, grp_sbj_dict)
+
+        return RegionWardSbj(*args, pc_ijk=pc_ijk, sig_sbj_dict=sig_sbj_dict,
+                             **kwargs)
+
+    def __init__(self, *args, sig_sbj_dict, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        if data is not None:
-            sig_sbj = self.get_sig_sbj(data)
+        self.sig_sbj_dict = sig_sbj_dict
 
-        self.sig_sbj = sig_sbj
-        self.sig_space = self.cov_pooled - sig_sbj
+        self.sig_space_dict = dict()
+        for grp in self.sig_sbj_dict.keys():
+            self.sig_space_dict[grp] = self.fs_dict[grp].cov - \
+                                       sig_sbj_dict[grp]
 
-        assert (self.sig_space >= 0).all(), 'invalid sig_sbj passed'
+            assert (self.sig_space_dict[grp] >= 0).all(), 'invalid sig_sbj passed'
 
     def get_t2(self):
         """ hotelling t squared distance between groups
@@ -31,7 +40,14 @@ class RegionWardSbj(RegionWardGrp):
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        sig = self.sig_sbj + self.sig_space / len(self.pc_ijk)
+        sig_list = list()
+        for grp in self.sig_space_dict.keys():
+            sig = self.sig_sbj_dict[grp] + self.sig_space_dict[grp] / len(self.pc_ijk)
+            sig_list.append(sig)
+
+        # pool
+        sig = np.atleast_2d(np.mean(sig_list))
+
         quad_term = mu_diff @ np.linalg.inv(sig) @ mu_diff
 
         scale = (fs0.n * fs1.n) / (fs0.n + fs1.n)
@@ -43,22 +59,27 @@ class RegionWardSbj(RegionWardGrp):
 
         return t2
 
-    def get_sig_sbj(self, data):
+    @staticmethod
+    def get_sig_sbj(file_tree, mask, grp_sbj_dict):
         """ computes sig_sbj from raw data
 
         Args:
-            data (np.array): (space0, space1, space2, num_sbj, num_feat)
+            file_tree (FileTree): data object
+            mask (np.array): boolean array, describes space of region
+            grp_sbj_dict (dict): keys are group labels, values are list of sbj
         """
-        raise NotImplementedError
-
         # get relevant features
-        mask = self.pc_ijk.to_mask()
-        x = data[mask, :, :]
+        with file_tree.loaded():
+            x = file_tree.data[mask, :, :]
 
         # average per sbj
         x = np.mean(x, axis=0)
 
         # compute covariance
-        sig_sbj = np.cov(x, ddof=0)
+        sig_sbj_dict = dict()
+        for grp, sbj_list in grp_sbj_dict.items():
+            split = np.array([sbj in sbj_list for sbj in file_tree.sbj_list])
+            sig_sbj = np.cov(x[split, :].T, ddof=0)
+            sig_sbj_dict[grp] = np.atleast_2d(sig_sbj)
 
-        return sig_sbj
+        return sig_sbj_dict
