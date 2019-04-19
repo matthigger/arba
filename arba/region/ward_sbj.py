@@ -7,8 +7,14 @@ class RegionWardSbj(RegionWardGrp):
     """ computes t2 according to split covariance model (across sbj and space)
     """
 
-    def __init__(self, *args, sig_sbj, **kwargs):
+    def __init__(self, *args, sig_sbj=None, data=None, **kwargs):
+        assert (sig_sbj is None) != (data is None), 'either sig_sbj xor data'
+
         super().__init__(*args, **kwargs)
+
+        if data is not None:
+            sig_sbj = self.get_sig_sbj(data)
+
         self.sig_sbj = sig_sbj
         self.sig_space = self.cov_pooled - sig_sbj
 
@@ -36,3 +42,23 @@ class RegionWardSbj(RegionWardGrp):
             raise AttributeError('invalid t2')
 
         return t2
+
+    def get_sig_sbj(self, data):
+        """ computes sig_sbj from raw data
+
+        Args:
+            data (np.array): (space0, space1, space2, num_sbj, num_feat)
+        """
+        raise NotImplementedError
+
+        # get relevant features
+        mask = self.pc_ijk.to_mask()
+        x = data[mask, :, :]
+
+        # average per sbj
+        x = np.mean(x, axis=0)
+
+        # compute covariance
+        sig_sbj = np.cov(x, ddof=0)
+
+        return sig_sbj
