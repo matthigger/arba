@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from .merge_record import MergeRecord
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward
+from ..region import RegionWardGrp
 
 
 class SegGraphHistory(SegGraph):
@@ -31,7 +31,7 @@ class SegGraphHistory(SegGraph):
         self.obj_fnc = obj_fnc
         self._err_edge_list = None
         if self.obj_fnc is None:
-            self.obj_fnc = RegionT2Ward.get_error_tr
+            self.obj_fnc = RegionWardGrp.get_error_tr
 
     def merge(self, reg_tuple):
         """ record combination in merge_record """

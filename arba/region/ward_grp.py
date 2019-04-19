@@ -5,7 +5,7 @@ from .feat_stat import FeatStat, FeatStatSingle, FeatStatEmpty
 from .reg import Region
 
 
-class RegionT2Ward(Region):
+class RegionWardGrp(Region):
     """ computes MSE error of representing T-sq per voxel by a single value
 
     Attributes:

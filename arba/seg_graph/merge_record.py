@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward
+from ..region import RegionWardGrp
 from ..space import PointCloud
 
 
@@ -145,7 +145,7 @@ class MergeRecord(nx.DiGraph):
         for grp, sbj_list in grp_sbj_dict.items():
             fs_dict[grp] = sum(file_tree.get_fs(ijk, sbj_list=sbj_list)
                                for ijk in pc)
-        return RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
+        return RegionWardGrp(pc_ijk=pc, fs_dict=fs_dict)
 
     def get_iter_sg(self, file_tree, grp_sbj_dict):
         """ iterator over seg_graph which undergoes recorded merge operations
