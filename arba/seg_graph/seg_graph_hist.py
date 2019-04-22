@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from .merge_record import MergeRecord
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward
+from ..region import RegionWardSbj
 
 
 class SegGraphHistory(SegGraph):
@@ -17,7 +17,7 @@ class SegGraphHistory(SegGraph):
 
     Attributes:
         merge_record (MergeRecord)
-        max_t2 (float): max t2 stat
+        min_pval (float): min pval observed across all regions
         _err_edge_list (SortedList): tuples of (error, (reg_a, reg_b)) associated
                                      with joining reg_a, reg_b
     """
@@ -26,12 +26,12 @@ class SegGraphHistory(SegGraph):
         super().__init__(*args, **kwargs)
         self.merge_record = MergeRecord(self.file_tree.mask,
                                         ref=self.file_tree.ref)
-        self.max_t2 = max(len(r) * r.t2 for r in self.nodes)
+        self.min_pval = min(r.pval for r in self.nodes)
 
         self.obj_fnc = obj_fnc
         self._err_edge_list = None
         if self.obj_fnc is None:
-            self.obj_fnc = RegionT2Ward.get_error_tr
+            self.obj_fnc = RegionWardSbj.get_error_det
 
     def merge(self, reg_tuple):
         """ record combination in merge_record """
@@ -39,9 +39,8 @@ class SegGraphHistory(SegGraph):
 
         reg_sum = super().merge(reg_tuple)
 
-        _t2 = len(reg_sum) * reg_sum.t2
-        if _t2 > self.max_t2:
-            self.max_t2 = _t2
+        if reg_sum.pval < self.min_pval:
+            self.min_pval = reg_sum.pval
 
         return reg_sum
 

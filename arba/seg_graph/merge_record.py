@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import RegionT2Ward
+from ..region import RegionWardSbj
 from ..space import PointCloud
 
 
@@ -139,13 +139,9 @@ class MergeRecord(nx.DiGraph):
             reg (RegionWardT2): region
         """
 
-        pc = self.get_pc(node)
-
-        fs_dict = dict()
-        for grp, sbj_list in grp_sbj_dict.items():
-            fs_dict[grp] = sum(file_tree.get_fs(ijk, sbj_list=sbj_list)
-                               for ijk in pc)
-        return RegionT2Ward(pc_ijk=pc, fs_dict=fs_dict)
+        return RegionWardSbj.from_data(pc_ijk=self.get_pc(node),
+                                       file_tree=file_tree,
+                                       grp_sbj_dict=grp_sbj_dict)
 
     def get_iter_sg(self, file_tree, grp_sbj_dict):
         """ iterator over seg_graph which undergoes recorded merge operations
@@ -240,7 +236,7 @@ class MergeRecord(nx.DiGraph):
 
         return tree_hist, node_reg_dict
 
-    def to_nii(self, f_out, fnc=None, n=None, n_list=None, verbose=False,
+    def to_nii(self, f_out, fnc=None, n=100, n_list=None, verbose=False,
                **kwargs):
         """ writes a 4d volume with at different granularities
 

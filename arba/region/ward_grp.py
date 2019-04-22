@@ -1,0 +1,135 @@
+import numpy as np
+from scipy.stats import f
+
+from .reg import Region
+
+
+class RegionWardGrp(Region):
+    """ region object, segmentations constructed to cluster observations
+
+    sq_error_det -> max_likelihood
+    sq_error_tr -> min distance between observation and population means
+
+    (see methods for detail)
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._t2 = None
+        self._pval = None
+
+        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0)),
+        # this is critical for computation of sq_error_det
+        fs0, fs1 = self.fs_dict.values()
+        self.cov_pooled = (fs0.n * fs0.cov +
+                           fs1.n * fs1.cov) / (fs0.n + fs1.n)
+
+    @property
+    def pval(self):
+        # memoize
+        if self._pval is None:
+            self._pval = self.get_pval()
+        return self._pval
+
+    @property
+    def t2(self):
+        # memoize
+        if self._t2 is None:
+            self._t2 = self.get_t2()
+        return self._t2
+
+    def get_t2(self):
+        """ hotelling t squared distance between groups
+
+        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T sig^-1 (u_1 - u_0)
+
+        where sig = pooled covar between groups
+        """
+
+        fs0, fs1 = self.fs_dict.values()
+
+        mu_diff = fs0.mu - fs1.mu
+        quad_term = mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
+
+        n0, n1 = self.n0n1
+        scale = (n0 * n1) / (n0 + n1)
+
+        t2 = scale * quad_term
+
+        if t2 < 0:
+            raise AttributeError('invalid t2')
+
+        return t2
+
+    @property
+    def n0n1(self):
+        fs0, fs1 = self.fs_dict.values()
+        return fs0.n, fs1.n
+
+    def get_pval(self):
+        """ gets pvalue of t squared stat
+
+        see http://math.bme.hu/~marib/tobbvalt/tv5.pdf
+        """
+        # dimensionality of data
+        p = next(iter(self.fs_dict.values())).d
+
+        # compute scale to f stat
+        n0, n1 = self.n0n1
+        f_scale = (n0 + n1 - p - 1) / (p * (n0 + n1 - 2))
+
+        # compute pval
+        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n0 + n1 - p - 1)
+
+        if np.isnan(pval):
+            raise AttributeError('invalid pval')
+
+        return pval
+
+    @property
+    def sq_error_det(self):
+        """ the weighted sum of the determinants of pooled covar matrices
+
+        we have {x_i, r_i, omega_i} where x_i is the feature vector, r_i is the
+        region it belongs to and omega_i is the group (e.g. Schizophrenia or
+        Healthy)
+
+        segmentation_ML = arg max P({x_i|r_i, omega_i}_i)
+                        = ...independence, normality, equal grp covariance ...
+                        = sum_r N_r |cov_pooled_r|
+
+        so we define:
+
+        sq_error_det = N_r |cov_pooled_r|
+
+        where N_r is number of observations in region r.
+        """
+
+        n = sum(fs.n for fs in self.fs_dict.values())
+        return np.linalg.det(self.cov_pooled) * n
+
+    @property
+    def sq_error_tr(self):
+        """ the weighted sum of the trace of pooled covar matrices
+
+        (see doc in sq_error_det for notation)
+
+        sq_error_tr = sum_i || x_i - mu_{r_i, omega_i}||^2
+                    = ...
+                    = sum_r  N_r tr(cov_pooled_r)
+        """
+
+        n = sum(fs.n for fs in self.fs_dict.values())
+        return np.trace(self.cov_pooled) * n
+
+    @staticmethod
+    def get_error_det(reg_0, reg_1, reg_union=None):
+        if reg_union is None:
+            reg_union = reg_0 + reg_1
+        return reg_union.sq_error_det - reg_0.sq_error_det - reg_1.sq_error_det
+
+    @staticmethod
+    def get_error_tr(reg_0, reg_1, reg_union=None):
+        if reg_union is None:
+            reg_union = reg_0 + reg_1
+        return reg_union.sq_error_tr - reg_0.sq_error_tr - reg_1.sq_error_tr

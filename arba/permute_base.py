@@ -1,6 +1,6 @@
 import pathlib
 from abc import ABC, abstractmethod
-from bisect import bisect_right
+from bisect import bisect_right, bisect_left
 
 import matplotlib.pyplot as plt
 import nibabel as nib
@@ -112,7 +112,7 @@ class PermuteBase(ABC):
             plt.hist(stat_sorted, bins=20)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
-            plt.xlabel(r'Max $T^2(r)$ in Hierarchy')
+            plt.xlabel(r'Max (or min) stat in Hierarchy')
             plt.ylabel(f'Count\n(Across {num_perm} Permutations)')
             save_fig(folder / 'hist_max_stat.pdf', size_inches=(4, 3))
 
@@ -214,7 +214,7 @@ class PermuteBase(ABC):
             stat_volume (np.array): (space0, space1, space2) stats
         """
 
-    def determine_sig(self, split=None, stat_volume=None):
+    def determine_sig(self, split=None, stat_volume=None, flag_min=False):
         """ runs on the original case, uses the stats saved to determine sig"""
         assert (split is None) != (stat_volume is None), \
             'split xor stat_volume'
@@ -223,6 +223,11 @@ class PermuteBase(ABC):
             # get stat volume of original
             stat_volume = self.run_split(split)
 
+        if flag_min:
+            bisect = bisect_left
+        else:
+            bisect = bisect_right
+
         # build array of pval
         # https://stats.stackexchange.com/questions/109207/p-values-equal-to-0-in-permutation-test
         # todo: add confidence from CLT approx of binmoial
@@ -230,8 +235,10 @@ class PermuteBase(ABC):
         n = len(self.split_stat_dict)
         pval = np.zeros(self.file_tree.ref.shape)
         for i, j, k in self.file_tree.pc:
-            p = bisect_right(stat_sorted, stat_volume[i, j, k]) / n
-            pval[i, j, k] = 1 - p
+            p = bisect(stat_sorted, stat_volume[i, j, k]) / n
+            if not flag_min:
+                p = 1 - p
+            pval[i, j, k] = p
 
         return stat_volume, pval
 

@@ -4,8 +4,8 @@ from .seg_graph import SegGraph
 from .seg_graph_hist import SegGraphHistory
 
 
-class SegGraphT2(SegGraphHistory):
-    """ keeps track of t-squared distances among all regions through history
+class SegGraphHistPval(SegGraphHistory):
+    """ keeps track of pval among all regions through history
 
     Attributes:
         node_t2_dict (dict): keys are nodes, values are t2
@@ -13,31 +13,28 @@ class SegGraphT2(SegGraphHistory):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, obj='t2', **kwargs)
-        # init node_t2_dict
-        self.node_t2_dict = dict()
+        # init node_pval_dict
+        self.node_pval_dict = dict()
         for reg in self.nodes:
             ijk = next(iter(reg.pc_ijk))
             node = self.merge_record.ijk_leaf_dict[ijk]
-            self.node_t2_dict[node] = reg.t2 * len(reg)
+            self.node_pval_dict[node] = reg.pval
 
     def merge(self, reg_tuple):
         node_sum = len(self.merge_record.nodes)
         reg_sum = super().merge(reg_tuple)
 
-        # record t2 of newest region
-        self.node_t2_dict[node_sum] = reg_sum.t2 * len(reg_sum)
+        # record pval of newest region
+        self.node_pval_dict[node_sum] = reg_sum.pval
 
         return reg_sum
 
-    def cut_greedy_t2(self):
+    def cut_greedy_pval(self):
         """ gets SegGraph of disjoint reg with max t2 which covers volume
         """
-        # we 'flip' t2 as _cut_greedy() will minimize the given objective
-        node_neg_t2_dict = {n: -m for n, m in self.node_t2_dict.items()}
-
-        # get disjoint cover of entire volume which greedily maximizes t2
-        node_list = self._cut_greedy(node_val_dict=node_neg_t2_dict,
-                                     max_flag=True)
+        # get disjoint cover of entire volume which greedily minimizes pval
+        node_list = self._cut_greedy(node_val_dict=self.node_pval_dict,
+                                     max_flag=False)
 
         # build seg graph
         sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
@@ -52,18 +49,18 @@ class SegGraphT2(SegGraphHistory):
 
         return sg
 
-    def get_max_t2_array(self):
-        """ returns volume of max t2 per voxel
+    def get_min_pval_array(self):
+        """ returns volume of min pval per voxel
 
         Returns:
-            max_t2 (array): maximum t2 observed per each voxel
+            min_pval (array): min pval observed per each voxel
         """
-        node_list = self._cut_greedy(node_val_dict=self.node_t2_dict,
+        node_list = self._cut_greedy(node_val_dict=self.node_pval_dict,
                                      max_flag=True)
 
-        max_t2 = np.zeros(self.file_tree.ref.shape)
+        min_pval = np.zeros(self.file_tree.ref.shape)
         for n in node_list:
             mask = self.merge_record.get_pc(n).to_mask()
-            max_t2[mask] = self.node_t2_dict[n]
+            min_pval[mask] = self.node_pval_dict[n]
 
-        return max_t2
+        return min_pval

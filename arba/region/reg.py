@@ -37,6 +37,9 @@ class Region:
             # allows use of sum(reg_iter)
             return type(self)(self.pc_ijk, self.fs_dict)
 
+        if not isinstance(other, type(self)):
+            raise TypeError
+
         fs_dict = {grp: self.fs_dict[grp] + other.fs_dict[grp]
                    for grp in self.fs_dict.keys()}
 
