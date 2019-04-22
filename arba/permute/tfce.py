@@ -1,4 +1,4 @@
-from arba.simulate.tfce.compute import apply_tfce
+from arba.simulate.tfce import apply_tfce
 from ...permute_base import PermuteBase
 
 

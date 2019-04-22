@@ -6,8 +6,8 @@ from contextlib import contextmanager
 import nibabel as nib
 import numpy as np
 
-from ..region import FeatStat
-from ..space import get_ref, Mask, PointCloud
+from arba.region import FeatStat
+from arba.space import get_ref, Mask, PointCloud
 
 
 def check_loaded(fnc):

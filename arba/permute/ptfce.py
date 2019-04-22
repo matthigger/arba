@@ -11,7 +11,7 @@ import numpy as np
 import psutil
 from tqdm import tqdm
 
-from arba.simulate.ptfce.compute_smooth import compute_smooth
+from arba.simulate.compute_smooth import compute_smooth
 from ...permute_base import PermuteBase
 
 f_run_ptfce = pathlib.Path(__file__).parent / 'run_ptfce.R'
