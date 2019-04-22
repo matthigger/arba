@@ -6,9 +6,10 @@ from collections import defaultdict
 import nibabel as nib
 import numpy as np
 
-from ..seg_graph import FileTree, FeatStat
+from ..seg_graph import FeatStat
 from ..space import RefSpace, get_ref
 
+raise NotImplementedError('use new FileTree')
 
 class Model:
     """ given FeatStat per voxel and size, generates images
