@@ -29,6 +29,13 @@ class RegionWardSbj(RegionWardGrp):
 
             assert (self.sig_space_dict[grp] >= 0).all(), 'invalid sig_sbj passed'
 
+    @property
+    def n0n1(self):
+        fs0, fs1 = self.fs_dict.values()
+        # assume same num of sbj per each vox
+        num_vox = len(self.pc_ijk)
+        return fs0.n / num_vox, fs1.n / num_vox
+
     def get_t2(self):
         """ hotelling t squared distance between groups
 
@@ -50,7 +57,8 @@ class RegionWardSbj(RegionWardGrp):
 
         quad_term = mu_diff @ np.linalg.inv(sig) @ mu_diff
 
-        scale = (fs0.n * fs1.n) / (fs0.n + fs1.n)
+        n0, n1 = self.n0n1
+        scale = (n0 * n1) / (n0 + n1)
 
         t2 = scale * quad_term
 

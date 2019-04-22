@@ -51,7 +51,8 @@ class RegionWardGrp(Region):
         mu_diff = fs0.mu - fs1.mu
         quad_term = mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
 
-        scale = (fs0.n * fs1.n) / (fs0.n + fs1.n)
+        n0, n1 = self.n0n1
+        scale = (n0 * n1) / (n0 + n1)
 
         t2 = scale * quad_term
 
@@ -59,6 +60,11 @@ class RegionWardGrp(Region):
             raise AttributeError('invalid t2')
 
         return t2
+
+    @property
+    def n0n1(self):
+        fs0, fs1 = self.fs_dict.values()
+        return fs0.n, fs1.n
 
     def get_pval(self):
         """ gets pvalue of t squared stat
@@ -69,11 +75,11 @@ class RegionWardGrp(Region):
         p = next(iter(self.fs_dict.values())).d
 
         # compute scale to f stat
-        n, m = [fs.n for fs in self.fs_dict.values()]
-        f_scale = (n + m - p - 1) / (p * (n + m - 2))
+        n0, n1 = self.n0n1
+        f_scale = (n0 + n1 - p - 1) / (p * (n0 + n1 - 2))
 
         # compute pval
-        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n + m - p - 1)
+        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n0 + n1 - p - 1)
 
         if np.isnan(pval):
             raise AttributeError('invalid pval')
