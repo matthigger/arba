@@ -80,7 +80,11 @@ class PermuteARBA(PermuteBase):
 
         return sg_hist
 
-    def run_split_min_pval(self, split, **kwargs):
+    def run_split_max(self, split, **kwargs):
+        """" returns the minimum pvalue across hierarchy
+
+        NOTE: name "max" is for consistency with Permute class
+        """
         return split, self.run_split(split).min_pval
 
     def determine_sig(self, split=None, stat_volume=None):
