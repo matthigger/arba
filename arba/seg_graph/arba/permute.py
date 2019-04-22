@@ -2,7 +2,7 @@ from arba.permute_base import PermuteBase
 from arba.plot import save_fig, size_v_wt2
 from arba.space import Mask
 from ..seg_graph_hist import SegGraphHistory
-from ..seg_graph_t2 import SegGraphT2
+from ..seg_graph_t2 import SegGraphHistPval
 
 
 class PermuteARBA(PermuteBase):
@@ -48,7 +48,7 @@ class PermuteARBA(PermuteBase):
         Args:
             split (tuple): (num_sbj), split[i] describes which class the i-th
                            sbj belongs to in this split
-            full_t2 (bool): toggles instantiating SegGraphT2, a subclass of
+            full_t2 (bool): toggles instantiating SegGraphHistPval, a subclass of
                             SegGraphHistory which tracks t2 per each node.
 
         Returns:
@@ -58,8 +58,8 @@ class PermuteARBA(PermuteBase):
         grp_sbj_dict = {'0': self.file_tree.sbj_bool_to_list(split),
                         '1': self.file_tree.sbj_bool_to_list(not_split)}
         if full_t2:
-            sg_hist = SegGraphT2(file_tree=self.file_tree,
-                                 grp_sbj_dict=grp_sbj_dict)
+            sg_hist = SegGraphHistPval(file_tree=self.file_tree,
+                                       grp_sbj_dict=grp_sbj_dict)
         else:
             sg_hist = SegGraphHistory(file_tree=self.file_tree,
                                       grp_sbj_dict=grp_sbj_dict)
@@ -81,16 +81,16 @@ class PermuteARBA(PermuteBase):
         return sg_hist
 
     def run_split_max(self, split, **kwargs):
-        return split, self.run_split(split).max_t2
+        return split, self.run_split(split).min_pval
 
     def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
 
         # get volume of stat
         sg_hist = self.run_split(split, full_t2=True)
-        max_t2 = sg_hist.get_max_t2_array()
+        min_pval = sg_hist.get_min_pval_array()
 
         # store sg_hist of split
         self.sg_hist = sg_hist
 
-        return super().determine_sig(stat_volume=max_t2)
+        return super().determine_sig(stat_volume=min_pval)

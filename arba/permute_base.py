@@ -191,12 +191,12 @@ class PermuteBase(ABC):
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
                 _, self.split_stat_dict[split] = \
-                    self.run_split_max(split,
-                                       effect_split_dict=effect_split_dict)
+                    self.run_split_min_pval(split,
+                                            effect_split_dict=effect_split_dict)
 
         return self.split_stat_dict
 
-    def run_split_max(self, split, **kwargs):
+    def run_split_min_pval(self, split, **kwargs):
         """ runs a single split, returns max stat """
         stat_volume = self.run_split(split, **kwargs)
 

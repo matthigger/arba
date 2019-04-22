@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 
 from .ward_grp import RegionWardGrp
@@ -8,13 +10,21 @@ class RegionWardSbj(RegionWardGrp):
     """
 
     @staticmethod
-    def from_data(*args, pc_ijk, file_tree, grp_sbj_dict, **kwargs):
+    def from_data(pc_ijk, file_tree, grp_sbj_dict, **kwargs):
 
+        # get sig_sbj_dict
         mask = pc_ijk.to_mask()
         sig_sbj_dict = RegionWardSbj.get_sig_sbj(file_tree, mask, grp_sbj_dict)
 
-        return RegionWardSbj(*args, pc_ijk=pc_ijk, sig_sbj_dict=sig_sbj_dict,
-                             **kwargs)
+        # get stats across region per grp
+        fs_dict = defaultdict(list)
+        for ijk in pc_ijk:
+            for grp, sbj_list in grp_sbj_dict.items():
+                fs_dict[grp].append(file_tree.get_fs(ijk, sbj_list=sbj_list))
+        fs_dict = {k: sum(l) for k, l in fs_dict.items()}
+
+        return RegionWardSbj(pc_ijk=pc_ijk, fs_dict=fs_dict,
+                             sig_sbj_dict=sig_sbj_dict, **kwargs)
 
     def __init__(self, *args, sig_sbj_dict, **kwargs):
 
@@ -27,7 +37,8 @@ class RegionWardSbj(RegionWardGrp):
             self.sig_space_dict[grp] = self.fs_dict[grp].cov - \
                                        sig_sbj_dict[grp]
 
-            assert (self.sig_space_dict[grp] >= 0).all(), 'invalid sig_sbj passed'
+            assert (self.sig_space_dict[
+                        grp] >= 0).all(), 'invalid sig_sbj passed'
 
     @property
     def n0n1(self):
@@ -49,7 +60,8 @@ class RegionWardSbj(RegionWardGrp):
         mu_diff = fs0.mu - fs1.mu
         sig_list = list()
         for grp in self.sig_space_dict.keys():
-            sig = self.sig_sbj_dict[grp] + self.sig_space_dict[grp] / len(self.pc_ijk)
+            sig = self.sig_sbj_dict[grp] + self.sig_space_dict[grp] / len(
+                self.pc_ijk)
             sig_list.append(sig)
 
         # pool
