@@ -26,7 +26,7 @@ class RegionWardSbj(RegionWardGrp):
         return RegionWardSbj(pc_ijk=pc_ijk, fs_dict=fs_dict,
                              sig_sbj_dict=sig_sbj_dict, **kwargs)
 
-    def __init__(self, *args, sig_sbj_dict, **kwargs):
+    def __init__(self, *args, sig_sbj_dict=None, **kwargs):
 
         super().__init__(*args, **kwargs)
 
@@ -37,8 +37,31 @@ class RegionWardSbj(RegionWardGrp):
             self.sig_space_dict[grp] = self.fs_dict[grp].cov - \
                                        sig_sbj_dict[grp]
 
-            assert (self.sig_space_dict[
-                        grp] >= 0).all(), 'invalid sig_sbj passed'
+            assert (self.sig_space_dict[grp] >= -1e-6).all(), \
+                'invalid sig_sbj passed'
+
+    def __add__(self, other):
+        if isinstance(other, type(0)) and other == 0:
+            # allows use of sum(reg_iter)
+            return type(self)(self.pc_ijk, self.fs_dict)
+
+        if not isinstance(other, type(self)):
+            raise TypeError
+
+        fs_dict = {grp: self.fs_dict[grp] + other.fs_dict[grp]
+                   for grp in self.fs_dict.keys()}
+
+        # compute + store sig_sbj
+        sig_sbj_dict = dict()
+        for grp in self.sig_sbj_dict.keys():
+            len_total = len(self) + len(other)
+            lam_self = len(self) / len_total
+            lam_other = len(other) / len_total
+            sig_sbj_dict[grp] = self.sig_sbj_dict[grp] * lam_self + \
+                                other.sig_sbj_dict[grp] * lam_other
+
+        return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
+                          fs_dict=fs_dict, sig_sbj_dict=sig_sbj_dict)
 
     @property
     def n0n1(self):
