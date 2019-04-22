@@ -208,6 +208,8 @@ class FileTree:
         assert (sbj_list is None) != (sbj_bool is None), \
             'sbj_list xor sbj_bool'
         if sbj_bool is None:
+            assert set(self.sbj_list).issuperset(sbj_list), \
+                'sbj not in FileTree'
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # build img
@@ -246,9 +248,6 @@ class FileTree:
 
         sbj_set = set(sbj_list)
         return np.array([sbj in sbj_set for sbj in self.sbj_list])
-
-    def sbj_bool_to_list(self, sbj_bool):
-        return [sbj for b, sbj in zip(sbj_bool, self.sbj_list) if b]
 
     def __eq__(self, other):
         if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
