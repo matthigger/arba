@@ -2,13 +2,12 @@ from collections import defaultdict
 
 from arba.data import FileTree
 from arba.seg_graph import PermuteARBA
-from arba.simulate import PermuteTFCE
 from pnl_data.set.hcp_100 import folder, people
 
 # arba params
 alpha = .05
 feat_tuple = 'FA',
-num_perm = 96
+num_perm = 100
 
 # run params
 par_flag = True
@@ -42,9 +41,10 @@ folder_tfce = folder_out / 'tfce'
 
 with file_tree.loaded():
     permute_arba = PermuteARBA(file_tree)
-    permute_arba.run(split, par_flag=True, verbose=True, folder=folder_arba,
-                     n=num_perm, print_image=True, save_self=True,
-                     print_tree=True, print_hist=True, print_region=True)
+    permute_arba.run(split, par_flag=par_flag, verbose=True,
+                     folder=folder_arba, n=num_perm, print_image=True,
+                     save_self=True, print_tree=True, print_hist=True,
+                     print_region=True)
 
     # permute_tfce = PermuteTFCE(file_tree)
     # permute_tfce.run(split, par_flag=True, verbose=True,
