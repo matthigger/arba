@@ -80,7 +80,7 @@ class PermuteARBA(PermuteBase):
 
         return sg_hist
 
-    def run_split_max(self, split, **kwargs):
+    def run_split_min_pval(self, split, **kwargs):
         return split, self.run_split(split).min_pval
 
     def determine_sig(self, split=None, stat_volume=None):
@@ -93,4 +93,4 @@ class PermuteARBA(PermuteBase):
         # store sg_hist of split
         self.sg_hist = sg_hist
 
-        return super().determine_sig(stat_volume=min_pval)
+        return super().determine_sig(stat_volume=min_pval, flag_min=True)
