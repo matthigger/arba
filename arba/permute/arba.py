@@ -1,8 +1,8 @@
-from arba.permute_base import PermuteBase
 from arba.plot import save_fig, size_v_wt2
-from arba.space import Mask
 from arba.seg_graph.seg_graph_hist import SegGraphHistory
 from arba.seg_graph.seg_graph_t2 import SegGraphHistPval
+from arba.space import Mask
+from .permute import PermuteBase
 
 
 class PermuteARBA(PermuteBase):

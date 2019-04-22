@@ -7,17 +7,15 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
+from arba import permute
 from mh_pytools import file
 from mh_pytools import parallel
 from .effect import Effect
-from .ptfce import PermutePTFCE
-from .tfce import PermuteTFCE
-from ..seg_graph import PermuteARBA
 from ..space import sample_mask, sample_mask_min_var, PointCloud
 
-method_permute_dict = {'arba': PermuteARBA,
-                       'tfce': PermuteTFCE,
-                       'ptfce': PermutePTFCE}
+method_permute_dict = {'arba': permute.PermuteARBA,
+                       'tfce': permute.PermuteTFCE,
+                       'ptfce': permute.PermutePTFCE}
 
 
 class Simulator:

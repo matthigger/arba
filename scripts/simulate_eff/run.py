@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from arba.data import FileTree, scale_normalize
+from arba.file_tree import FileTree, scale_normalize
 from arba.plot import plot_performance
 from arba.simulate import Simulator
 from arba.space import Mask
