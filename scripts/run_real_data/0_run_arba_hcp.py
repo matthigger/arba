@@ -8,7 +8,7 @@ from pnl_data.set.hcp_100 import folder, people
 # arba params
 alpha = .05
 feat_tuple = 'FA',
-num_perm = 10
+num_perm = 96
 
 # run params
 par_flag = True
@@ -16,7 +16,7 @@ verbose = True
 
 # output folder
 s_feat = '-'.join(feat_tuple)
-folder_out = folder / f'arba_cv_MF_{s_feat}_test'
+folder_out = folder / f'arba_cv_MF_{s_feat}_new'
 folder_out.mkdir(exist_ok=True)
 
 folder_data = folder / 'to_100307_low_res'
