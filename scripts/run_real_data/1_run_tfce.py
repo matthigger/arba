@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from arba.file_tree import FileTree, scale_normalize
+from arba.data import FileTree, scale_normalize
 from arba.simulate import PermuteTFCE
 from arba.space import Mask
 from pnl_data.set.sz import folder, people

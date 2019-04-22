@@ -6,7 +6,7 @@ from collections import defaultdict
 import nibabel as nib
 import numpy as np
 
-from arba.file_tree import FileTree
+from arba.data import FileTree
 from arba.region import FeatStat
 from arba.space import RefSpace, get_ref
 

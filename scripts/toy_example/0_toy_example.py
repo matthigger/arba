@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 
 import pnl_data
-from arba.file_tree import FileTree
+from arba.data import FileTree
 from arba.permute import PermuteARBA
 from arba.region import FeatStat
 from arba.simulate import Model

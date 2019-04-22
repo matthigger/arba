@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from arba.file_tree import FileTree, scale_normalize
+from arba.data import FileTree
 from arba.plot import save_fig
 from arba.plot.scatter_tree import size_v_wt2, size_v_t2
 from arba.seg_graph import PermuteARBA

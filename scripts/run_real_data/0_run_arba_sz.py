@@ -3,7 +3,7 @@ from collections import defaultdict
 
 import numpy as np
 
-from arba.file_tree import FileTree, scale_normalize
+from arba.data import FileTree, scale_normalize
 from arba.seg_graph import PermuteARBA
 from arba.simulate.tfce import PermuteTFCE
 from arba.space import Mask

@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from arba.file_tree import FileTree
+from arba.data import FileTree
 from arba.seg_graph import PermuteARBA
 from pnl_data.set.hcp_100 import folder, people
 
