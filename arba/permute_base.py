@@ -112,7 +112,7 @@ class PermuteBase(ABC):
             plt.hist(stat_sorted, bins=20)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
-            plt.xlabel(r'Max $T^2(r)$ in Hierarchy')
+            plt.xlabel(r'Max (or min) stat in Hierarchy')
             plt.ylabel(f'Count\n(Across {num_perm} Permutations)')
             save_fig(folder / 'hist_max_stat.pdf', size_inches=(4, 3))
 
@@ -191,12 +191,12 @@ class PermuteBase(ABC):
                          'desc': 'compute max stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
                 _, self.split_stat_dict[split] = \
-                    self.run_split_min_pval(split,
-                                            effect_split_dict=effect_split_dict)
+                    self.run_split_max(split,
+                                       effect_split_dict=effect_split_dict)
 
         return self.split_stat_dict
 
-    def run_split_min_pval(self, split, **kwargs):
+    def run_split_max(self, split, **kwargs):
         """ runs a single split, returns max stat """
         stat_volume = self.run_split(split, **kwargs)
 
