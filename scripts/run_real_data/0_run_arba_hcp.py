@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from arba.data import FileTree
+from arba.data import FileTree, Split
 from arba.seg_graph import PermuteARBA
 from pnl_data.set.hcp_100 import folder, people
 
@@ -22,18 +22,17 @@ folder_data = folder / 'to_100307_low_res'
 
 # get files per feature
 sbj_feat_file_tree = defaultdict(dict)
-sbj_male_list = list()
+split = defaultdict(list)
 for p in people:
     for feat in feat_tuple:
         f = folder_data / f'{p.name}_{feat}.nii.gz'
         if not f.exists():
             raise FileNotFoundError(f)
         sbj_feat_file_tree[p][feat] = f
-    if p.gender == 'M':
-        sbj_male_list.append(p)
+    split[p.gender].append(p)
+split = Split(split)
 
 file_tree = FileTree(sbj_feat_file_tree)
-split = file_tree.sbj_list_to_bool(sbj_male_list)
 
 # build file tree dict
 folder_arba = folder_out / 'arba_permute'

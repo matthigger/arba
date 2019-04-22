@@ -19,8 +19,7 @@ class PermuteTFCE(PermuteBase):
         """ returns a volume of tfce enhanced t2 stats
 
         Args:
-            split (tuple): (num_sbj), split[i] describes which class the i-th
-                           sbj belongs to in this split
+            split (Split):
 
         Returns:
             stat_volume (np.array): (space0, space1, space2)

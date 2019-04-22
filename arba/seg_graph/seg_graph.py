@@ -18,21 +18,21 @@ class SegGraph(nx.Graph):
 
     Attributes:
         file_tree (FileTree): file tree
-        grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+        split (Split):
     """
 
-    def __init__(self, file_tree, grp_sbj_dict, _add_nodes=True, **kwargs):
+    def __init__(self, file_tree, split, _add_nodes=True, **kwargs):
         """
 
         Args:
             file_tree (FileTree): file tree
-            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+            split (Split):
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
         super().__init__()
         self.file_tree = file_tree
-        self.grp_sbj_dict = grp_sbj_dict
+        self.split = split
 
         if _add_nodes:
             with file_tree.loaded():
@@ -40,12 +40,8 @@ class SegGraph(nx.Graph):
                 self.connect_neighbors(**kwargs)
 
     def _add_nodes(self):
-        grp_sbj_bool = dict()
-        for grp, sbj_list in self.grp_sbj_dict.items():
-            grp_sbj_bool[grp] = self.file_tree.sbj_list_to_bool(sbj_list)
-
-        # build regions
         assert self.file_tree.pc, 'no active area found in file_tree'
+
         for ijk in self.file_tree.pc:
             # space region occupies
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
@@ -53,7 +49,7 @@ class SegGraph(nx.Graph):
             # build and store in graph
             reg = RegionWardSbj.from_data(pc_ijk=pc_ijk,
                                           file_tree=self.file_tree,
-                                          grp_sbj_dict=self.grp_sbj_dict)
+                                          split=self.split)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
@@ -204,7 +200,7 @@ class SegGraph(nx.Graph):
         """
 
         # init seg graph
-        sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
+        sg = SegGraph(file_tree=self.file_tree, split=self.split,
                       _add_nodes=False)
 
         # if self is empty, return empty SegGraph

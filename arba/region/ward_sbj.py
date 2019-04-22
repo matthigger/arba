@@ -10,16 +10,16 @@ class RegionWardSbj(RegionWardGrp):
     """
 
     @staticmethod
-    def from_data(pc_ijk, file_tree, grp_sbj_dict, **kwargs):
+    def from_data(pc_ijk, file_tree, split, **kwargs):
 
         # get sig_sbj_dict
         mask = pc_ijk.to_mask()
-        sig_sbj_dict = RegionWardSbj.get_sig_sbj(file_tree, mask, grp_sbj_dict)
+        sig_sbj_dict = RegionWardSbj.get_sig_sbj(file_tree, mask, split)
 
         # get stats across region per grp
         fs_dict = defaultdict(list)
         for ijk in pc_ijk:
-            for grp, sbj_list in grp_sbj_dict.items():
+            for grp, sbj_list in split.items():
                 fs_dict[grp].append(file_tree.get_fs(ijk, sbj_list=sbj_list))
         fs_dict = {k: sum(l) for k, l in fs_dict.items()}
 
@@ -103,13 +103,13 @@ class RegionWardSbj(RegionWardGrp):
         return t2
 
     @staticmethod
-    def get_sig_sbj(file_tree, mask, grp_sbj_dict):
+    def get_sig_sbj(file_tree, mask, split):
         """ computes sig_sbj from raw data
 
         Args:
             file_tree (FileTree): data object
             mask (np.array): boolean array, describes space of region
-            grp_sbj_dict (dict): keys are group labels, values are list of sbj
+            split (Split):
         """
         # get relevant features
         with file_tree.loaded():
@@ -120,9 +120,8 @@ class RegionWardSbj(RegionWardGrp):
 
         # compute covariance
         sig_sbj_dict = dict()
-        for grp, sbj_list in grp_sbj_dict.items():
-            split = np.array([sbj in sbj_list for sbj in file_tree.sbj_list])
-            sig_sbj = np.cov(x[split, :].T, ddof=0)
+        for grp, bool_idx in split.bool_iter():
+            sig_sbj = np.cov(x[bool_idx, :].T, ddof=0)
             sig_sbj_dict[grp] = np.atleast_2d(sig_sbj)
 
         return sig_sbj_dict

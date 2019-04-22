@@ -1,4 +1,5 @@
 import pathlib
+import random
 from abc import ABC, abstractmethod
 from bisect import bisect_right, bisect_left
 
@@ -6,7 +7,6 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 import seaborn as sns
-from scipy.special import comb
 from tqdm import tqdm
 
 from arba.plot import save_fig
@@ -18,10 +18,6 @@ class PermuteBase(ABC):
     """ runs permutation testing to get maximum 'stat' per region
 
     # todo: adaptive mode, run only as many n as needed to ensure sig
-
-    a permutation is characterized by a split, a tuple of booleans.  split[i]
-    describes if the i-th subject is in grp 1 (under that split)
-
 
     Attributes:
         file_tree (FileTree): file_tree
@@ -57,7 +53,7 @@ class PermuteBase(ABC):
             # use old split_stat_dict
             self.split_stat_dict = last_self.split_stat_dict
 
-    def run(self, split, n=5000, folder=None, **kwargs):
+    def run(self, split, n=5000, folder=None, seed=1, **kwargs):
         """ runs permutation testing
 
         Args:
@@ -65,16 +61,28 @@ class PermuteBase(ABC):
             n (int): number of permutations
             folder (str or Path): saves output
         """
+        # set random seed
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+
         # no need to repeat a split which is already done
-        n = max(n - len(self.split_stat_dict), 0)
+        n -= len(self.split_stat_dict)
+
+        # stop if number of permutations already complete
+        if n <= 0:
+            return
 
         with self.file_tree.loaded():
-            if n > 0:
-                # build list of splits
-                split_list = self.sample_splits(n, split, **kwargs)
+            # build list of new splits
+            split_list = list()
+            while len(split_list) < n:
+                _split = split.sample()
+                if _split not in self.split_stat_dict.keys():
+                    split_list.append(_split)
 
-                # run splits (permutation sampling from null hypothesis)
-                self.run_split_max_multi(split_list=split_list, **kwargs)
+            # run splits (permutation sampling from null hypothesis)
+            self.run_split_max_multi(split_list=split_list, **kwargs)
 
             # determine sig
             self.stat_volume, self.pval = self.determine_sig(split)
@@ -118,12 +126,10 @@ class PermuteBase(ABC):
 
         if print_image:
             # print mean image per grp per feature
-            not_split = tuple(not x for x in split)
             for feat in self.file_tree.feat_list:
-                for lbl, _split in (('1', split),
-                                    ('0', not_split)):
-                    f_out = folder / f'{feat}_{lbl}.nii.gz'
-                    self.file_tree.to_nii(feat=feat, sbj_bool=_split,
+                for grp, sbj_bool in split.bool_iter():
+                    f_out = folder / f'{feat}_{grp}.nii.gz'
+                    self.file_tree.to_nii(feat=feat, sbj_bool=sbj_bool,
                                           f_out=f_out)
 
         if print_region:
@@ -137,40 +143,6 @@ class PermuteBase(ABC):
                 mask = Mask(self.stat_volume == reg_stat,
                             ref=self.file_tree.ref)
                 mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
-
-    def sample_splits(self, n, split, seed=1, **kwargs):
-        """ sample splits, ensure none are repeated
-
-        note: each split has same number of ones as self.split
-
-        Args:
-            n (int): number of permutations
-            split (np.array): the target split (used to count 0s and 1s)
-            seed : initialize random number generator (helpful for debug)
-
-        Returns:
-            split_list (list): each element is a split
-        """
-        num_ones = sum(split)
-        num_sbj = len(split)
-
-        assert comb(num_sbj, num_ones) >= (n + len(self.split_stat_dict)), \
-            'not enough unique splits'
-
-        np.random.seed(seed)
-
-        split_list = list()
-        while len(split_list) < n:
-            # build a split
-            ones_idx = np.random.choice(range(num_sbj), size=num_ones,
-                                        replace=False)
-            split = tuple(idx in ones_idx for idx in range(num_sbj))
-
-            # add this split so long as its not already in the split_stat_dict
-            if split not in self.split_stat_dict.keys():
-                split_list.append(split)
-
-        return split_list
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
                             effect_split_dict=None, **kwargs):
@@ -245,16 +217,16 @@ class PermuteBase(ABC):
     def get_t2(self, split, verbose=False):
         """ computes t2 stat per voxel (not scaled) """
 
-        split = np.array(split)
-
         # build fs per ijk in mask
         t2 = np.zeros(self.file_tree.ref.shape)
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute t2 per vox'}
-        split_not = tuple([not x for x in split])
+        sbj_bool = split.sbj_bool
         for ijk in tqdm(self.file_tree.pc, **tqdm_dict):
-            fs0 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split_not)
-            fs1 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split)
+            fs0 = self.file_tree.get_fs(ijk=ijk,
+                                        sbj_bool=np.logical_not(sbj_bool))
+            fs1 = self.file_tree.get_fs(ijk=ijk,
+                                        sbj_bool=sbj_bool)
 
             # compute t2
             delta = fs0.mu - fs1.mu

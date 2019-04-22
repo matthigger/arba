@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 
 import pnl_data
-from arba.data import FileTree
+from arba.data import FileTree, Split
 from arba.permute import PermuteARBA
 from arba.region import FeatStat
 from arba.simulate import Model
@@ -56,7 +56,8 @@ for pop, (mu_btm, mu_top) in pop_mu_bt_dict.items():
 # build file tree
 file_tree = FileTree(sbj_feat_file_tree)
 sbj_list = [f'pop1_{idx}' for idx in range(n_img)]
-split = file_tree.sbj_list_to_bool(sbj_list)
+Split.fix_order(file_tree.sbj_list)
+split = Split(grp_sbj_dict)
 
 mask_effect.to_nii(folder / 'mask_effect.nii.gz')
 
@@ -78,6 +79,6 @@ with file_tree.loaded():
     f_out = folder / 'merge_record.nii.gz'
     f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
                                                 file_tree=file_tree,
-                                                grp_sbj_dict=grp_sbj_dict)
+                                                split=split)
 
     print(folder)

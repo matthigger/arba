@@ -37,13 +37,13 @@ class SegGraphHistPval(SegGraphHistory):
                                      max_flag=False)
 
         # build seg graph
-        sg = SegGraph(file_tree=self.file_tree, grp_sbj_dict=self.grp_sbj_dict,
+        sg = SegGraph(file_tree=self.file_tree, split=self.split,
                       _add_nodes=False)
         reg_list = list()
         for n in node_list:
             reg = self.merge_record.resolve_node(n,
                                                  file_tree=self.file_tree,
-                                                 grp_sbj_dict=self.grp_sbj_dict)
+                                                 split=self.split)
             reg_list.append(reg)
         sg.add_nodes_from(reg_list)
 

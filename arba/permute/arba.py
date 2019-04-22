@@ -30,14 +30,9 @@ class PermuteARBA(PermuteBase):
             else:
                 effect_mask = None
 
-            sbj_bool_to_list = self.file_tree.sbj_bool_to_list
-            not_split = tuple(not (x) for x in split)
-            grp_sbj_dict = {'ctrl': sbj_bool_to_list(not_split),
-                            'effect': sbj_bool_to_list(split)}
-
             tree_hist, \
             node_reg_dict = merge_record.resolve_hist(self.file_tree,
-                                                      grp_sbj_dict)
+                                                      split)
             size_v_wt2(tree_hist, mask=effect_mask,
                        mask_label='Effect Volume (%)')
             save_fig(f_out=folder / 'size_v_t2.pdf')
@@ -46,23 +41,19 @@ class PermuteARBA(PermuteBase):
         """ builds sg_hist from a split
 
         Args:
-            split (tuple): (num_sbj), split[i] describes which class the i-th
-                           sbj belongs to in this split
+            split (Split):
             full_t2 (bool): toggles instantiating SegGraphHistPval, a subclass of
                             SegGraphHistory which tracks t2 per each node.
 
         Returns:
             sg_hist (SegGraphHistory): reduced as much as possible
         """
-        not_split = tuple(not x for x in split)
-        grp_sbj_dict = {'0': self.file_tree.sbj_bool_to_list(split),
-                        '1': self.file_tree.sbj_bool_to_list(not_split)}
         if full_t2:
             sg_hist = SegGraphHistPval(file_tree=self.file_tree,
-                                       grp_sbj_dict=grp_sbj_dict)
+                                       split=split)
         else:
             sg_hist = SegGraphHistory(file_tree=self.file_tree,
-                                      grp_sbj_dict=grp_sbj_dict)
+                                      split=split)
         return sg_hist
 
     def run_split(self, split, **kwargs):

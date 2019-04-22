@@ -24,7 +24,7 @@ for sbj in file_tree.sbj_list:
 
 # # resolve (old t2)
 # with file_tree.loaded():
-#     sg = merge_record.resolve_hist(file_tree, grp_sbj_dict)
+#     sg = merge_record.resolve_hist(file_tree, split)
 #
 # sg_old_t2 = sg
 # file.save(sg, f_sg_old)

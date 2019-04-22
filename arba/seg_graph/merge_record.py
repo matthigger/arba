@@ -127,13 +127,13 @@ class MergeRecord(nx.DiGraph):
 
         return node_sum
 
-    def resolve_node(self, node, file_tree, grp_sbj_dict):
+    def resolve_node(self, node, file_tree, split):
         """ gets the region associated with the node from the file_trees given
 
         Args:
             node (int): node
             file_tree (FileTree): file tree
-            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+            split (Split):
 
         Returns:
             reg (RegionWardT2): region
@@ -141,14 +141,14 @@ class MergeRecord(nx.DiGraph):
 
         return RegionWardSbj.from_data(pc_ijk=self.get_pc(node),
                                        file_tree=file_tree,
-                                       grp_sbj_dict=grp_sbj_dict)
+                                       split=split)
 
-    def get_iter_sg(self, file_tree, grp_sbj_dict):
+    def get_iter_sg(self, file_tree, split):
         """ iterator over seg_graph which undergoes recorded merge operations
 
         Args:
             file_tree (FileTree): file tree
-            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+            split (Split):
 
         Yields:
             seg_graph (SegGraph): build from ft_hist
@@ -157,11 +157,10 @@ class MergeRecord(nx.DiGraph):
         """
 
         # init seg graph
-        sg = SegGraph(file_tree=file_tree, grp_sbj_dict=grp_sbj_dict,
-                      _add_nodes=False)
+        sg = SegGraph(file_tree=file_tree, split=split, _add_nodes=False)
 
         # init node_reg_dict
-        node_reg_dict = {node: self.resolve_node(node, file_tree, grp_sbj_dict)
+        node_reg_dict = {node: self.resolve_node(node, file_tree, split)
                          for node in self.leaf_ijk_dict.keys()}
 
         # add leafs to sg
@@ -190,18 +189,18 @@ class MergeRecord(nx.DiGraph):
 
             node_new += 1
 
-    def get_node_reg_dict(self, file_tree, grp_sbj_dict):
-        """ maps each node to a region per file_tree, grp_sbj_dict
+    def get_node_reg_dict(self, file_tree, split):
+        """ maps each node to a region per file_tree, split
 
         Args:
             file_tree (FileTree): file tree
-            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+            split (Split):
 
         Returns:
             node_reg_dict (dict): keys are nodes, values are regions
         """
 
-        iter_sg = self.get_iter_sg(file_tree, grp_sbj_dict)
+        iter_sg = self.get_iter_sg(file_tree, split)
 
         sg, _, _ = next(iter_sg)
 
@@ -216,20 +215,20 @@ class MergeRecord(nx.DiGraph):
 
         return node_reg_dict
 
-    def resolve_hist(self, file_tree, grp_sbj_dict):
+    def resolve_hist(self, file_tree, split):
         """ returns a copy of tree_hist where each node is replaced by region
 
         NOTE: for large tree_hist, this will use a lot of memory
 
         Args:
             file_tree (FileTree): file tree
-            grp_sbj_dict (dict): keys are grp labels, values are list of sbj
+            split (Split):
 
         Returns:
             tree_hist (nx.DiGraph): each node replaced with resolved version
             node_reg_dict (dict): keys are nodes, values are regions
         """
-        node_reg_dict = self.get_node_reg_dict(file_tree, grp_sbj_dict)
+        node_reg_dict = self.get_node_reg_dict(file_tree, split)
         tree_hist = nx.relabel_nodes(self,
                                      mapping=node_reg_dict,
                                      copy=True)
