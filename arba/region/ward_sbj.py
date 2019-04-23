@@ -2,6 +2,7 @@ from collections import defaultdict
 
 import numpy as np
 
+from .feat_stat import FeatStat
 from .ward_grp import RegionWardGrp
 
 
@@ -12,9 +13,10 @@ class RegionWardSbj(RegionWardGrp):
     @staticmethod
     def from_data(pc_ijk, file_tree, split, **kwargs):
 
-        # get sig_sbj_dict
+        # get grp_sbj_fs_dict
         mask = pc_ijk.to_mask()
-        sig_sbj_dict = RegionWardSbj.get_sig_sbj(file_tree, mask, split)
+        grp_sbj_fs_dict = RegionWardSbj.get_grp_sbj_fs_dict(file_tree, mask,
+                                                            split)
 
         # get stats across region per grp
         fs_dict = defaultdict(list)
@@ -24,21 +26,13 @@ class RegionWardSbj(RegionWardGrp):
         fs_dict = {k: sum(l) for k, l in fs_dict.items()}
 
         return RegionWardSbj(pc_ijk=pc_ijk, fs_dict=fs_dict,
-                             sig_sbj_dict=sig_sbj_dict, **kwargs)
+                             grp_sbj_fs_dict=grp_sbj_fs_dict, **kwargs)
 
-    def __init__(self, *args, sig_sbj_dict=None, **kwargs):
+    def __init__(self, *args, grp_sbj_fs_dict=None, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        self.sig_sbj_dict = sig_sbj_dict
-
-        self.sig_space_dict = dict()
-        for grp in self.sig_sbj_dict.keys():
-            self.sig_space_dict[grp] = self.fs_dict[grp].cov - \
-                                       sig_sbj_dict[grp]
-
-            assert (self.sig_space_dict[grp] >= -1e-6).all(), \
-                'invalid sig_sbj passed'
+        self.grp_sbj_fs_dict = grp_sbj_fs_dict
 
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:
@@ -48,27 +42,29 @@ class RegionWardSbj(RegionWardGrp):
         if not isinstance(other, type(self)):
             raise TypeError
 
-        fs_dict = {grp: self.fs_dict[grp] + other.fs_dict[grp]
-                   for grp in self.fs_dict.keys()}
-
-        # compute + store sig_sbj
-        sig_sbj_dict = dict()
-        for grp in self.sig_sbj_dict.keys():
-            len_total = len(self) + len(other)
-            lam_self = len(self) / len_total
-            lam_other = len(other) / len_total
-            sig_sbj_dict[grp] = self.sig_sbj_dict[grp] * lam_self + \
-                                other.sig_sbj_dict[grp] * lam_other
+        fs_dict = dict()
+        grp_sbj_fs_dict = dict()
+        for grp in self.fs_dict.keys():
+            fs_dict[grp] = self.fs_dict[grp] + \
+                           other.fs_dict[grp]
+            grp_sbj_fs_dict[grp] = self.grp_sbj_fs_dict[grp] + \
+                                   other.grp_sbj_fs_dict[grp]
 
         return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
-                          fs_dict=fs_dict, sig_sbj_dict=sig_sbj_dict)
+                          fs_dict=fs_dict, grp_sbj_fs_dict=grp_sbj_fs_dict)
+
+    @property
+    def sig_sbj(self):
+        return FeatStat.get_pool_cov(self.grp_sbj_fs_dict.values())
+
+    @property
+    def sig_space(self):
+        return self.cov_pool - self.sig_sbj
 
     @property
     def n0n1(self):
-        fs0, fs1 = self.fs_dict.values()
-        # assume same num of sbj per each vox
-        num_vox = len(self.pc_ijk)
-        return fs0.n / num_vox, fs1.n / num_vox
+        fs0, fs1 = self.grp_sbj_fs_dict.values()
+        return fs0.n, fs1.n
 
     def get_t2(self):
         """ hotelling t squared distance between groups
@@ -79,16 +75,9 @@ class RegionWardSbj(RegionWardGrp):
         """
 
         fs0, fs1 = self.fs_dict.values()
-
         mu_diff = fs0.mu - fs1.mu
-        sig_list = list()
-        for grp in self.sig_space_dict.keys():
-            sig = self.sig_sbj_dict[grp] + self.sig_space_dict[grp] / len(
-                self.pc_ijk)
-            sig_list.append(sig)
 
-        # pool
-        sig = np.atleast_2d(np.mean(sig_list))
+        sig = self.sig_sbj + self.sig_space / len(self.pc_ijk)
 
         quad_term = mu_diff @ np.linalg.inv(sig) @ mu_diff
 
@@ -103,7 +92,7 @@ class RegionWardSbj(RegionWardGrp):
         return t2
 
     @staticmethod
-    def get_sig_sbj(file_tree, mask, split):
+    def get_grp_sbj_fs_dict(file_tree, mask, split):
         """ computes sig_sbj from raw data
 
         Args:
@@ -119,9 +108,8 @@ class RegionWardSbj(RegionWardGrp):
         x = np.mean(x, axis=0)
 
         # compute covariance
-        sig_sbj_dict = dict()
+        grp_sbj_fs_dict = dict()
         for grp, bool_idx in split.bool_iter():
-            sig_sbj = np.cov(x[bool_idx, :].T, ddof=0)
-            sig_sbj_dict[grp] = np.atleast_2d(sig_sbj)
+            grp_sbj_fs_dict[grp] = FeatStat.from_array(x[bool_idx, :].T)
 
-        return sig_sbj_dict
+        return grp_sbj_fs_dict

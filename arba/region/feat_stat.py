@@ -186,6 +186,15 @@ class FeatStat:
         cov = a @ self.cov @ a.T
         return FeatStat(n=self.n, mu=mu, cov=cov)
 
+    @staticmethod
+    def get_pool_cov(fs_list):
+        """ compute pooled covariance from list of FeatStat"""
+        pool_cov = 0
+        n = sum(fs.n for fs in fs_list)
+        for fs in fs_list:
+            pool_cov += fs.cov * (fs.n / n)
+        return pool_cov
+
 
 class FeatStatSingle(FeatStat):
     """ minimizes storage if a FeatStat of a single observation is needed

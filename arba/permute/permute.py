@@ -249,6 +249,8 @@ class PermuteBase(ABC):
     def get_t2(self, split, verbose=False):
         """ computes t2 stat per voxel (not scaled) """
 
+        raise NotImplementedError('scale?')
+
         # build fs per ijk in mask
         t2 = np.zeros(self.file_tree.ref.shape)
         tqdm_dict = {'disable': not verbose,
@@ -262,9 +264,8 @@ class PermuteBase(ABC):
 
             # compute t2
             delta = fs0.mu - fs1.mu
-            cov_pooled = (fs0.cov * fs0.n +
-                          fs1.cov * fs1.cov) / (fs0.n + fs1.n)
+            pool_cov = fs0.get_pool_cov((fs0, fs1))
             i, j, k = ijk
-            t2[i, j, k] = delta @ np.linalg.inv(cov_pooled) @ delta
+            t2[i, j, k] = delta @ np.linalg.inv(pool_cov) @ delta
 
         return t2

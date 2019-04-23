@@ -2,6 +2,7 @@ import numpy as np
 from scipy.stats import f
 
 from .reg import Region
+from .feat_stat import FeatStat
 
 
 class RegionWardGrp(Region):
@@ -18,11 +19,7 @@ class RegionWardGrp(Region):
         self._t2 = None
         self._pval = None
 
-        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0)),
-        # this is critical for computation of sq_error_det
-        fs0, fs1 = self.fs_dict.values()
-        self.cov_pooled = (fs0.n * fs0.cov +
-                           fs1.n * fs1.cov) / (fs0.n + fs1.n)
+        self.cov_pool = FeatStat.get_pool_cov(self.fs_dict.values())
 
     @property
     def pval(self):
@@ -41,15 +38,13 @@ class RegionWardGrp(Region):
     def get_t2(self):
         """ hotelling t squared distance between groups
 
-        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T sig^-1 (u_1 - u_0)
-
-        where sig = pooled covar between groups
+        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T cov_pool^-1 (u_1 - u_0)
         """
 
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        quad_term = mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
+        quad_term = mu_diff @ np.linalg.inv(self.cov_pool) @ mu_diff
 
         n0, n1 = self.n0n1
         scale = (n0 * n1) / (n0 + n1)
@@ -106,7 +101,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.linalg.det(self.cov_pooled) * n
+        return np.linalg.det(self.cov_pool) * n
 
     @property
     def sq_error_tr(self):
@@ -120,7 +115,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.trace(self.cov_pooled) * n
+        return np.trace(self.cov_pool) * n
 
     @staticmethod
     def get_error_det(reg_0, reg_1, reg_union=None):

@@ -7,6 +7,7 @@ import numpy as np
 import pnl_data
 from arba.data import FileTree, Split
 from arba.permute import PermuteARBA
+from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig
 from arba.region import FeatStat
 from arba.simulate import Model
 from arba.space import RefSpace, Mask
@@ -73,12 +74,22 @@ def fnc_get_pop1_mean(reg):
 with file_tree.loaded():
     permuteARBA = PermuteARBA(file_tree)
     sg_hist = permuteARBA.run_split(split, full_t2=True)
-    permuteARBA.run(split, n=100, folder=folder, print_image=True,
-                    print_tree=True, print_hist=True, verbose=True)
 
-    f_out = folder / 'merge_record.nii.gz'
-    f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
-                                                file_tree=file_tree,
-                                                split=split)
+    tree_hist, _ = sg_hist.merge_record.resolve_hist(file_tree, split)
+
+    size_v_pval(sg=tree_hist, mask=mask_effect)
+    save_fig(f_out=folder / 'size_v_pval.pdf')
+    size_v_t2(sg=tree_hist, mask=mask_effect)
+    save_fig(f_out=folder / 'size_v_t2.pdf')
+    size_v_delta(sg=tree_hist, mask=mask_effect)
+    save_fig(f_out=folder / 'size_v_delta.pdf')
+
+    # permuteARBA.run(split, n=100, folder=folder, print_image=True,
+    #                 print_tree=True, print_hist=True, verbose=True)
+    #
+    # f_out = folder / 'merge_record.nii.gz'
+    # f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
+    #                                             file_tree=file_tree,
+    #                                             split=split)
 
     print(folder)
