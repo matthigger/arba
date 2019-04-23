@@ -5,10 +5,13 @@ import tempfile
 
 import nibabel as nib
 import numpy as np
+
 from .permute import PermuteBase
 
 
 class PermuteTFCE(PermuteBase):
+    flag_max = True
+
     def __init__(self, *args, h=2, e=.5, c=6, **kwargs):
         super().__init__(*args, **kwargs)
         self.h = h

@@ -24,8 +24,11 @@ class PermuteBase(ABC):
         split_stat_dict (dict): keys are splits, values are maximum stats under
                                 that split
     """
+    # toggles whether stat of interest is maximized or minimized
+    flag_max = True
+
+    # name of save file for object, must be consistent for pre-load (see init)
     f_save = 'permute.p.gz'
-    max_pval_region = .05
 
     def __init__(self, file_tree, folder=None):
         """
@@ -41,6 +44,7 @@ class PermuteBase(ABC):
         self.split_stat_dict = dict()
 
         if folder is not None:
+            # pre load last session's split_stat_dict
             f = folder / self.f_save
             if not f.exists():
                 return
@@ -60,6 +64,7 @@ class PermuteBase(ABC):
             split (np.array): split to test significance of
             n (int): number of permutations
             folder (str or Path): saves output
+            seed (hashable): seed for random num generator
         """
         # set random seed
         if seed is not None:
@@ -92,7 +97,7 @@ class PermuteBase(ABC):
                 self.save(folder=folder, split=split, **kwargs)
 
     def save(self, folder, split, print_image=False, save_self=False,
-             print_hist=False, print_region=False, **kwargs):
+             print_hist=False, print_region=False, alpha=.05, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
         folder.mkdir(exist_ok=True, parents=True)
@@ -107,10 +112,18 @@ class PermuteBase(ABC):
         if save_self:
             file.save(self, folder / self.f_save)
 
+        # compute critical stat
         f_out = folder / 'thresh.txt'
         stat_sorted = sorted(self.split_stat_dict.values())
         num_perm = len(stat_sorted)
-        thresh = np.percentile(stat_sorted, 95, interpolation='lower')
+        if self.flag_max:
+            perc_thresh = 100 - alpha * 100
+            thresh = np.percentile(stat_sorted, perc_thresh,
+                                   interpolation='lower')
+        else:
+            perc_thresh = alpha * 100
+            thresh = np.percentile(stat_sorted, perc_thresh,
+                                   interpolation='higher')
         with open(str(f_out), 'w') as f:
             print(f'critical stat thresh: {thresh:.3e}', file=f)
 
@@ -120,9 +133,9 @@ class PermuteBase(ABC):
             plt.hist(stat_sorted, bins=20)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
-            plt.xlabel(r'Max (or min) stat in Hierarchy')
-            plt.ylabel(f'Count\n(Across {num_perm} Permutations)')
-            save_fig(folder / 'hist_max_stat.pdf', size_inches=(4, 3))
+            plt.xlabel(r'extrema stat in Hierarchy')
+            plt.ylabel(f'Count\n({num_perm} Permutations)')
+            save_fig(folder / 'hist_extrema_stat.pdf', size_inches=(4, 3))
 
         if print_image:
             # print mean image per grp per feature
@@ -133,16 +146,29 @@ class PermuteBase(ABC):
                                           f_out=f_out)
 
         if print_region:
-            stat_descend = sorted(np.unique(self.stat_volume.flatten()),
-                                  reverse=True)
+            pval_list = sorted(np.unique(self.pval[self.file_tree.mask]))
 
-            for reg_idx, reg_stat in enumerate(stat_descend):
-                p = 1 - bisect_right(stat_sorted, reg_stat) / num_perm
-                if p > self.max_pval_region:
+            reg_idx = 0
+            for p in pval_list:
+
+                if p > alpha:
                     break
-                mask = Mask(self.stat_volume == reg_stat,
-                            ref=self.file_tree.ref)
-                mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
+
+                # label connected compoenents of img
+                mask = label(pval_list == p)
+
+                p_idx = 1
+                while True:
+                    _mask = mask == p_idx
+                    if not _mask.any():
+                        # no more regions @ this pval
+                        break
+
+                    # print contiguous region @ this pval
+                    _mask = Mask(_mask, ref=self.file_tree.ref)
+                    _mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
+                    reg_idx += 1
+                    p_idx += 1
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
                             effect_split_dict=None, **kwargs):
@@ -154,25 +180,31 @@ class PermuteBase(ABC):
                 arg_list.append({'split': split,
                                  'verbose': False,
                                  'effect_split_dict': effect_split_dict})
-            res = parallel.run_par_fnc(fnc='run_split_max', obj=self,
+            res = parallel.run_par_fnc(fnc='run_split_xtrm', obj=self,
                                        arg_list=arg_list, verbose=verbose)
-            for split, max_stat in res:
-                self.split_stat_dict[split] = max_stat
+            for split, xtrm_stat in res:
+                self.split_stat_dict[split] = xtrm_stat
         else:
             tqdm_dict = {'disable': not verbose,
-                         'desc': 'compute max stat per split'}
+                         'desc': 'compute extrema stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
                 _, self.split_stat_dict[split] = \
-                    self.run_split_max(split,
-                                       effect_split_dict=effect_split_dict)
+                    self.run_split_xtrm(split,
+                                        effect_split_dict=effect_split_dict)
 
         return self.split_stat_dict
 
-    def run_split_max(self, split, **kwargs):
-        """ runs a single split, returns max stat """
+    def run_split_xtrm(self, split, **kwargs):
+        """ runs a single split, returns extrema stat (see max_flag)
+        """
         stat_volume = self.run_split(split, **kwargs)
 
-        return split, stat_volume[self.file_tree.mask].max()
+        if self.max_flag:
+            xtrm = stat_volume[self.file_tree.mask].max()
+        else:
+            xtrm = stat_volume[self.file_tree.mask].min()
+
+        return split, xtrm
 
     @abstractmethod
     def run_split(self, split, **kwargs):
@@ -186,7 +218,7 @@ class PermuteBase(ABC):
             stat_volume (np.array): (space0, space1, space2) stats
         """
 
-    def determine_sig(self, split=None, stat_volume=None, flag_min=False):
+    def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
         assert (split is None) != (stat_volume is None), \
             'split xor stat_volume'
@@ -195,10 +227,10 @@ class PermuteBase(ABC):
             # get stat volume of original
             stat_volume = self.run_split(split)
 
-        if flag_min:
-            bisect = bisect_left
-        else:
+        if self.flag_max:
             bisect = bisect_right
+        else:
+            bisect = bisect_left
 
         # build array of pval
         # https://stats.stackexchange.com/questions/109207/p-values-equal-to-0-in-permutation-test
@@ -208,7 +240,7 @@ class PermuteBase(ABC):
         pval = np.zeros(self.file_tree.ref.shape)
         for i, j, k in self.file_tree.pc:
             p = bisect(stat_sorted, stat_volume[i, j, k]) / n
-            if not flag_min:
+            if self.flag_max:
                 p = 1 - p
             pval[i, j, k] = p
 

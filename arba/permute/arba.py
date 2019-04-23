@@ -1,4 +1,4 @@
-from arba.plot import save_fig, size_v_wt2
+from arba.plot import save_fig, size_v_pval
 from arba.seg_graph.seg_graph_hist import SegGraphHistory
 from arba.seg_graph.seg_graph_t2 import SegGraphHistPval
 from arba.space import Mask
@@ -8,7 +8,7 @@ from .permute import PermuteBase
 class PermuteARBA(PermuteBase):
     """ runs ARBA permutations
     """
-    print_pval_max = .05
+    flag_max = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,11 +30,9 @@ class PermuteARBA(PermuteBase):
             else:
                 effect_mask = None
 
-            tree_hist, \
-            node_reg_dict = merge_record.resolve_hist(self.file_tree,
-                                                      split)
-            size_v_wt2(tree_hist, mask=effect_mask,
-                       mask_label='Effect Volume (%)')
+            tree_hist, _ = merge_record.resolve_hist(self.file_tree, split)
+            size_v_pval(tree_hist, mask=effect_mask,
+                        mask_label='Effect Volume (%)')
             save_fig(f_out=folder / 'size_v_t2.pdf')
 
     def _split_to_sg_hist(self, split, full_t2=False, **kwargs):
@@ -71,10 +69,8 @@ class PermuteARBA(PermuteBase):
 
         return sg_hist
 
-    def run_split_max(self, split, **kwargs):
+    def run_split_xtrm(self, split, **kwargs):
         """" returns the minimum pvalue across hierarchy
-
-        NOTE: name "max" is for consistency with Permute class
         """
         return split, self.run_split(split).min_pval
 
@@ -88,4 +84,4 @@ class PermuteARBA(PermuteBase):
         # store sg_hist of split
         self.sg_hist = sg_hist
 
-        return super().determine_sig(stat_volume=min_pval, flag_min=True)
+        return super().determine_sig(stat_volume=min_pval)

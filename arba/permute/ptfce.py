@@ -36,6 +36,8 @@ def compute_smooth(f_z, f_mask):
 
 
 class PermutePTFCE(PermuteBase):
+    flag_max = True
+
     # memory needed to run each
     mem_buff = 5e9
     mem_per_run = 24e8
