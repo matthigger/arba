@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.stats import f
 
+from .pool_cov import PoolCov
 from .reg import Region
-from .feat_stat import FeatStat
 
 
 class RegionWardGrp(Region):
@@ -19,7 +19,8 @@ class RegionWardGrp(Region):
         self._t2 = None
         self._pval = None
 
-        self.cov_pool = FeatStat.get_pool_cov(self.fs_dict.values())
+        self.cov_pool = PoolCov.sum([PoolCov.from_feat_stat(fs)
+                                     for fs in self.fs_dict.values()])
 
     @property
     def pval(self):
@@ -44,7 +45,7 @@ class RegionWardGrp(Region):
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        quad_term = mu_diff @ np.linalg.inv(self.cov_pool) @ mu_diff
+        quad_term = mu_diff @ np.linalg.inv(self.cov_pool.value) @ mu_diff
 
         n0, n1 = self.n0n1
         scale = (n0 * n1) / (n0 + n1)
@@ -101,7 +102,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.linalg.det(self.cov_pool) * n
+        return np.linalg.det(self.cov_pool.value) * n
 
     @property
     def sq_error_tr(self):
@@ -115,7 +116,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.trace(self.cov_pool) * n
+        return np.trace(self.cov_pool.value) * n
 
     @staticmethod
     def get_error_det(reg_0, reg_1, reg_union=None):
