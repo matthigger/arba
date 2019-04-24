@@ -6,7 +6,7 @@ import numpy as np
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionWardSbj
+from ..region import RegionWardGrp
 from ..space import PointCloud
 
 
@@ -47,7 +47,7 @@ class SegGraph(nx.Graph):
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
 
             # build and store in graph
-            reg = RegionWardSbj.from_data(pc_ijk=pc_ijk,
+            reg = RegionWardGrp.from_data(pc_ijk=pc_ijk,
                                           file_tree=self.file_tree,
                                           split=self.split)
             self.add_node(reg)

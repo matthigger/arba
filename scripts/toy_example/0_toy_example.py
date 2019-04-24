@@ -7,7 +7,7 @@ import numpy as np
 import pnl_data
 from arba.data import FileTree, Split
 from arba.permute import PermuteARBA
-from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig, size_v_sig_sbj, size_v_sig_space, size_v_sig_adj
+from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig
 from arba.region import FeatStat
 from arba.simulate import Model
 from arba.space import RefSpace, Mask
@@ -85,10 +85,7 @@ with file_tree.loaded():
 
     for fnc_plot in (size_v_pval,
                      size_v_t2,
-                     size_v_delta,
-                     size_v_sig_sbj,
-                     size_v_sig_space,
-                     size_v_sig_adj):
+                     size_v_delta):
         fnc_plot(sg=tree_hist, mask=mask_effect)
         save_fig(f_out=folder / f'{fnc_plot.__name__}.pdf')
 

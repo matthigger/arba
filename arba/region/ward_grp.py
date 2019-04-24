@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import numpy as np
 from scipy.stats import f
 
@@ -13,6 +15,17 @@ class RegionWardGrp(Region):
 
     (see methods for detail)
     """
+
+    @classmethod
+    def from_data(cls, pc_ijk, file_tree, split, **kwargs):
+        # get stats across region per grp
+        fs_dict = defaultdict(list)
+        for ijk in pc_ijk:
+            for grp, sbj_list in split.items():
+                fs_dict[grp].append(file_tree.get_fs(ijk, sbj_list=sbj_list))
+        fs_dict = {k: sum(l) for k, l in fs_dict.items()}
+
+        return cls(pc_ijk=pc_ijk, fs_dict=fs_dict, **kwargs)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

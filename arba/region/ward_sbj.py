@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 import numpy as np
 
 from .feat_stat import FeatStat
@@ -11,30 +9,27 @@ class RegionWardSbj(RegionWardGrp):
     """ computes t2 according to split covariance model (across sbj and space)
     """
 
-    @staticmethod
-    def from_data(pc_ijk, file_tree, split, **kwargs):
+    @classmethod
+    def from_data(cls, pc_ijk, file_tree, split, **kwargs):
 
-        # get grp_sbj_fs_dict
+        reg = super().from_data(pc_ijk, file_tree, split, **kwargs)
+
         mask = pc_ijk.to_mask()
-        sig_sbj = RegionWardSbj.get_sig_sbj(file_tree, mask, split)
+        reg.sig_sbj = RegionWardSbj.get_sig_sbj(file_tree, mask, split)
+        reg.sig_space = PoolCov(n=reg.sig_sbj.n,
+                                value=reg.cov_pool.value -
+                                      reg.sig_sbj.value)
 
-        # get stats across region per grp
-        fs_dict = defaultdict(list)
-        for ijk in pc_ijk:
-            for grp, sbj_list in split.items():
-                fs_dict[grp].append(file_tree.get_fs(ijk, sbj_list=sbj_list))
-        fs_dict = {k: sum(l) for k, l in fs_dict.items()}
-
-        return RegionWardSbj(pc_ijk=pc_ijk, fs_dict=fs_dict, sig_sbj=sig_sbj,
-                             **kwargs)
+        return reg
 
     def __init__(self, *args, sig_sbj=None, **kwargs):
 
         super().__init__(*args, **kwargs)
 
         self.sig_sbj = sig_sbj
-        self.sig_space = PoolCov(n=self.sig_sbj.n,
-                                 value=self.cov_pool.value - sig_sbj.value)
+        if sig_sbj is not None:
+            self.sig_space = PoolCov(n=self.sig_sbj.n,
+                                     value=self.cov_pool.value - sig_sbj.value)
 
     def __add__(self, other):
         if isinstance(other, type(0)) and other == 0:

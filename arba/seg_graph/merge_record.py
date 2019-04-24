@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from .seg_graph import SegGraph
-from ..region import RegionWardSbj
+from ..region import RegionWardGrp
 from ..space import PointCloud
 
 
@@ -139,7 +139,7 @@ class MergeRecord(nx.DiGraph):
             reg (RegionWardT2): region
         """
 
-        return RegionWardSbj.from_data(pc_ijk=self.get_pc(node),
+        return RegionWardGrp.from_data(pc_ijk=self.get_pc(node),
                                        file_tree=file_tree,
                                        split=split)
 
