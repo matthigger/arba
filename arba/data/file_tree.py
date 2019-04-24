@@ -8,6 +8,7 @@ import numpy as np
 
 from arba.region import FeatStat
 from arba.space import get_ref, Mask, PointCloud
+from tqdm import tqdm
 
 
 def check_loaded(fnc):
@@ -126,7 +127,7 @@ class FileTree:
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self):
+    def loaded(self, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
@@ -134,14 +135,14 @@ class FileTree:
         """
         was_loaded = self.is_loaded
         if not was_loaded:
-            self.load()
+            self.load(**kwargs)
         try:
             yield self
         finally:
             if not was_loaded:
                 self.unload()
 
-    def load(self):
+    def load(self, verbose=False):
         """ loads data, applies fnc in self.fnc_list
         """
         # build memmap file
@@ -149,7 +150,9 @@ class FileTree:
         self.data = np.zeros(shape)
 
         # load data
-        for sbj_idx, sbj in enumerate(self.sbj_list):
+        for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
+                                 desc='load per sbj',
+                                 disable=not verbose):
             for feat_idx, feat in enumerate(self.feat_list):
                 f = self.sbj_feat_file_tree[sbj][feat]
                 img = nib.load(str(f))

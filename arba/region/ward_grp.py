@@ -22,6 +22,10 @@ class RegionWardGrp(Region):
         self.cov_pool = PoolCov.sum([PoolCov.from_feat_stat(fs)
                                      for fs in self.fs_dict.values()])
 
+    def reset(self):
+        self._t2 = None
+        self._pval = None
+
     @property
     def pval(self):
         # memoize

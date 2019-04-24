@@ -13,6 +13,7 @@ class PoolCov:
 
     @staticmethod
     def sum(pool_cov_list):
+        pool_cov_list = list(pool_cov_list)
         n = sum(pc.n for pc in pool_cov_list)
         value = 0
         for pc in pool_cov_list:

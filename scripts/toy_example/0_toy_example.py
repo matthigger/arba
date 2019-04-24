@@ -7,7 +7,7 @@ import numpy as np
 import pnl_data
 from arba.data import FileTree, Split
 from arba.permute import PermuteARBA
-from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig
+from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig, size_v_sig_sbj, size_v_sig_space, size_v_sig_adj
 from arba.region import FeatStat
 from arba.simulate import Model
 from arba.space import RefSpace, Mask
@@ -20,7 +20,8 @@ shape = (4, 4, 1)
 pop_mu_bt_dict = {'pop0': (0, 0),
                   'pop1': (1, 0)}
 folder = pnl_data.folder_data / 'arba_toy_ex'
-shutil.rmtree(str(folder))
+if folder.exists():
+    shutil.rmtree(str(folder))
 folder.mkdir(exist_ok=True)
 
 # init random seed
@@ -77,12 +78,19 @@ with file_tree.loaded():
 
     tree_hist, _ = sg_hist.merge_record.resolve_hist(file_tree, split)
 
-    size_v_pval(sg=tree_hist, mask=mask_effect)
-    save_fig(f_out=folder / 'size_v_pval.pdf')
-    size_v_t2(sg=tree_hist, mask=mask_effect)
-    save_fig(f_out=folder / 'size_v_t2.pdf')
-    size_v_delta(sg=tree_hist, mask=mask_effect)
-    save_fig(f_out=folder / 'size_v_delta.pdf')
+    # reg = max(tree_hist.nodes, key=len)
+    # for r in tree_hist.nodes:
+    #     r.sig_sbj = reg.sig_sbj
+    #     r.reset()
+
+    for fnc_plot in (size_v_pval,
+                     size_v_t2,
+                     size_v_delta,
+                     size_v_sig_sbj,
+                     size_v_sig_space,
+                     size_v_sig_adj):
+        fnc_plot(sg=tree_hist, mask=mask_effect)
+        save_fig(f_out=folder / f'{fnc_plot.__name__}.pdf')
 
     # permuteARBA.run(split, n=100, folder=folder, print_image=True,
     #                 print_tree=True, print_hist=True, verbose=True)

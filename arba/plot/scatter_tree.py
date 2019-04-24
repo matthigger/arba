@@ -91,14 +91,33 @@ def size_v_delta(*args, **kwargs):
 
     return scatter_tree(*args, fnc=get_delta, ylabel=ylabel, **kwargs)
 
+
 def size_v_sig_sbj(*args, **kwargs):
-    ylabel = r'$\Delta$'
+    ylabel = r'$|\Sigma_{sbj}|$'
 
     def get_sig_sbj(reg):
-        fs0, fs1 = reg.sig_sbj.values()
-        return np.linalg.norm(fs0.mu - fs1.mu)
+        return np.linalg.det(np.atleast_2d(reg.sig_sbj.value))
 
     return scatter_tree(*args, fnc=get_sig_sbj, ylabel=ylabel, **kwargs)
+
+
+def size_v_sig_space(*args, **kwargs):
+    ylabel = r'$|\Sigma_{space}|$'
+
+    def get_sig_space(reg):
+        return np.linalg.det(np.atleast_2d(reg.sig_space.value))
+
+    return scatter_tree(*args, fnc=get_sig_space, ylabel=ylabel, **kwargs)
+
+
+def size_v_sig_adj(*args, **kwargs):
+    ylabel = r'$|\Sigma_{space} / m|$'
+
+    def get_sig_space(reg):
+        sig = reg.sig_space.value / len(reg.pc_ijk)
+        return np.linalg.det(np.atleast_2d(sig))
+
+    return scatter_tree(*args, fnc=get_sig_space, ylabel=ylabel, **kwargs)
 
 
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
