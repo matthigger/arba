@@ -1,6 +1,5 @@
 from arba.plot import save_fig, size_v_pval
 from arba.seg_graph.seg_graph_hist import SegGraphHistory
-from arba.seg_graph.seg_graph_t2 import SegGraphHistPval
 from arba.space import Mask
 from .permute import PermuteBase
 
@@ -35,24 +34,16 @@ class PermuteARBA(PermuteBase):
                         mask_label='Effect Volume (%)')
             save_fig(f_out=folder / 'size_v_t2.pdf')
 
-    def _split_to_sg_hist(self, split, full_t2=False, **kwargs):
+    def _split_to_sg_hist(self, split, **kwargs):
         """ builds sg_hist from a split
 
         Args:
             split (Split):
-            full_t2 (bool): toggles instantiating SegGraphHistPval, a subclass of
-                            SegGraphHistory which tracks t2 per each node.
 
         Returns:
             sg_hist (SegGraphHistory): reduced as much as possible
         """
-        if full_t2:
-            sg_hist = SegGraphHistPval(file_tree=self.file_tree,
-                                       split=split)
-        else:
-            sg_hist = SegGraphHistory(file_tree=self.file_tree,
-                                      split=split)
-        return sg_hist
+        return SegGraphHistory(file_tree=self.file_tree, split=split, **kwargs)
 
     def run_split(self, split, **kwargs):
         """ returns max stat (per vox) across new ARBA hierarchy
@@ -72,7 +63,7 @@ class PermuteARBA(PermuteBase):
     def run_split_xtrm(self, split, **kwargs):
         """" returns the minimum pvalue across hierarchy
         """
-        return split, self.run_split(split).min_pval
+        return split, self.run_split(split, **kwargs).min_pval
 
     def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""

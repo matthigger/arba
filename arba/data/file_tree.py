@@ -39,7 +39,6 @@ class FileTree:
 
     Attributes available after load()
         mask (Mask): mask of active area
-        pc (PointCloud): point cloud of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
 
@@ -57,10 +56,6 @@ class FileTree:
     @property
     def d(self):
         return len(self.feat_list)
-
-    @property
-    def pc(self):
-        return self._pc
 
     @property
     def mask(self):
@@ -83,10 +78,6 @@ class FileTree:
 
         self.__mask = mask
         self._mask = mask
-        if self.__mask is not None:
-            self._pc = PointCloud.from_mask(self.__mask)
-        else:
-            self._pc = None
 
         self.fs = None
         self.data = None
@@ -124,8 +115,6 @@ class FileTree:
 
         if mask is not None:
             self._mask = np.logical_and(self._mask, mask)
-
-        self._pc = PointCloud.from_mask(self._mask)
 
     @check_loaded
     def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
@@ -182,7 +171,7 @@ class FileTree:
                 img = nib.load(str(f))
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
-        # get pc, mask
+        # get mask
         self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
         self.apply_mask(mask=None, reset=True)
 
@@ -244,7 +233,7 @@ class FileTree:
             # build based on custom fnc
             raise NotImplementedError('how does fnc handle effect?')
             x = back * np.ones(self.ref.shape)
-            for i, j, k in self.pc:
+            for i, j, k in self.mask.iter_ijk():
                 x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
         else:
             # build based on mean feature
@@ -302,8 +291,8 @@ def scale_normalize(ft):
         ft (FileTree): file tree to be equalized
     """
     # compute stats
-    shape = (len(ft.pc) * ft.num_sbj, ft.d)
-    shape_orig = (len(ft.pc), ft.num_sbj, ft.d)
+    shape = (len(ft) * ft.num_sbj, ft.d)
+    shape_orig = (len(ft), ft.num_sbj, ft.d)
     _data = ft.data[ft.mask, :, :].reshape(shape, order='F')
     ft.fs = FeatStat.from_array(_data.T)
 

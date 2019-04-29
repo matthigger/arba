@@ -40,9 +40,9 @@ class SegGraph(nx.Graph):
                 self.connect_neighbors(**kwargs)
 
     def _add_nodes(self):
-        assert self.file_tree.pc, 'no active area found in file_tree'
+        assert len(self.file_tree.mask) > 0, 'no active area found in file_tree'
 
-        for ijk in self.file_tree.pc:
+        for ijk in self.file_tree.mask.iter_ijk():
             # space region occupies
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
 

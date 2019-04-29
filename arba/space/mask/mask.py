@@ -33,7 +33,11 @@ class Mask(np.ndarray):
         self.ref = getattr(obj, 'ref', None)
 
     def __len__(self):
-        return np.sum((self).flatten())
+        return self.sum().astype(int)
+
+    def iter_ijk(self):
+        for ijk in np.vstack(np.where(self)).T:
+            yield tuple(ijk)
 
     def to_nii(self, f_out=None, ref=None):
         # get f_out

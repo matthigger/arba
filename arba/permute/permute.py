@@ -190,7 +190,8 @@ class PermuteBase(ABC):
             for split in tqdm(split_list, **tqdm_dict):
                 _, self.split_stat_dict[split] = \
                     self.run_split_xtrm(split,
-                                        effect_split_dict=effect_split_dict)
+                                        effect_split_dict=effect_split_dict,
+                                        verbose=verbose)
 
         return self.split_stat_dict
 
@@ -238,7 +239,7 @@ class PermuteBase(ABC):
         stat_sorted = sorted(self.split_stat_dict.values())
         n = len(self.split_stat_dict)
         pval = np.zeros(self.file_tree.ref.shape)
-        for i, j, k in self.file_tree.pc:
+        for i, j, k in self.file_tree.mask.iter_ijk():
             p = bisect(stat_sorted, stat_volume[i, j, k]) / n
             if self.flag_max:
                 p = 1 - p
@@ -256,7 +257,7 @@ class PermuteBase(ABC):
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute t2 per vox'}
         sbj_bool = split.sbj_bool
-        for ijk in tqdm(self.file_tree.pc, **tqdm_dict):
+        for ijk in tqdm(self.file_tree.mask.iter_ijk(), **tqdm_dict):
             fs0 = self.file_tree.get_fs(ijk=ijk,
                                         sbj_bool=np.logical_not(sbj_bool))
             fs1 = self.file_tree.get_fs(ijk=ijk,
