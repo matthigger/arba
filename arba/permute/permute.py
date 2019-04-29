@@ -182,8 +182,8 @@ class PermuteBase(ABC):
                                  'effect_split_dict': effect_split_dict})
             res = parallel.run_par_fnc(fnc='run_split_xtrm', obj=self,
                                        arg_list=arg_list, verbose=verbose)
-            for split, xtrm_stat in res:
-                self.split_stat_dict[split] = xtrm_stat
+            for split, xtrm in res:
+                self.split_stat_dict[split] = xtrm
         else:
             tqdm_dict = {'disable': not verbose,
                          'desc': 'compute extrema stat per split'}
