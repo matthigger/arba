@@ -16,7 +16,7 @@ class Split(dict):
 
     >>> Split.fix_order('abcde')
     >>> split = Split({'grp0': 'abc', 'grp1': 'd', 'grp2': 'e'})
-    >>> split.as_tuple
+    >>> split.tuple
     ('grp0', 'grp0', 'grp0', 'grp1', 'grp2')
     >>> random.seed(1)
     >>> split.sample()
@@ -53,6 +53,8 @@ class Split(dict):
             for sbj in sbj_list:
                 self.sbj_grp_dict[sbj] = grp
 
+        self.tuple = tuple(self.sbj_grp_dict[sbj] for sbj in self.sbj_list)
+
     def __len__(self):
         return len(self.sbj_list)
 
@@ -69,8 +71,7 @@ class Split(dict):
         sbj_list = list(self.sbj_list)
         random.shuffle(sbj_list)
         assert sbj_list != self.sbj_list, 'original indexing lost'
-        for sbj, grp in zip(sbj_list,
-                            self.as_tuple):
+        for sbj, grp in zip(sbj_list, self.tuple):
             d[grp].append(sbj)
 
         return Split(d)
@@ -94,14 +95,10 @@ class Split(dict):
         for grp in self.grp_list:
             yield grp, self.get_list(grp)
 
-    @property
-    def as_tuple(self):
-        return tuple(self.sbj_grp_dict[sbj] for sbj in self.sbj_list)
-
     def __hash__(self):
-        return hash(self.as_tuple)
+        return hash(self.tuple)
 
     def __eq__(self, other):
         if self.grp_list != other.grp_list:
             return False
-        return self.as_tuple == other.as_tuple
+        return self.tuple == other.tuple
