@@ -36,13 +36,17 @@ class SegGraph(nx.Graph):
 
         if _add_nodes:
             with file_tree.loaded():
-                self._add_nodes()
+                self._add_nodes(**kwargs)
                 self.connect_neighbors(**kwargs)
 
-    def _add_nodes(self):
+    def _add_nodes(self, verbose=False, **kwargs):
         assert len(self.file_tree.mask) > 0, 'no active area found in file_tree'
 
-        for ijk in self.file_tree.mask.iter_ijk():
+        tqdm_dict = {'desc': 'build node per ijk',
+                     'disable': not verbose,
+                     'total': self.file_tree.mask.sum().astype(int)}
+
+        for ijk in tqdm(self.file_tree.mask.iter_ijk(), **tqdm_dict):
             # space region occupies
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
 
