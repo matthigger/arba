@@ -1,7 +1,8 @@
+import random
 from collections import defaultdict
 
 import numpy as np
-import random
+
 
 class Split(dict):
     """ manages partitioning of sbjs, keys are grp labels, values are sbj_list
@@ -82,9 +83,16 @@ class Split(dict):
 
         return sbj_bool
 
+    def get_list(self, grp):
+        return [sbj for sbj in self.sbj_list if self.sbj_grp_dict[sbj] == grp]
+
     def bool_iter(self):
         for grp in self.grp_list:
             yield grp, self.get_bool(grp)
+
+    def grp_list_iter(self):
+        for grp in self.grp_list:
+            yield grp, self.get_list(grp)
 
     @property
     def as_tuple(self):

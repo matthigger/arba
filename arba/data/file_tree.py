@@ -5,10 +5,10 @@ from contextlib import contextmanager
 
 import nibabel as nib
 import numpy as np
+from tqdm import tqdm
 
 from arba.region import FeatStat
 from arba.space import get_ref, Mask, PointCloud
-from tqdm import tqdm
 
 
 def check_loaded(fnc):
@@ -93,6 +93,30 @@ class FileTree:
         self.f_data = None
 
         self.split_effect = None
+
+    def discard_to(self, n_sbj, split=None):
+        """ discards sbj so only n_sbj remains (in place)
+
+        Args:
+            n_sbj (int):
+            split (Split): if passed, ensures at most n_sbj per split grp
+        """
+        if self.is_loaded:
+            raise AttributeError('may not be loaded during discard_to()')
+
+        # get appropriate grp_list_iter, iter of grp, sbj_list
+        if split is None:
+            grp_list_iter = iter(('grp0', self.sbj_list))
+        else:
+            grp_list_iter = split.grp_list_iter()
+
+        # prune tree to approrpiate sbj
+        for _, sbj_list in grp_list_iter:
+            for sbj in sbj_list[n_sbj:]:
+                del self.sbj_feat_file_tree[sbj]
+
+        # update sbj_list
+        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     def apply_mask(self, mask=None, reset=False):
         if reset:
