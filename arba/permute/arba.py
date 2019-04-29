@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 from arba.plot import save_fig, size_v_pval
 from arba.seg_graph import SegGraphHistory, SegGraphHistPval
 from arba.space import Mask
@@ -32,7 +34,8 @@ class PermuteARBA(PermuteBase):
             tree_hist, _ = merge_record.resolve_hist(self.file_tree, split)
             size_v_pval(tree_hist, mask=effect_mask,
                         mask_label='Effect Volume (%)')
-            save_fig(f_out=folder / 'size_v_t2.pdf')
+            plt.gcf().savefig(str(folder / 'size_v_pval.png'))
+            save_fig(f_out=folder / 'size_v_pval.pdf')
 
     def _split_to_sg_hist(self, split, pval_hist=False, **kwargs):
         """ builds sg_hist from a split
