@@ -129,8 +129,8 @@ class Simulator:
         # get mask of active area
         if self.active_rad is not None:
             mask_eff_dilated = effect.mask.dilate(self.active_rad)
-
-            self.file_tree.apply_mask(mask=mask_eff_dilated, reset=True)
+            self.file_tree.mask = np.logical_and(mask_eff_dilated,
+                                                 self.file_tree.mask)
 
         # set scale of effect
         if t2 is not None:

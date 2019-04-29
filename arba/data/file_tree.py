@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 
 from arba.region import FeatStat
-from arba.space import get_ref, Mask, PointCloud
+from arba.space import get_ref, Mask
 
 
 def check_loaded(fnc):
@@ -41,8 +41,11 @@ class FileTree:
         mask (Mask): mask of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
-
         split_effect (tuple): split, effect
+
+    Hidden Attributes:
+        __mask (Mask): mask of intersectino of all files (only available when
+                       loaded)
     """
 
     @property
@@ -56,10 +59,6 @@ class FileTree:
     @property
     def d(self):
         return len(self.feat_list)
-
-    @property
-    def mask(self):
-        return self._mask
 
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
@@ -76,12 +75,12 @@ class FileTree:
         if fnc_list is None:
             self.fnc_list = list()
 
-        self.__mask = mask
-        self._mask = mask
-
         self.fs = None
         self.data = None
         self.f_data = None
+
+        self.mask = mask
+        self.__mask = None
 
         self.split_effect = None
 
@@ -108,13 +107,6 @@ class FileTree:
 
         # update sbj_list
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
-
-    def apply_mask(self, mask=None, reset=False):
-        if reset:
-            self._mask = self.__mask
-
-        if mask is not None:
-            self._mask = np.logical_and(self._mask, mask)
 
     @check_loaded
     def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
@@ -171,9 +163,14 @@ class FileTree:
                 img = nib.load(str(f))
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
-        # get mask
+        # get mask of data
         self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-        self.apply_mask(mask=None, reset=True)
+
+        # get mask
+        if self.mask is not None:
+            self.mask = np.logical_and(self.__mask, self.mask)
+        else:
+            self.mask = self.__mask
 
         # apply all fnc
         for fnc in self.fnc_list:
@@ -194,6 +191,7 @@ class FileTree:
         os.remove(str(self.f_data))
         self.data = None
         self.f_data = None
+        self.__mask = None
 
     @check_loaded
     def get_data_subset(self, sbj_list=None):
@@ -291,8 +289,8 @@ def scale_normalize(ft):
         ft (FileTree): file tree to be equalized
     """
     # compute stats
-    shape = (len(ft) * ft.num_sbj, ft.d)
-    shape_orig = (len(ft), ft.num_sbj, ft.d)
+    shape = (len(ft.mask) * ft.num_sbj, ft.d)
+    shape_orig = (len(ft.mask), ft.num_sbj, ft.d)
     _data = ft.data[ft.mask, :, :].reshape(shape, order='F')
     ft.fs = FeatStat.from_array(_data.T)
 
