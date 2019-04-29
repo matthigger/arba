@@ -56,7 +56,7 @@ class SegGraphHistPval(SegGraphHistory):
             min_pval (array): min pval observed per each voxel
         """
         node_list = self._cut_greedy(node_val_dict=self.node_pval_dict,
-                                     max_flag=True)
+                                     max_flag=False)
 
         min_pval = np.zeros(self.file_tree.ref.shape)
         for n in node_list:
