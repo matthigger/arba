@@ -7,14 +7,14 @@ from arba.permute import PermuteARBA
 from arba.space import sample_mask, Mask
 from pnl_data.set.sz import folder, people
 
-feat_tuple = 'fw',
+feat_tuple = ('fw', 'fat')
 grp_tuple = ('HC', 'SCZ')
-n = 240
+n = 24*6
 verbose = True
 par_flag = True
 
-quick = False
-tmp_folder = False
+quick = True
+tmp_folder = True
 
 # build folder
 if tmp_folder:
@@ -56,12 +56,12 @@ split = Split(split)
 
 if quick:
     # discard to a few sbj and a small area
-    file_tree.discard_to(10, split=split)
-    Split.fix_order(file_tree.sbj_list)
+    # file_tree.discard_to(10, split=split)
+    # Split.fix_order(file_tree.sbj_list)
 
     # sample to smaller mask
     file_tree.mask = sample_mask(prior_array=file_tree.mask,
-                                 num_vox=1000,
+                                 num_vox=3000,
                                  ref=file_tree.ref)
 
     # build split with new order
@@ -74,4 +74,4 @@ if quick:
 # run
 permute_arba = PermuteARBA(file_tree, folder=folder_arba)
 permute_arba.run(split, n=n, folder=folder_arba, verbose=verbose,
-                 par_flag=par_flag, print_tree=True)
+                 par_flag=par_flag, print_image=True)
