@@ -1,6 +1,5 @@
-from collections import defaultdict
-
 import numpy as np
+from collections import defaultdict
 from scipy.stats import f
 
 from .pool_cov import PoolCov
@@ -92,7 +91,7 @@ class RegionWardGrp(Region):
         f_scale = (n0 + n1 - p - 1) / (p * (n0 + n1 - 2))
 
         # compute pval
-        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n0 + n1 - p - 1)
+        pval = f.sf(self.t2 * f_scale, dfn=p, dfd=n0 + n1 - p - 1)
 
         if np.isnan(pval):
             raise AttributeError('invalid pval')
