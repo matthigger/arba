@@ -12,6 +12,7 @@ from tqdm import tqdm
 from arba.plot import save_fig
 from arba.space import Mask
 from mh_pytools import file, parallel
+from scipy.ndimage import label
 
 
 class PermuteBase(ABC):
@@ -96,17 +97,19 @@ class PermuteBase(ABC):
             if folder is not None:
                 self.save(folder=folder, split=split, **kwargs)
 
-    def save(self, folder, split, print_image=False, save_self=False,
-             print_hist=False, print_region=False, alpha=.05, **kwargs):
+    def save(self, folder, split, print_image=False, save_self=True,
+             print_hist=True, print_region=True, alpha=.05, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
         folder.mkdir(exist_ok=True, parents=True)
 
+        file.save(split, folder / 'split.p.gz')
+
         affine = self.file_tree.ref.affine
-        for label, x in (('pval', self.pval),
+        for img_label, x in (('pval', self.pval),
                          ('stat_volume', self.stat_volume)):
             img = nib.Nifti1Image(x, affine)
-            img.to_filename(str(folder / f'{label}.nii.gz'))
+            img.to_filename(str(folder / f'{img_label}.nii.gz'))
 
         folder = pathlib.Path(folder)
         if save_self:
@@ -155,20 +158,15 @@ class PermuteBase(ABC):
                     break
 
                 # label connected compoenents of img
-                mask = label(pval_list == p)
+                mask, num_reg = label(p == self.pval)
 
-                p_idx = 1
-                while True:
-                    _mask = mask == p_idx
-                    if not _mask.any():
-                        # no more regions @ this pval
-                        break
+                for _idx in range(num_reg):
+                    _mask = mask == (_idx + 1)
 
                     # print contiguous region @ this pval
                     _mask = Mask(_mask, ref=self.file_tree.ref)
                     _mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
                     reg_idx += 1
-                    p_idx += 1
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
                             effect_split_dict=None, **kwargs):
