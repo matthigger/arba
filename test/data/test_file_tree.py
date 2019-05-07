@@ -64,7 +64,6 @@ def test_all(file_tree):
     with file_tree.loaded():
         # check space
         assert file_tree.mask == mask, 'invalid mask after load'
-        assert file_tree.pc == pc, 'invalid pc after load'
 
         # original data should have unequal variance
         assert np.allclose(np.diag(file_tree.fs.cov),
@@ -72,7 +71,7 @@ def test_all(file_tree):
 
         # compute feat_stat of data, should be 0 mean, unit variance
         _data = file_tree.data[file_tree.mask, :, :]
-        shape = (len(file_tree.pc) * file_tree.num_sbj, file_tree.d)
+        shape = (len(file_tree) * file_tree.num_sbj, file_tree.d)
         _data = _data.reshape(shape, order='F')
         fs = FeatStat.from_array(_data.T)
         assert np.allclose(fs.mu, 0), 'data not centered'

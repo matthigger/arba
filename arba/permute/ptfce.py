@@ -11,13 +11,33 @@ import numpy as np
 import psutil
 from tqdm import tqdm
 
-from .compute_smooth import compute_smooth
-from ...permute_base import PermuteBase
+from .permute import PermuteBase
 
 f_run_ptfce = pathlib.Path(__file__).parent / 'run_ptfce.R'
 
 
+def compute_smooth(f_z, f_mask):
+    cmd = f'smoothest -z {f_z} -m {f_mask}'
+    s = subprocess.check_output(shlex.split(cmd))
+
+    dict_out = dict()
+    for line in str(s).split('\\n'):
+        line_split = line.split(' ')
+        if len(line_split) <= 1:
+            continue
+        elif len(line_split) == 2:
+            val = float(line_split[1])
+        else:
+            val = np.array([float(x) for x in line_split[1:]])
+        feat = line_split[0]
+        dict_out[feat] = val
+
+    return dict_out
+
+
 class PermutePTFCE(PermuteBase):
+    flag_max = True
+
     # memory needed to run each
     mem_buff = 5e9
     mem_per_run = 24e8

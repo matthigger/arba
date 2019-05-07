@@ -82,6 +82,44 @@ def size_v_pval(*args, corrected=False, size=None, **kwargs):
     return scatter_tree(*args, fnc=get_pval, ylabel=ylabel, **kwargs)
 
 
+def size_v_delta(*args, **kwargs):
+    ylabel = r'$\Delta$'
+
+    def get_delta(reg):
+        fs0, fs1 = reg.fs_dict.values()
+        return np.linalg.norm(fs0.mu - fs1.mu)
+
+    return scatter_tree(*args, fnc=get_delta, ylabel=ylabel, **kwargs)
+
+
+def size_v_sig_sbj(*args, **kwargs):
+    ylabel = r'$|\Sigma_{sbj}|$'
+
+    def get_sig_sbj(reg):
+        return np.linalg.det(np.atleast_2d(reg.sig_sbj.value))
+
+    return scatter_tree(*args, fnc=get_sig_sbj, ylabel=ylabel, **kwargs)
+
+
+def size_v_sig_space(*args, **kwargs):
+    ylabel = r'$|\Sigma_{space}|$'
+
+    def get_sig_space(reg):
+        return np.linalg.det(np.atleast_2d(reg.sig_space.value))
+
+    return scatter_tree(*args, fnc=get_sig_space, ylabel=ylabel, **kwargs)
+
+
+def size_v_sig_adj(*args, **kwargs):
+    ylabel = r'$|\Sigma_{space} / m|$'
+
+    def get_sig_space(reg):
+        sig = reg.sig_space.value / len(reg.pc_ijk)
+        return np.linalg.det(np.atleast_2d(sig))
+
+    return scatter_tree(*args, fnc=get_sig_space, ylabel=ylabel, **kwargs)
+
+
 def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
                  mask_label='% mask', reg_highlight={},
                  dict_highlight=None, edge=True, reg_list=None, ax=None,
@@ -139,7 +177,7 @@ def scatter_tree(sg, fnc, ylabel, cmap=None, mask=None,
 
         sc = nx.draw_networkx_nodes(reg_list, pos=node_pos,
                                     nodelist=reg_list,
-                                     vmin=0, vmax=1,
+                                    vmin=0, vmax=1,
                                     alpha=alpha, **kwargs)
 
         return sc

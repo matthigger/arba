@@ -6,8 +6,9 @@ from collections import defaultdict
 import nibabel as nib
 import numpy as np
 
-from ..seg_graph import FileTree, FeatStat
-from ..space import RefSpace, get_ref
+from arba.data import FileTree
+from arba.region import FeatStat
+from arba.space import RefSpace, get_ref
 
 
 class Model:

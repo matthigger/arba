@@ -1,14 +1,15 @@
-from arba.permute_base import PermuteBase
-from arba.plot import save_fig, size_v_wt2
+import matplotlib.pyplot as plt
+
+from arba.plot import save_fig, size_v_pval, size_v_t2
+from arba.seg_graph import SegGraphHistory, SegGraphHistPval
 from arba.space import Mask
-from ..seg_graph_hist import SegGraphHistory
-from ..seg_graph_t2 import SegGraphHistPval
+from .permute import PermuteBase
 
 
 class PermuteARBA(PermuteBase):
     """ runs ARBA permutations
     """
-    print_pval_max = .05
+    flag_max = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,39 +31,34 @@ class PermuteARBA(PermuteBase):
             else:
                 effect_mask = None
 
-            sbj_bool_to_list = self.file_tree.sbj_bool_to_list
-            not_split = tuple(not (x) for x in split)
-            grp_sbj_dict = {'ctrl': sbj_bool_to_list(not_split),
-                            'effect': sbj_bool_to_list(split)}
+            tree_hist, _ = merge_record.resolve_hist(self.file_tree, split)
 
-            tree_hist, \
-            node_reg_dict = merge_record.resolve_hist(self.file_tree,
-                                                      grp_sbj_dict)
-            size_v_wt2(tree_hist, mask=effect_mask,
-                       mask_label='Effect Volume (%)')
+            size_v_pval(tree_hist, mask=effect_mask,
+                        mask_label='Effect Volume (%)')
+            plt.gcf().savefig(str(folder / 'size_v_pval.png'))
+            save_fig(f_out=folder / 'size_v_pval.pdf')
+
+            size_v_t2(tree_hist, mask=effect_mask,
+                      mask_label='Effect Volume (%)')
+            plt.gcf().savefig(str(folder / 'size_v_t2.png'))
             save_fig(f_out=folder / 'size_v_t2.pdf')
 
-    def _split_to_sg_hist(self, split, full_t2=False, **kwargs):
+    def _split_to_sg_hist(self, split, pval_hist=False, **kwargs):
         """ builds sg_hist from a split
 
         Args:
-            split (tuple): (num_sbj), split[i] describes which class the i-th
-                           sbj belongs to in this split
-            full_t2 (bool): toggles instantiating SegGraphHistPval, a subclass of
-                            SegGraphHistory which tracks t2 per each node.
+            split (Split):
+            pval_hist (bool): toggles whether sg_hist tracks history of pval
 
         Returns:
             sg_hist (SegGraphHistory): reduced as much as possible
         """
-        not_split = tuple(not x for x in split)
-        grp_sbj_dict = {'0': self.file_tree.sbj_bool_to_list(split),
-                        '1': self.file_tree.sbj_bool_to_list(not_split)}
-        if full_t2:
-            sg_hist = SegGraphHistPval(file_tree=self.file_tree,
-                                       grp_sbj_dict=grp_sbj_dict)
+        if pval_hist:
+            sg_hist = SegGraphHistPval(file_tree=self.file_tree, split=split,
+                                       **kwargs)
         else:
-            sg_hist = SegGraphHistory(file_tree=self.file_tree,
-                                      grp_sbj_dict=grp_sbj_dict)
+            sg_hist = SegGraphHistory(file_tree=self.file_tree, split=split,
+                                      **kwargs)
         return sg_hist
 
     def run_split(self, split, **kwargs):
@@ -80,21 +76,19 @@ class PermuteARBA(PermuteBase):
 
         return sg_hist
 
-    def run_split_max(self, split, **kwargs):
+    def run_split_xtrm(self, split, **kwargs):
         """" returns the minimum pvalue across hierarchy
-
-        NOTE: name "max" is for consistency with Permute class
         """
-        return split, self.run_split(split).min_pval
+        return split, self.run_split(split, **kwargs).min_pval
 
     def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
 
         # get volume of stat
-        sg_hist = self.run_split(split, full_t2=True)
+        sg_hist = self.run_split(split, pval_hist=True)
         min_pval = sg_hist.get_min_pval_array()
 
         # store sg_hist of split
         self.sg_hist = sg_hist
 
-        return super().determine_sig(stat_volume=min_pval, flag_min=True)
+        return super().determine_sig(stat_volume=min_pval)

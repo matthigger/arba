@@ -1,4 +1,5 @@
 import pathlib
+import random
 from abc import ABC, abstractmethod
 from bisect import bisect_right, bisect_left
 
@@ -6,12 +7,12 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 import seaborn as sns
-from scipy.special import comb
 from tqdm import tqdm
 
 from arba.plot import save_fig
 from arba.space import Mask
 from mh_pytools import file, parallel
+from scipy.ndimage import label
 
 
 class PermuteBase(ABC):
@@ -19,17 +20,16 @@ class PermuteBase(ABC):
 
     # todo: adaptive mode, run only as many n as needed to ensure sig
 
-    a permutation is characterized by a split, a tuple of booleans.  split[i]
-    describes if the i-th subject is in grp 1 (under that split)
-
-
     Attributes:
         file_tree (FileTree): file_tree
         split_stat_dict (dict): keys are splits, values are maximum stats under
                                 that split
     """
+    # toggles whether stat of interest is maximized or minimized
+    flag_max = True
+
+    # name of save file for object, must be consistent for pre-load (see init)
     f_save = 'permute.p.gz'
-    max_pval_region = .05
 
     def __init__(self, file_tree, folder=None):
         """
@@ -45,6 +45,7 @@ class PermuteBase(ABC):
         self.split_stat_dict = dict()
 
         if folder is not None:
+            # pre load last session's split_stat_dict
             f = folder / self.f_save
             if not f.exists():
                 return
@@ -57,24 +58,37 @@ class PermuteBase(ABC):
             # use old split_stat_dict
             self.split_stat_dict = last_self.split_stat_dict
 
-    def run(self, split, n=5000, folder=None, **kwargs):
+    def run(self, split, n=5000, folder=None, seed=1, **kwargs):
         """ runs permutation testing
 
         Args:
             split (np.array): split to test significance of
             n (int): number of permutations
             folder (str or Path): saves output
+            seed (hashable): seed for random num generator
         """
+        # set random seed
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
+
         # no need to repeat a split which is already done
-        n = max(n - len(self.split_stat_dict), 0)
+        n -= len(self.split_stat_dict)
+
+        # stop if number of permutations already complete
+        if n <= 0:
+            return
 
         with self.file_tree.loaded():
-            if n > 0:
-                # build list of splits
-                split_list = self.sample_splits(n, split, **kwargs)
+            # build list of new splits
+            split_list = list()
+            while len(split_list) < n:
+                _split = split.sample()
+                if _split not in self.split_stat_dict.keys():
+                    split_list.append(_split)
 
-                # run splits (permutation sampling from null hypothesis)
-                self.run_split_max_multi(split_list=split_list, **kwargs)
+            # run splits (permutation sampling from null hypothesis)
+            self.run_split_max_multi(split_list=split_list, **kwargs)
 
             # determine sig
             self.stat_volume, self.pval = self.determine_sig(split)
@@ -83,26 +97,36 @@ class PermuteBase(ABC):
             if folder is not None:
                 self.save(folder=folder, split=split, **kwargs)
 
-    def save(self, folder, split, print_image=False, save_self=False,
-             print_hist=False, print_region=False, **kwargs):
+    def save(self, folder, split, print_image=False, save_self=True,
+             print_hist=True, print_region=True, alpha=.05, **kwargs):
         """ saves output images in a folder"""
         folder = pathlib.Path(folder)
         folder.mkdir(exist_ok=True, parents=True)
 
+        file.save(split, folder / 'split.p.gz')
+
         affine = self.file_tree.ref.affine
-        for label, x in (('pval', self.pval),
+        for img_label, x in (('pval', self.pval),
                          ('stat_volume', self.stat_volume)):
             img = nib.Nifti1Image(x, affine)
-            img.to_filename(str(folder / f'{label}.nii.gz'))
+            img.to_filename(str(folder / f'{img_label}.nii.gz'))
 
         folder = pathlib.Path(folder)
         if save_self:
             file.save(self, folder / self.f_save)
 
+        # compute critical stat
         f_out = folder / 'thresh.txt'
         stat_sorted = sorted(self.split_stat_dict.values())
         num_perm = len(stat_sorted)
-        thresh = np.percentile(stat_sorted, 95, interpolation='lower')
+        if self.flag_max:
+            perc_thresh = 100 - alpha * 100
+            thresh = np.percentile(stat_sorted, perc_thresh,
+                                   interpolation='lower')
+        else:
+            perc_thresh = alpha * 100
+            thresh = np.percentile(stat_sorted, perc_thresh,
+                                   interpolation='higher')
         with open(str(f_out), 'w') as f:
             print(f'critical stat thresh: {thresh:.3e}', file=f)
 
@@ -112,65 +136,37 @@ class PermuteBase(ABC):
             plt.hist(stat_sorted, bins=20)
             plt.gca().axvline(thresh, color='r', label=f'95%={thresh:.2f}')
             plt.gca().legend()
-            plt.xlabel(r'Max (or min) stat in Hierarchy')
-            plt.ylabel(f'Count\n(Across {num_perm} Permutations)')
-            save_fig(folder / 'hist_max_stat.pdf', size_inches=(4, 3))
+            plt.xlabel(r'extrema stat in Hierarchy')
+            plt.ylabel(f'Count\n({num_perm} Permutations)')
+            save_fig(folder / 'hist_extrema_stat.pdf', size_inches=(4, 3))
 
         if print_image:
             # print mean image per grp per feature
-            not_split = tuple(not x for x in split)
             for feat in self.file_tree.feat_list:
-                for lbl, _split in (('1', split),
-                                    ('0', not_split)):
-                    f_out = folder / f'{feat}_{lbl}.nii.gz'
-                    self.file_tree.to_nii(feat=feat, sbj_bool=_split,
+                for grp, sbj_bool in split.bool_iter():
+                    f_out = folder / f'{feat}_{grp}.nii.gz'
+                    self.file_tree.to_nii(feat=feat, sbj_bool=sbj_bool,
                                           f_out=f_out)
 
         if print_region:
-            stat_descend = sorted(np.unique(self.stat_volume.flatten()),
-                                  reverse=True)
+            pval_list = sorted(np.unique(self.pval[self.file_tree.mask]))
 
-            for reg_idx, reg_stat in enumerate(stat_descend):
-                p = 1 - bisect_right(stat_sorted, reg_stat) / num_perm
-                if p > self.max_pval_region:
+            reg_idx = 0
+            for p in pval_list:
+
+                if p > alpha:
                     break
-                mask = Mask(self.stat_volume == reg_stat,
-                            ref=self.file_tree.ref)
-                mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
 
-    def sample_splits(self, n, split, seed=1, **kwargs):
-        """ sample splits, ensure none are repeated
+                # label connected compoenents of img
+                mask, num_reg = label(p == self.pval)
 
-        note: each split has same number of ones as self.split
+                for _idx in range(num_reg):
+                    _mask = mask == (_idx + 1)
 
-        Args:
-            n (int): number of permutations
-            split (np.array): the target split (used to count 0s and 1s)
-            seed : initialize random number generator (helpful for debug)
-
-        Returns:
-            split_list (list): each element is a split
-        """
-        num_ones = sum(split)
-        num_sbj = len(split)
-
-        assert comb(num_sbj, num_ones) >= (n + len(self.split_stat_dict)), \
-            'not enough unique splits'
-
-        np.random.seed(seed)
-
-        split_list = list()
-        while len(split_list) < n:
-            # build a split
-            ones_idx = np.random.choice(range(num_sbj), size=num_ones,
-                                        replace=False)
-            split = tuple(idx in ones_idx for idx in range(num_sbj))
-
-            # add this split so long as its not already in the split_stat_dict
-            if split not in self.split_stat_dict.keys():
-                split_list.append(split)
-
-        return split_list
+                    # print contiguous region @ this pval
+                    _mask = Mask(_mask, ref=self.file_tree.ref)
+                    _mask.to_nii(f_out=folder / f'region_{reg_idx}.nii.gz')
+                    reg_idx += 1
 
     def run_split_max_multi(self, split_list, par_flag=False, verbose=False,
                             effect_split_dict=None, **kwargs):
@@ -182,25 +178,32 @@ class PermuteBase(ABC):
                 arg_list.append({'split': split,
                                  'verbose': False,
                                  'effect_split_dict': effect_split_dict})
-            res = parallel.run_par_fnc(fnc='run_split_max', obj=self,
+            res = parallel.run_par_fnc(fnc='run_split_xtrm', obj=self,
                                        arg_list=arg_list, verbose=verbose)
-            for split, max_stat in res:
-                self.split_stat_dict[split] = max_stat
+            for split, xtrm in res:
+                self.split_stat_dict[split] = xtrm
         else:
             tqdm_dict = {'disable': not verbose,
-                         'desc': 'compute max stat per split'}
+                         'desc': 'compute extrema stat per split'}
             for split in tqdm(split_list, **tqdm_dict):
                 _, self.split_stat_dict[split] = \
-                    self.run_split_max(split,
-                                       effect_split_dict=effect_split_dict)
+                    self.run_split_xtrm(split,
+                                        effect_split_dict=effect_split_dict,
+                                        verbose=verbose)
 
         return self.split_stat_dict
 
-    def run_split_max(self, split, **kwargs):
-        """ runs a single split, returns max stat """
+    def run_split_xtrm(self, split, **kwargs):
+        """ runs a single split, returns extrema stat (see max_flag)
+        """
         stat_volume = self.run_split(split, **kwargs)
 
-        return split, stat_volume[self.file_tree.mask].max()
+        if self.max_flag:
+            xtrm = stat_volume[self.file_tree.mask].max()
+        else:
+            xtrm = stat_volume[self.file_tree.mask].min()
+
+        return split, xtrm
 
     @abstractmethod
     def run_split(self, split, **kwargs):
@@ -214,7 +217,7 @@ class PermuteBase(ABC):
             stat_volume (np.array): (space0, space1, space2) stats
         """
 
-    def determine_sig(self, split=None, stat_volume=None, flag_min=False):
+    def determine_sig(self, split=None, stat_volume=None):
         """ runs on the original case, uses the stats saved to determine sig"""
         assert (split is None) != (stat_volume is None), \
             'split xor stat_volume'
@@ -223,10 +226,10 @@ class PermuteBase(ABC):
             # get stat volume of original
             stat_volume = self.run_split(split)
 
-        if flag_min:
-            bisect = bisect_left
-        else:
+        if self.flag_max:
             bisect = bisect_right
+        else:
+            bisect = bisect_left
 
         # build array of pval
         # https://stats.stackexchange.com/questions/109207/p-values-equal-to-0-in-permutation-test
@@ -234,9 +237,9 @@ class PermuteBase(ABC):
         stat_sorted = sorted(self.split_stat_dict.values())
         n = len(self.split_stat_dict)
         pval = np.zeros(self.file_tree.ref.shape)
-        for i, j, k in self.file_tree.pc:
+        for i, j, k in self.file_tree.mask.iter_ijk():
             p = bisect(stat_sorted, stat_volume[i, j, k]) / n
-            if not flag_min:
+            if self.flag_max:
                 p = 1 - p
             pval[i, j, k] = p
 
@@ -245,22 +248,23 @@ class PermuteBase(ABC):
     def get_t2(self, split, verbose=False):
         """ computes t2 stat per voxel (not scaled) """
 
-        split = np.array(split)
+        raise NotImplementedError('scale?')
 
         # build fs per ijk in mask
         t2 = np.zeros(self.file_tree.ref.shape)
         tqdm_dict = {'disable': not verbose,
                      'desc': 'compute t2 per vox'}
-        split_not = tuple([not x for x in split])
-        for ijk in tqdm(self.file_tree.pc, **tqdm_dict):
-            fs0 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split_not)
-            fs1 = self.file_tree.get_fs(ijk=ijk, sbj_bool=split)
+        sbj_bool = split.sbj_bool
+        for ijk in tqdm(self.file_tree.mask.iter_ijk(), **tqdm_dict):
+            fs0 = self.file_tree.get_fs(ijk=ijk,
+                                        sbj_bool=np.logical_not(sbj_bool))
+            fs1 = self.file_tree.get_fs(ijk=ijk,
+                                        sbj_bool=sbj_bool)
 
             # compute t2
             delta = fs0.mu - fs1.mu
-            cov_pooled = (fs0.cov * fs0.n +
-                          fs1.cov * fs1.cov) / (fs0.n + fs1.n)
+            pool_cov = fs0.get_pool_cov((fs0, fs1))
             i, j, k = ijk
-            t2[i, j, k] = delta @ np.linalg.inv(cov_pooled) @ delta
+            t2[i, j, k] = delta @ np.linalg.inv(pool_cov) @ delta
 
         return t2

@@ -5,8 +5,10 @@ from collections import defaultdict
 import numpy as np
 
 import pnl_data
-from arba.data import FileTree
-from arba.seg_graph import PermuteARBA, FeatStat
+from arba.data import FileTree, Split
+from arba.permute import PermuteARBA
+from arba.plot import size_v_pval, size_v_t2, size_v_delta, save_fig
+from arba.region import FeatStat
 from arba.simulate import Model
 from arba.space import RefSpace, Mask
 
@@ -18,7 +20,8 @@ shape = (4, 4, 1)
 pop_mu_bt_dict = {'pop0': (0, 0),
                   'pop1': (1, 0)}
 folder = pnl_data.folder_data / 'arba_toy_ex'
-shutil.rmtree(str(folder))
+if folder.exists():
+    shutil.rmtree(str(folder))
 folder.mkdir(exist_ok=True)
 
 # init random seed
@@ -55,7 +58,8 @@ for pop, (mu_btm, mu_top) in pop_mu_bt_dict.items():
 # build file tree
 file_tree = FileTree(sbj_feat_file_tree)
 sbj_list = [f'pop1_{idx}' for idx in range(n_img)]
-split = file_tree.sbj_list_to_bool(sbj_list)
+Split.fix_order(file_tree.sbj_list)
+split = Split(grp_sbj_dict)
 
 mask_effect.to_nii(folder / 'mask_effect.nii.gz')
 
@@ -71,12 +75,26 @@ def fnc_get_pop1_mean(reg):
 with file_tree.loaded():
     permuteARBA = PermuteARBA(file_tree)
     sg_hist = permuteARBA.run_split(split, full_t2=True)
-    permuteARBA.run(split, n=100, folder=folder, print_image=True,
-                    print_tree=True, print_hist=True, verbose=True)
 
-    f_out = folder / 'merge_record.nii.gz'
-    f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
-                                                file_tree=file_tree,
-                                                grp_sbj_dict=grp_sbj_dict)
+    tree_hist, _ = sg_hist.merge_record.resolve_hist(file_tree, split)
+
+    # reg = max(tree_hist.nodes, key=len)
+    # for r in tree_hist.nodes:
+    #     r.sig_sbj = reg.sig_sbj
+    #     r.reset()
+
+    for fnc_plot in (size_v_pval,
+                     size_v_t2,
+                     size_v_delta):
+        fnc_plot(sg=tree_hist, mask=mask_effect)
+        save_fig(f_out=folder / f'{fnc_plot.__name__}.pdf')
+
+    # permuteARBA.run(split, n=100, folder=folder, print_image=True,
+    #                 print_tree=True, print_hist=True, verbose=True)
+    #
+    # f_out = folder / 'merge_record.nii.gz'
+    # f_out, n_list = sg_hist.merge_record.to_nii(f_out, fnc=fnc_get_pop1_mean,
+    #                                             file_tree=file_tree,
+    #                                             split=split)
 
     print(folder)

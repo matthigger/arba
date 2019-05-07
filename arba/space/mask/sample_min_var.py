@@ -17,7 +17,10 @@ def sample_mask_min_var(num_vox, file_tree):
     """
 
     # choose random voxel as init
-    min_ijk = random.choice(list(file_tree.pc))
+    prior_array = file_tree.mask
+    p = np.array(prior_array / prior_array.sum())
+    idx = np.random.choice(range(p.size), size=1, p=p.flatten())
+    min_ijk = np.unravel_index(idx[0], prior_array.shape)
     fs = file_tree.get_fs(ijk=min_ijk)
 
     # init mask (as a PointCloud) and its neighbor set

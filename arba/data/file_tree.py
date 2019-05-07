@@ -5,9 +5,10 @@ from contextlib import contextmanager
 
 import nibabel as nib
 import numpy as np
+from tqdm import tqdm
 
-from ..region import FeatStat
-from ..space import get_ref, Mask, PointCloud
+from arba.region import FeatStat
+from arba.space import get_ref, Mask
 
 
 def check_loaded(fnc):
@@ -38,11 +39,13 @@ class FileTree:
 
     Attributes available after load()
         mask (Mask): mask of active area
-        pc (PointCloud): point cloud of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
-
         split_effect (tuple): split, effect
+
+    Hidden Attributes:
+        __mask (Mask): mask of intersectino of all files (only available when
+                       loaded)
     """
 
     @property
@@ -56,14 +59,6 @@ class FileTree:
     @property
     def d(self):
         return len(self.feat_list)
-
-    @property
-    def pc(self):
-        return self._pc
-
-    @property
-    def mask(self):
-        return self._mask
 
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
@@ -80,27 +75,38 @@ class FileTree:
         if fnc_list is None:
             self.fnc_list = list()
 
-        self.__mask = mask
-        self._mask = mask
-        if self.__mask is not None:
-            self._pc = PointCloud.from_mask(self.__mask)
-        else:
-            self._pc = None
-
         self.fs = None
         self.data = None
         self.f_data = None
 
+        self.mask = mask
+        self.__mask = None
+
         self.split_effect = None
 
-    def apply_mask(self, mask=None, reset=False):
-        if reset:
-            self._mask = self.__mask
+    def discard_to(self, n_sbj, split=None):
+        """ discards sbj so only n_sbj remains (in place)
 
-        if mask is not None:
-            self._mask = np.logical_and(self._mask, mask)
+        Args:
+            n_sbj (int):
+            split (Split): if passed, ensures at most n_sbj per split grp
+        """
+        if self.is_loaded:
+            raise AttributeError('may not be loaded during discard_to()')
 
-        self._pc = PointCloud.from_mask(self._mask)
+        # get appropriate grp_list_iter, iter of grp, sbj_list
+        if split is None:
+            grp_list_iter = iter(('grp0', self.sbj_list))
+        else:
+            grp_list_iter = split.grp_list_iter()
+
+        # prune tree to approrpiate sbj
+        for _, sbj_list in grp_list_iter:
+            for sbj in sbj_list[n_sbj:]:
+                del self.sbj_feat_file_tree[sbj]
+
+        # update sbj_list
+        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     @check_loaded
     def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
@@ -126,7 +132,7 @@ class FileTree:
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self):
+    def loaded(self, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
@@ -134,14 +140,14 @@ class FileTree:
         """
         was_loaded = self.is_loaded
         if not was_loaded:
-            self.load()
+            self.load(**kwargs)
         try:
             yield self
         finally:
             if not was_loaded:
                 self.unload()
 
-    def load(self):
+    def load(self, verbose=False):
         """ loads data, applies fnc in self.fnc_list
         """
         # build memmap file
@@ -149,15 +155,22 @@ class FileTree:
         self.data = np.zeros(shape)
 
         # load data
-        for sbj_idx, sbj in enumerate(self.sbj_list):
+        for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
+                                 desc='load per sbj',
+                                 disable=not verbose):
             for feat_idx, feat in enumerate(self.feat_list):
                 f = self.sbj_feat_file_tree[sbj][feat]
                 img = nib.load(str(f))
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
-        # get pc, mask
+        # get mask of data
         self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-        self.apply_mask(mask=None, reset=True)
+
+        # get mask
+        if self.mask is not None:
+            self.mask = np.logical_and(self.__mask, self.mask)
+        else:
+            self.mask = self.__mask
 
         # apply all fnc
         for fnc in self.fnc_list:
@@ -178,6 +191,7 @@ class FileTree:
         os.remove(str(self.f_data))
         self.data = None
         self.f_data = None
+        self.__mask = None
 
     @check_loaded
     def get_data_subset(self, sbj_list=None):
@@ -208,6 +222,8 @@ class FileTree:
         assert (sbj_list is None) != (sbj_bool is None), \
             'sbj_list xor sbj_bool'
         if sbj_bool is None:
+            assert set(self.sbj_list).issuperset(sbj_list), \
+                'sbj not in FileTree'
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # build img
@@ -215,7 +231,7 @@ class FileTree:
             # build based on custom fnc
             raise NotImplementedError('how does fnc handle effect?')
             x = back * np.ones(self.ref.shape)
-            for i, j, k in self.pc:
+            for i, j, k in self.mask.iter_ijk():
                 x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
         else:
             # build based on mean feature
@@ -244,11 +260,8 @@ class FileTree:
         if sbj_list is None:
             return np.ones(self.num_sbj).astype(bool)
 
-        sbj_set = set(sbj_list)
-        return np.array([sbj in sbj_set for sbj in self.sbj_list])
-
-    def sbj_bool_to_list(self, sbj_bool):
-        return [sbj for b, sbj in zip(sbj_bool, self.sbj_list) if b]
+        sbj_name_set = set([s.name for s in sbj_list])
+        return np.array([sbj.name in sbj_name_set for sbj in self.sbj_list])
 
     def __eq__(self, other):
         if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
@@ -276,8 +289,8 @@ def scale_normalize(ft):
         ft (FileTree): file tree to be equalized
     """
     # compute stats
-    shape = (len(ft.pc) * ft.num_sbj, ft.d)
-    shape_orig = (len(ft.pc), ft.num_sbj, ft.d)
+    shape = (len(ft.mask) * ft.num_sbj, ft.d)
+    shape_orig = (len(ft.mask), ft.num_sbj, ft.d)
     _data = ft.data[ft.mask, :, :].reshape(shape, order='F')
     ft.fs = FeatStat.from_array(_data.T)
 

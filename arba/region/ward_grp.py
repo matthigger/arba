@@ -1,6 +1,8 @@
 import numpy as np
+from collections import defaultdict
 from scipy.stats import f
 
+from .pool_cov import PoolCov
 from .reg import Region
 
 
@@ -13,16 +15,28 @@ class RegionWardGrp(Region):
     (see methods for detail)
     """
 
+    @classmethod
+    def from_data(cls, pc_ijk, file_tree, split, **kwargs):
+        # get stats across region per grp
+        fs_dict = defaultdict(list)
+        for ijk in pc_ijk:
+            for grp, sbj_list in split.items():
+                fs_dict[grp].append(file_tree.get_fs(ijk, sbj_list=sbj_list))
+        fs_dict = {k: sum(l) for k, l in fs_dict.items()}
+
+        return cls(pc_ijk=pc_ijk, fs_dict=fs_dict, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._t2 = None
         self._pval = None
 
-        # note: all feat_stat.cov are simple averages (np.cov(x, ddof=0)),
-        # this is critical for computation of sq_error_det
-        fs0, fs1 = self.fs_dict.values()
-        self.cov_pooled = (fs0.n * fs0.cov +
-                           fs1.n * fs1.cov) / (fs0.n + fs1.n)
+        self.cov_pool = PoolCov.sum([PoolCov.from_feat_stat(fs)
+                                     for fs in self.fs_dict.values()])
+
+    def reset(self):
+        self._t2 = None
+        self._pval = None
 
     @property
     def pval(self):
@@ -41,15 +55,13 @@ class RegionWardGrp(Region):
     def get_t2(self):
         """ hotelling t squared distance between groups
 
-        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T sig^-1 (u_1 - u_0)
-
-        where sig = pooled covar between groups
+        (n0 * n1) / (n0 + n1) (u_1 - u_0)^T cov_pool^-1 (u_1 - u_0)
         """
 
         fs0, fs1 = self.fs_dict.values()
 
         mu_diff = fs0.mu - fs1.mu
-        quad_term = mu_diff @ np.linalg.inv(self.cov_pooled) @ mu_diff
+        quad_term = mu_diff @ np.linalg.inv(self.cov_pool.value) @ mu_diff
 
         n0, n1 = self.n0n1
         scale = (n0 * n1) / (n0 + n1)
@@ -79,7 +91,7 @@ class RegionWardGrp(Region):
         f_scale = (n0 + n1 - p - 1) / (p * (n0 + n1 - 2))
 
         # compute pval
-        pval = f.sf(self.t2 * f_scale, dfd=p, dfn=n0 + n1 - p - 1)
+        pval = f.sf(self.t2 * f_scale, dfn=p, dfd=n0 + n1 - p - 1)
 
         if np.isnan(pval):
             raise AttributeError('invalid pval')
@@ -106,7 +118,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.linalg.det(self.cov_pooled) * n
+        return np.linalg.det(self.cov_pool.value) * n
 
     @property
     def sq_error_tr(self):
@@ -120,7 +132,7 @@ class RegionWardGrp(Region):
         """
 
         n = sum(fs.n for fs in self.fs_dict.values())
-        return np.trace(self.cov_pooled) * n
+        return np.trace(self.cov_pool.value) * n
 
     @staticmethod
     def get_error_det(reg_0, reg_1, reg_union=None):
