@@ -77,7 +77,8 @@ class Split(dict):
         return Split(d)
 
     def get_bool(self, grp, negate=False):
-        sbj_bool = np.array([sbj in self[grp] for sbj in self.sbj_list])
+        name_set = set(sbj.name for sbj in self[grp])
+        sbj_bool = np.array([sbj.name in name_set for sbj in self.sbj_list])
 
         if negate:
             sbj_bool = np.logical_not(sbj_bool)
