@@ -260,8 +260,8 @@ class FileTree:
         if sbj_list is None:
             return np.ones(self.num_sbj).astype(bool)
 
-        sbj_name_set = set([s.name for s in sbj_list])
-        return np.array([sbj.name in sbj_name_set for sbj in self.sbj_list])
+        sbj_set = set(sbj_list)
+        return np.array([sbj in sbj_set for sbj in self.sbj_list])
 
     def __eq__(self, other):
         if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
