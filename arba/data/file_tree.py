@@ -44,7 +44,7 @@ class FileTree:
         split_effect (tuple): split, effect
 
     Hidden Attributes:
-        __mask (Mask): mask of intersectino of all files (only available when
+        __mask (Mask): mask of intersection of all files (only available when
                        loaded)
     """
 
