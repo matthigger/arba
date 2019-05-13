@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from arba.data import FileTree, scale_normalize, Split
 from arba.permute import run_print_single
-from arba.seg_graph import SegGraphHistPval
+from arba.seg_graph import SegGraphHistT2
 from arba.space import Mask, sample_mask
 from pnl_data.set.ofer_tbss import folder
 
@@ -34,7 +34,7 @@ for feat in feat_tuple:
 mask = Mask.from_nii(str(folder_data / 'mean_FA_above_p2.nii.gz'))
 
 if quick:
-    mask = sample_mask(prior_array=mask, num_vox=300, ref=mask.ref)
+    mask = sample_mask(prior_array=mask, num_vox=1000, ref=mask.ref)
 
 file_tree = FileTree(sbj_feat_file_tree=sbj_feat_file_tree, mask=mask,
                      fnc_list=[scale_normalize])
@@ -49,5 +49,5 @@ split = Split(split)
 
 # run
 with file_tree.loaded():
-    sg_hist = SegGraphHistPval(file_tree=file_tree, split=split)
+    sg_hist = SegGraphHistT2(file_tree=file_tree, split=split)
     run_print_single(sg_hist=sg_hist, verbose=verbose, folder=folder_arba)
