@@ -14,7 +14,7 @@ def effect(d=2, t2=5):
     mean = np.ones(d) * np.sqrt(t2 / d)
     fs = FeatStat(n=10, mu=np.zeros(d), cov=np.eye(d))
     mask = Mask(np.ones((3, 3)))
-    effect = Effect(mask=mask, mean=mean, fs=fs)
+    effect = Effect(mask=mask, offset=mean, fs=fs)
 
     assert np.isclose(effect.t2, t2), 't2 computation'
 

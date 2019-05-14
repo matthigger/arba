@@ -1,11 +1,13 @@
+import pathlib
+import tempfile
 from copy import copy
 
+import nibabel as nib
 import numpy as np
-from scipy.spatial.distance import dice
-from scipy.stats import mannwhitneyu, multivariate_normal
-
 from arba.region import FeatStat
 from arba.space import Mask
+from scipy.spatial.distance import dice
+from scipy.stats import mannwhitneyu, multivariate_normal
 
 
 def draw_random_u(d):
@@ -25,19 +27,61 @@ def draw_random_u(d):
 class Effect:
     """ adds an effect to an image
 
-    note: only iid normal effects are supported
+    an effect is a constant offset to a set of voxels, scale may vary
 
     Attributes:
-        mean (np.array): average offset of effect on a voxel
+        offset (np.array): average offset of effect on a voxel
         mask (Mask): effect location
-        fs (FeatStat): FeatStat of unaffected area
-
+        scale (np.array): scale of effect, defaults to mask, otherwise values
+                          between 0 and 1. allows `soft' boundary to effect
+        eff_img (np.array): offset image (memoized)
+        u (np.array): offset, normalized
+        fs (FeatStat): FeatStat of unaffected area (used to compute t2)
         t2 (float): t squared distance
-        u (np.array): effect direction
+
+    todo: call of get_auc(), get_dice() and get_sens_spec() should be uniform
     """
+
+    def __init__(self, mask, offset, scale=None, fs=None):
+        self.offset = np.atleast_1d(offset)
+        self.mask = mask
+        self.fs = fs
+        self.scale = scale
+        if self.scale is None:
+            self.scale = self.mask
+
+        self._eff_img = None
+
+    def to_nii(self, f_out=None):
+        if f_out is None:
+            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+            f_out = pathlib.Path(f_out)
+
+        img = nib.Nifti1Image(self.eff_img, affine=self.mask.ref.affine)
+        img.to_filename(str(f_out))
+
+        return f_out
+
+    @property
+    def eff_img(self):
+        if self._eff_img is None:
+            shape = (*self.mask.shape, self.d)
+            self._eff_img = np.zeros(shape)
+            for idx in range(self.d):
+                self._eff_img[..., idx] = self.offset[idx] * self.scale
+        return self._eff_img
+
     @property
     def d(self):
-        return len(self.mean)
+        return len(self.offset)
+
+    def __len__(self):
+        return len(self.mask)
+
+    def apply(self, x):
+        """ given an image, x, applies the effect
+        """
+        return x + self.eff_img
 
     @staticmethod
     def from_fs_t2(fs, t2, mask, u=None):
@@ -61,7 +105,7 @@ class Effect:
 
         # build effect with proper direction, scale to proper t2
         # (ensure u is copied so we have a spare to validate against)
-        eff = Effect(mask=mask, mean=copy(u), fs=fs)
+        eff = Effect(mask=mask, offset=copy(u), fs=fs)
         eff.t2 = t2
 
         assert np.allclose(eff.u, u), 'direction error'
@@ -71,39 +115,39 @@ class Effect:
 
     @property
     def t2(self):
-        return self.mean @ self.fs.cov_inv @ self.mean
+        if self.fs is None:
+            return None
+        return self.offset @ self.fs.cov_inv @ self.offset
 
     @t2.setter
     def t2(self, val):
-        self.mean *= np.sqrt(val / self.t2)
+        """ change scale of effect to achieve new t2
+        """
+        if self.fs is None:
+            raise AttributeError('fs required to set t2')
+        self._eff_img = None
+        self.offset *= np.sqrt(val / self.t2)
 
     @property
     def u(self):
-        return self.mean / np.linalg.norm(self.mean)
+        return self.offset / np.linalg.norm(self.offset)
 
     @u.setter
     def u(self, val):
+        """ changes direction of effect, keeps t2 constant
+        """
+        if self.fs is None:
+            raise AttributeError('fs required to set u')
+        self._eff_img = None
         c = val @ self.fs.cov_inv @ val
-        self.mean = np.atleast_1d(val) * self.t2 / c
-
-    def __init__(self, mask, mean, fs):
-        self.mask = mask
-        self.mean = np.atleast_1d(mean)
-        self.fs = fs
-
-    def __len__(self):
-        return len(self.mask)
+        self.offset = np.atleast_1d(val) * self.t2 / c
 
     def get_auc(self, x, mask):
         """ computes auc of statistic given by array x
 
-        a strong auc value requires that there exists some threshold which
-        seperates affected voxels from unaffected voxels.  here, self serves
-        as 'ground truth' of which voxels are, or are not, affected
-
         Args:
-            x (np.array)
-            mask (mask): values in x which are to be counted
+            x (np.array): scores (per voxel)
+            mask (mask): values in x which are to be counted towards auc
 
         Returns:
             auc (float): value in [0, 1]
@@ -178,8 +222,3 @@ class Effect:
             spec = np.nan
 
         return sens, spec
-
-    def apply_to_file_tree(self, file_tree):
-        """ applies effect to a file tree
-        """
-        file_tree.add(self.mean, mask=self.mask)
