@@ -80,10 +80,13 @@ class Effect:
     def __len__(self):
         return len(self.mask)
 
-    def apply(self, x):
+    def apply(self, x, negate=False):
         """ given an image, x, applies the effect
         """
-        return x + self.eff_img
+        if negate:
+            return x - self.eff_img
+        else:
+            return x + self.eff_img
 
     @staticmethod
     def from_fs_t2(fs, t2, mask, edge_n=None, u=None):

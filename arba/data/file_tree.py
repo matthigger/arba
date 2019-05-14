@@ -157,7 +157,7 @@ class FileTree:
             if not was_loaded:
                 self.unload()
 
-    def load(self, split_effect_dict=None, verbose=False):
+    def load(self, split_effect_dict=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
@@ -166,8 +166,10 @@ class FileTree:
                                       groups, one is True (effect applied),
                                       other is False
             verbose (bool): toggles command line output
-
+            memmap (bool): toggles memory map (self.data becomes read only, but
+                           accesible from all threads to save on memory)
         """
+
         if self.is_loaded:
             raise AttributeError('already loaded')
 
@@ -198,30 +200,50 @@ class FileTree:
             fnc(self)
 
         # apply effects
-        if split_effect_dict is not None:
-            self.split_effect_dict = split_effect_dict
-            for split, effect in split_effect_dict.items():
-                # note: group True has the effect applied
-                sbj_bool = split.get_bool(True)
-                for sbj_idx in np.where(sbj_bool):
-                    x = self.data[:, :, :, sbj_idx, :]
-                    self.data[:, :, :, sbj_idx, :] = effect.apply(x)
+        self.reset_effect(split_effect_dict)
 
         # flush data to memmap, make read only copy
-        self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
-        self.f_data = pathlib.Path(self.f_data)
-        x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                      shape=shape)
-        x[:] = self.data[:]
-        x.flush()
-        self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                              shape=shape)
+        if memmap:
+            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+            self.f_data = pathlib.Path(self.f_data)
+            x = np.memmap(self.f_data, dtype='float32', mode='w+',
+                          shape=shape)
+            x[:] = self.data[:]
+            x.flush()
+            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                                  shape=shape)
+
+    @check_loaded
+    def reset_effect(self, split_eff_dict=None):
+
+        def _apply(split_eff_dict, negate=False):
+            if split_eff_dict is None:
+                return
+
+            for split, effect in split_eff_dict.items():
+                # note: group True has the effect applied
+                for sbj in split[True]:
+                    sbj_idx = self.sbj_list.index(sbj)
+                    x = self.data[:, :, :, sbj_idx, :]
+                    x = effect.apply(x, negate=negate)
+                    self.data[:, :, :, sbj_idx, :] = x
+
+        # rm old effects
+        _apply(self.split_effect_dict, negate=True)
+
+        # add new effects
+        _apply(split_eff_dict, negate=False)
+
+        # record updates
+        self.split_effect_dict = split_eff_dict
 
     def unload(self):
         # delete memory map file
-        os.remove(str(self.f_data))
+        if self.f_data is not None and self.f_data.exists():
+            os.remove(str(self.f_data))
+            self.f_data = None
+            
         self.data = None
-        self.f_data = None
         self.__mask = None
         self.split_effect_dict = dict()
 
