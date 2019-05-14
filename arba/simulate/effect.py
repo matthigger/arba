@@ -8,6 +8,7 @@ from arba.region import FeatStat
 from arba.space import Mask
 from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu, multivariate_normal
+from scipy.ndimage.morphology import distance_transform_cdt
 
 
 def draw_random_u(d):
@@ -84,13 +85,18 @@ class Effect:
         return x + self.eff_img
 
     @staticmethod
-    def from_fs_t2(fs, t2, mask, u=None):
+    def from_fs_t2(fs, t2, mask, edge_n=None, u=None):
         """ scales effect with observations
 
         Args:
             fs (FeatStat): stats of affected area
             t2 (float): ratio of effect to population variance
             mask (Mask): effect location
+            edge_n (int): number of voxels on edge of mask (taxicab erosion)
+                          which have a 'scaled' effect.  For example, if edge_n
+                          = 1, then the outermost layer of voxels has only half
+                          the offset applied.  see Effect.scale and eff_img for
+                          detail
             u (array): direction of offset
         """
 
@@ -103,9 +109,17 @@ class Effect:
         elif len(u) != fs.d:
             raise AttributeError('direction offset must have same len as fs.d')
 
+        # compute scale
+        if edge_n is None:
+            scale = mask
+        else:
+            scale = distance_transform_cdt(mask,
+                                           metric='taxicab') / (edge_n + 1)
+            scale[scale >= 1] = 1
+
         # build effect with proper direction, scale to proper t2
         # (ensure u is copied so we have a spare to validate against)
-        eff = Effect(mask=mask, offset=copy(u), fs=fs)
+        eff = Effect(mask=mask, offset=copy(u), fs=fs, scale=scale)
         eff.t2 = t2
 
         assert np.allclose(eff.u, u), 'direction error'

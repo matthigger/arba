@@ -109,17 +109,26 @@ class FileTree:
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     @check_loaded
-    def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
-
-        # get sbj_bool
+    def get_fs(self, ijk=None, mask=None, sbj_list=None, sbj_bool=None):
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
+        assert (ijk is None) != (mask is None), 'ijk xor mask required'
+
+        # get sbj_bool
         if sbj_bool is None:
+            if sbj_list is None:
+                sbj_list = self.sbj_list
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
-        # build fs
-        i, j, k = ijk
-        x = self.data[i, j, k, :, :]
+        # get data array
+        if ijk is not None:
+            # single point
+            i, j, k = ijk
+            x = self.data[i, j, k, :, :]
+            raise AttributeError('shape should be num_vox x num_sbj x d')
+        else:
+            # mask
+            x = self.data[mask, :, :]
 
         # apply effect
         if self.split_effect is not None:
@@ -128,7 +137,7 @@ class FileTree:
                 x = np.array(x)
                 x[split, :] += effect.mean
 
-        x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+        x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
         return FeatStat.from_array(x.T)
 
     @contextmanager
