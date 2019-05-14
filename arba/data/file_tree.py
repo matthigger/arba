@@ -41,7 +41,9 @@ class FileTree:
         mask (Mask): mask of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
-        split_effect (tuple): split, effect
+        split_effect_dict (dict): keys are splits, values are effects applied.
+                                  note that split must have two groups, one is
+                                  True (effect applied), other is False
 
     Hidden Attributes:
         __mask (Mask): mask of intersection of all files (only available when
@@ -82,7 +84,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.split_effect = None
+        self.split_effect_dict = dict()
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only n_sbj remains (in place)
@@ -125,40 +127,50 @@ class FileTree:
             # single point
             i, j, k = ijk
             x = self.data[i, j, k, :, :]
-            raise AttributeError('shape should be num_vox x num_sbj x d')
+            x = x[sbj_bool, :].reshape((-1, self.d), order='F')
         else:
             # mask
             x = self.data[mask, :, :]
-
-        # apply effect
-        if self.split_effect is not None:
-            split, effect = self.split_effect
-            if effect.mask[i, j, k]:
-                x = np.array(x)
-                x[split, :] += effect.mean
-
-        x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
+            x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, **kwargs):
+    def loaded(self, split_effect_dict=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
         loaded.  otherwise we're all set, no need to do it again.
         """
         was_loaded = self.is_loaded
-        if not was_loaded:
+
+        # load or check that previous load was equivilent
+        if was_loaded:
+            if split_effect_dict is not None:
+                assert split_effect_dict == self.split_effect_dict, \
+                    'split_effect_dict mismatch between load()'
+        else:
             self.load(**kwargs)
+
         try:
             yield self
         finally:
             if not was_loaded:
                 self.unload()
 
-    def load(self, verbose=False):
+    def load(self, split_effect_dict=None, verbose=False):
         """ loads data, applies fnc in self.fnc_list
+
+        Args:
+            split_effect_dict (dict): keys are splits, values are effects
+                                      applied. note that split must have two
+                                      groups, one is True (effect applied),
+                                      other is False
+            verbose (bool): toggles command line output
+
         """
+        if self.is_loaded:
+            raise AttributeError('already loaded')
+
         # build memmap file
         shape = (*self.ref.shape, self.num_sbj, self.d)
         self.data = np.zeros(shape)
@@ -185,6 +197,16 @@ class FileTree:
         for fnc in self.fnc_list:
             fnc(self)
 
+        # apply effects
+        if split_effect_dict is not None:
+            self.split_effect_dict = split_effect_dict
+            for split, effect in split_effect_dict.items():
+                # note: group True has the effect applied
+                sbj_bool = split.get_bool(True)
+                for sbj_idx in np.where(sbj_bool):
+                    x = self.data[:, :, :, sbj_idx, :]
+                    self.data[:, :, :, sbj_idx, :] = effect.apply(x)
+
         # flush data to memmap, make read only copy
         self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
         self.f_data = pathlib.Path(self.f_data)
@@ -201,63 +223,44 @@ class FileTree:
         self.data = None
         self.f_data = None
         self.__mask = None
+        self.split_effect_dict = dict()
 
     @check_loaded
-    def get_data_subset(self, sbj_list=None):
-        """ returns view of data corresponding only to sbj in sbj_list
-        """
-        raise NotImplementedError
-
-    @check_loaded
-    def to_nii(self, fnc=None, feat=None, sbj_list=None, f_out=None,
-               sbj_bool=None, back=0):
+    def to_nii(self, fnc=None, sbj_list=None, f_out=None, sbj_bool=None):
         """ writes data to a nii file
 
         Args:
             fnc (fnc): accepts data array, returns a 3d volume
-            feat : some feature in feat_list, if passed, fnc returns mean feat
             sbj_list (list): list of sbj to include, if None all sbj used
             f_out (str or Path): output nii file
-            back (float): background value
 
         Returns:
             f_out (Path): nii file out
         """
         # get f_out
         if f_out is None:
-            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+            s_feat = '_'.join(self.feat_list)
+            suffix = f'_{s_feat}.nii.gz'
+            f_out = tempfile.NamedTemporaryFile(suffix=suffix).name
 
         # get sbj_bool
-        assert (sbj_list is None) != (sbj_bool is None), \
-            'sbj_list xor sbj_bool'
         if sbj_bool is None:
-            assert set(self.sbj_list).issuperset(sbj_list), \
-                'sbj not in FileTree'
-            sbj_bool = self.sbj_list_to_bool(sbj_list)
+            if sbj_list is None:
+                # defaults to all sbj
+                sbj_bool = np.atleast_1d([True] * len(self.sbj_list))
+            else:
+                assert set(self.sbj_list).issuperset(sbj_list), \
+                    'sbj not in FileTree'
+                sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # build img
-        if fnc is not None:
-            # build based on custom fnc
-            raise NotImplementedError('how does fnc handle effect?')
-            x = back * np.ones(self.ref.shape)
-            for i, j, k in self.mask.iter_ijk():
-                x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
-        else:
-            # build based on mean feature
-            feat_idx = self.feat_list.index(feat)
-            x = self.data[:, :, :, sbj_bool, feat_idx]
-            if self.split_effect is not None:
-                x = np.array(x)
-                split, effect = self.split_effect
-                # todo: all splits are numpy array
-                # todo: rename sbj_bool -> split
-                # index effect into only active sbj
-                _split = np.array(split)[np.array(sbj_bool)]
-                if _split.sum():
-                    _x = x[effect.mask, :]
-                    _x[:, _split] += effect.mean[feat_idx]
-                    x[effect.mask, :] = _x
-            x = np.mean(x, axis=3)
+        if fnc is None:
+            def fnc(x):
+                return x
+
+        # apply fnc
+        x = self.data[:, :, :, sbj_bool, :]
+        x = fnc(x)
 
         # write to file
         img = nib.Nifti1Image(x, affine=self.ref.affine)

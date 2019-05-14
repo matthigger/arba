@@ -4,11 +4,12 @@ from copy import copy
 
 import nibabel as nib
 import numpy as np
-from arba.region import FeatStat
-from arba.space import Mask
+from scipy.ndimage.morphology import distance_transform_cdt
 from scipy.spatial.distance import dice
 from scipy.stats import mannwhitneyu, multivariate_normal
-from scipy.ndimage.morphology import distance_transform_cdt
+
+from arba.region import FeatStat
+from arba.space import Mask
 
 
 def draw_random_u(d):
@@ -44,7 +45,7 @@ class Effect:
     """
 
     def __init__(self, mask, offset, scale=None, fs=None):
-        self.offset = np.atleast_1d(offset)
+        self.offset = np.atleast_1d(offset).astype(float)
         self.mask = mask
         self.fs = fs
         self.scale = scale
@@ -55,7 +56,7 @@ class Effect:
 
     def to_nii(self, f_out=None):
         if f_out is None:
-            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+            f_out = tempfile.NamedTemporaryFile(suffix=f'_effect.nii.gz').name
             f_out = pathlib.Path(f_out)
 
         img = nib.Nifti1Image(self.eff_img, affine=self.mask.ref.affine)
@@ -122,6 +123,8 @@ class Effect:
         eff = Effect(mask=mask, offset=copy(u), fs=fs, scale=scale)
         eff.t2 = t2
 
+        u = np.atleast_1d(u).astype(float)
+        u *= 1 / np.linalg.norm(u)
         assert np.allclose(eff.u, u), 'direction error'
         assert np.allclose(eff.t2, t2), 't2 scale error'
 
@@ -140,7 +143,7 @@ class Effect:
         if self.fs is None:
             raise AttributeError('fs required to set t2')
         self._eff_img = None
-        self.offset *= np.sqrt(val / self.t2)
+        self.offset *= np.sqrt(float(val) / self.t2)
 
     @property
     def u(self):
