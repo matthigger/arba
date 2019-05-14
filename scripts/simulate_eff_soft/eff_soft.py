@@ -13,11 +13,11 @@ from arba.space import Mask, sample_mask
 from pnl_data.set import hcp_100
 
 feat_tuple = 'fa', 'md'
-num_vox = int(1e5)
-
-eff_num_vox_edge_n_list = [(1000, None),
-                           (200, None),
-                           (1000, 3)]
+num_vox = 3000
+verbose = True
+eff_num_vox_edge_n_list = [(500, None),
+                           (250, None),
+                           (500, 3)]
 eff_t2 = np.logspace(-1, 1, 11)
 
 # build output dir
@@ -76,15 +76,24 @@ with file_tree.loaded():
             seed += 1
 
 # test each method
-for _t2 in tqdm(eff_t2, desc='per t2'):
-    # scale effects
-    for eff in eff_list:
-        eff.t2 = _t2
-    split_eff_dict = {split: eff for eff in eff_list}
+with file_tree.loaded():
+    for _t2 in tqdm(eff_t2, desc='per t2'):
+        # set output folder
+        _folder = folder_out / f't2_{_t2:.1e}'
+        _folder.mkdir()
 
-    _folder = folder_out / f't2_{_t2:.2e}'
-    _folder.mkdir()
+        # scale effects
+        for eff_idx, eff in enumerate(eff_list):
+            eff.t2 = _t2
+            eff.to_nii(f_out=_folder / f'eff_{eff_idx}.nii.gz')
+        split_eff_dict = {split: eff for eff in eff_list}
 
-    with file_tree.loaded(split_eff_dict):
+        # apply effects
+        str_feat = '_'.join(feat_tuple)
+        file_tree.reset_effect(split_eff_dict)
+        file_tree.to_nii(f_out=_folder / f'{str_feat}.nii.gz')
+        file_tree.mask.to_nii(f_out=_folder / 'mask.nii.gz')
+
+        # run
         sg_hist = SegGraphHistT2(file_tree=file_tree, split=split)
-        run_print_single(sg_hist=sg_hist, folder=_folder)
+        run_print_single(sg_hist=sg_hist, folder=_folder, verbose=verbose)
