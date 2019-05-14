@@ -49,9 +49,15 @@ def plot_tree(sg_hist=None, folder=None):
         tree_hist, _ = merge_record.resolve_hist(file_tree=sg_hist.file_tree,
                                                  split=sg_hist.split)
 
+    if len(file_tree.split_effect_dict) == 1:
+        eff = next(iter(file_tree.split_effect_dict.values()))
+        mask = eff.mask
+    else:
+        mask = None
+
     for plt_fnc in (size_v_t2, size_v_pval):
         plt.figure()
-        plt_fnc(tree_hist)
+        plt_fnc(tree_hist, mask=mask)
         save_fig(folder / f'{plt_fnc.__name__}.pdf')
 
 
