@@ -89,17 +89,20 @@ def print_seg(sg_hist=None, folder=None):
         assert sg_hist is not None, 'either sg_hist xor folder'
 
     t2 = sg_hist.get_max_t2_array()
-    t2_idx, num_reg = label(t2)
 
-    t2_idx_list = list()
-    for _t2_idx in range(num_reg):
-        _t2 = t2[t2_idx == _t2_idx][0]
-        t2_idx_list.append((_t2, t2_idx))
-    t2_idx_list = sorted(t2_idx_list)
+    t2_mask_list = list()
+    for _t2 in np.unique(t2.flatten()):
+        if _t2 == 0:
+            continue
+        label_mask, num_label = label(t2 == _t2)
+        for label_idx in range(num_label):
+            mask = (label_idx + 1) == label_mask
+            t2_mask_list.append((_t2, mask))
+    t2_mask_list = sorted(t2_mask_list, reverse=True)
 
     seg = np.zeros(t2.shape)
-    for sort_idx, (_t2, _t2_idx) in enumerate(t2_idx_list):
-        seg[_t2_idx == t2_idx] = sort_idx
+    for sort_idx, (_, mask) in enumerate(t2_mask_list):
+        seg[mask] = sort_idx
 
     # print seg
     seg_img = nib.Nifti1Image(seg, sg_hist.file_tree.ref.affine)
