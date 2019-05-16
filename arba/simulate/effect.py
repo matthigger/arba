@@ -173,10 +173,10 @@ class Effect:
             auc (float): value in [0, 1]
         """
         # mask the statistic
-        stat_vec = x[mask]
+        stat_vec = np.array(x[mask.astype(bool)])
 
         # mask the ground truth to relevant area
-        truth_vec = self.mask[mask]
+        truth_vec = np.array(self.mask[mask.astype(bool)])
 
         # compute x, y
         x = stat_vec[truth_vec == 0]
