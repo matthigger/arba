@@ -2,23 +2,29 @@ import random
 import shutil
 from collections import defaultdict
 
+import matplotlib.pyplot as plt
+import nibabel as nib
 import numpy as np
+import seaborn as sns
 from tqdm import tqdm
 
 from arba.data import FileTree, Split
-from arba.permute import run_print_single
+from arba.permute import run_single, print_seg
+from arba.plot import save_fig
 from arba.seg_graph import SegGraphHistT2
 from arba.simulate import Effect
 from arba.space import Mask, sample_mask
+from mh_pytools import file
 from pnl_data.set import hcp_100
 
 feat_tuple = 'fa', 'md'
-num_vox = 3000
+num_vox = 5000
 verbose = True
-eff_num_vox_edge_n_list = [(500, None),
+eff_num_vox_edge_n_list = [(750, None),
                            (250, None),
-                           (500, 3)]
-eff_t2 = np.logspace(-1, 1, 11)
+                           (750, 3)]
+eff_t2 = np.logspace(-2, 1, 21)
+eff_u = (-1, 0)
 
 # build output dir
 folder_out = hcp_100.folder / 'eff_soft'
@@ -64,7 +70,8 @@ with file_tree.loaded():
                                    num_vox=eff_num_vox,
                                    ref=mask.ref)
             fs = file_tree.get_fs(mask=eff_mask)
-            eff = Effect.from_fs_t2(fs, t2=1, mask=eff_mask, edge_n=eff_edge_n)
+            eff = Effect.from_fs_t2(fs, t2=1, mask=eff_mask, edge_n=eff_edge_n,
+                                    u=eff_u)
             eff_list.append(eff)
 
         # ensure effects do not overlap
@@ -76,6 +83,7 @@ with file_tree.loaded():
             seed += 1
 
 # test each method
+auc_dict = defaultdict(list)
 with file_tree.loaded():
     for _t2 in tqdm(eff_t2, desc='per t2'):
         # set output folder
@@ -86,14 +94,40 @@ with file_tree.loaded():
         for eff_idx, eff in enumerate(eff_list):
             eff.t2 = _t2
             eff.to_nii(f_out=_folder / f'eff_{eff_idx}.nii.gz')
-        split_eff_dict = {split: eff for eff in eff_list}
+            eff.mask.to_nii(f_out=folder_out / f'eff_mask_{eff_idx}.nii.gz')
+        split_eff_list = [(split, eff) for eff in eff_list]
 
         # apply effects
         str_feat = '_'.join(feat_tuple)
-        file_tree.reset_effect(split_eff_dict)
-        file_tree.to_nii(f_out=_folder / f'{str_feat}.nii.gz')
+        file_tree.reset_effect(split_eff_list)
+        file_tree.to_nii(folder=_folder)
         file_tree.mask.to_nii(f_out=_folder / 'mask.nii.gz')
 
         # run
         sg_hist = SegGraphHistT2(file_tree=file_tree, split=split)
-        run_print_single(sg_hist=sg_hist, folder=_folder, verbose=verbose)
+        sg_hist, folder = run_single(sg_hist=sg_hist, folder=_folder,
+                                     verbose=verbose)
+        print_seg(sg_hist=sg_hist, folder=folder)
+        plt.close('all')
+
+        # compute auc
+        img_t2 = nib.load(str(_folder / 't2.nii.gz'))
+        t2 = img_t2.get_data()
+        for eff in eff_list:
+            mask = file_tree.mask - sum(e.mask for e in eff_list) + eff.mask
+            _auc = eff.get_auc(t2, mask)
+            auc_dict[eff].append(_auc)
+
+auc_dict = dict(auc_dict)
+file.save(auc_dict, folder_out / 'auc_dict.p.gz')
+
+# print auc graph
+sns.set(font_scale=1.2)
+plt.figure()
+for (eff, auc), (num_vox, edge_n) in zip(auc_dict.items(),
+                                         eff_num_vox_edge_n_list):
+    label = f'num_vox={num_vox}, edge_n={edge_n}'
+    plt.plot(eff_t2, auc_dict[eff], label=label)
+plt.legend()
+plt.gca().set_xscale('log')
+save_fig(folder_out / 'auc.pdf')
