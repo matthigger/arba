@@ -2,6 +2,7 @@ import os
 import pathlib
 import tempfile
 from contextlib import contextmanager
+from copy import deepcopy
 
 import nibabel as nib
 import numpy as np
@@ -41,10 +42,11 @@ class FileTree:
         mask (Mask): mask of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
-        split_effect (tuple): split, effect
+        split_eff_list = (list): pairs of (split, effect), each effect has been
+                                 applied to sbj in split[True]
 
     Hidden Attributes:
-        __mask (Mask): mask of intersectino of all files (only available when
+        __mask (Mask): mask of intersection of all files (only available when
                        loaded)
     """
 
@@ -82,7 +84,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.split_effect = None
+        self.split_eff_list = []
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only n_sbj remains (in place)
@@ -109,47 +111,66 @@ class FileTree:
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     @check_loaded
-    def get_fs(self, ijk, sbj_list=None, sbj_bool=None):
-
-        # get sbj_bool
+    def get_fs(self, ijk=None, mask=None, sbj_list=None, sbj_bool=None):
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
+        assert (ijk is None) != (mask is None), 'ijk xor mask required'
+
+        # get sbj_bool
         if sbj_bool is None:
+            if sbj_list is None:
+                sbj_list = self.sbj_list
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
-        # build fs
-        i, j, k = ijk
-        x = self.data[i, j, k, :, :]
-
-        # apply effect
-        if self.split_effect is not None:
-            split, effect = self.split_effect
-            if effect.mask[i, j, k]:
-                x = np.array(x)
-                x[split, :] += effect.mean
-
-        x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+        # get data array
+        if ijk is not None:
+            # single point
+            i, j, k = ijk
+            x = self.data[i, j, k, :, :]
+            x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+        else:
+            # mask
+            x = self.data[mask, :, :]
+            x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, **kwargs):
+    def loaded(self, split_eff_list=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
         loaded.  otherwise we're all set, no need to do it again.
         """
         was_loaded = self.is_loaded
-        if not was_loaded:
+
+        # load or check that previous load was equivilent
+        if was_loaded:
+            if split_eff_list is not None:
+                assert split_eff_list == self.split_eff_list, \
+                    'split_eff_list mismatch between load()'
+        else:
             self.load(**kwargs)
+
         try:
             yield self
         finally:
             if not was_loaded:
                 self.unload()
 
-    def load(self, verbose=False):
+    def load(self, split_eff_list=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
+
+        Args:
+            split_eff_list = (list): pairs of (split, effect), each effect has
+                                     been applied to sbj in split[True]
+            verbose (bool): toggles command line output
+            memmap (bool): toggles memory map (self.data becomes read only, but
+                           accesible from all threads to save on memory)
         """
+
+        if self.is_loaded:
+            raise AttributeError('already loaded')
+
         # build memmap file
         shape = (*self.ref.shape, self.num_sbj, self.d)
         self.data = np.zeros(shape)
@@ -176,85 +197,75 @@ class FileTree:
         for fnc in self.fnc_list:
             fnc(self)
 
+        # apply effects
+        self.reset_effect(split_eff_list)
+
         # flush data to memmap, make read only copy
-        self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
-        self.f_data = pathlib.Path(self.f_data)
-        x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                      shape=shape)
-        x[:] = self.data[:]
-        x.flush()
-        self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                              shape=shape)
+        if memmap:
+            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+            self.f_data = pathlib.Path(self.f_data)
+            x = np.memmap(self.f_data, dtype='float32', mode='w+',
+                          shape=shape)
+            x[:] = self.data[:]
+            x.flush()
+            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                                  shape=shape)
+
+    @check_loaded
+    def reset_effect(self, split_eff_list=None):
+
+        def _apply(split_eff_list, negate=False):
+            if split_eff_list is None:
+                return
+
+            for split, effect in split_eff_list:
+                # note: group True has the effect applied
+                for sbj in split[True]:
+                    sbj_idx = self.sbj_list.index(sbj)
+                    x = self.data[:, :, :, sbj_idx, :]
+                    x = effect.apply(x, negate=negate)
+                    self.data[:, :, :, sbj_idx, :] = x
+
+        # rm old effects
+        _apply(self.split_eff_list, negate=True)
+
+        # add new effects
+        _apply(split_eff_list, negate=False)
+
+        # record updates (changes may spoil our record of self.data)
+        self.split_eff_list = deepcopy(split_eff_list)
 
     def unload(self):
         # delete memory map file
-        os.remove(str(self.f_data))
+        if self.f_data is not None and self.f_data.exists():
+            os.remove(str(self.f_data))
+            self.f_data = None
+
         self.data = None
-        self.f_data = None
         self.__mask = None
+        self.split_eff_list = list()
 
     @check_loaded
-    def get_data_subset(self, sbj_list=None):
-        """ returns view of data corresponding only to sbj in sbj_list
-        """
-        raise NotImplementedError
-
-    @check_loaded
-    def to_nii(self, fnc=None, feat=None, sbj_list=None, f_out=None,
-               sbj_bool=None, back=0):
-        """ writes data to a nii file
+    def to_nii(self, folder=None):
+        """ writes each feature to a nii file
 
         Args:
-            fnc (fnc): accepts data array, returns a 3d volume
-            feat : some feature in feat_list, if passed, fnc returns mean feat
-            sbj_list (list): list of sbj to include, if None all sbj used
-            f_out (str or Path): output nii file
-            back (float): background value
+            folder (str or Path): output folder
 
         Returns:
             f_out (Path): nii file out
         """
-        # get f_out
-        if f_out is None:
-            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
-
-        # get sbj_bool
-        assert (sbj_list is None) != (sbj_bool is None), \
-            'sbj_list xor sbj_bool'
-        if sbj_bool is None:
-            assert set(self.sbj_list).issuperset(sbj_list), \
-                'sbj not in FileTree'
-            sbj_bool = self.sbj_list_to_bool(sbj_list)
-
-        # build img
-        if fnc is not None:
-            # build based on custom fnc
-            raise NotImplementedError('how does fnc handle effect?')
-            x = back * np.ones(self.ref.shape)
-            for i, j, k in self.mask.iter_ijk():
-                x[i, j, k] = fnc(self.data[i, j, k, sbj_bool, :])
-        else:
-            # build based on mean feature
-            feat_idx = self.feat_list.index(feat)
-            x = self.data[:, :, :, sbj_bool, feat_idx]
-            if self.split_effect is not None:
-                x = np.array(x)
-                split, effect = self.split_effect
-                # todo: all splits are numpy array
-                # todo: rename sbj_bool -> split
-                # index effect into only active sbj
-                _split = np.array(split)[np.array(sbj_bool)]
-                if _split.sum():
-                    _x = x[effect.mask, :]
-                    _x[:, _split] += effect.mean[feat_idx]
-                    x[effect.mask, :] = _x
-            x = np.mean(x, axis=3)
+        if folder is None:
+            folder = tempfile.TemporaryDirectory().name
+        folder = pathlib.Path(folder)
 
         # write to file
-        img = nib.Nifti1Image(x, affine=self.ref.affine)
-        img.to_filename(str(f_out))
+        for feat_idx, feat in enumerate(self.feat_list):
+            x = self.data[:, :, :, :, feat_idx]
+            img = nib.Nifti1Image(x, affine=self.ref.affine)
+            img.to_filename(str(folder / f'{feat}.nii.gz'))
 
-        return pathlib.Path(f_out)
+        return folder
 
     def sbj_list_to_bool(self, sbj_list=None):
         if sbj_list is None:
