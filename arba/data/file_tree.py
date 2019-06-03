@@ -149,7 +149,7 @@ class FileTree:
                 assert split_eff_list == self.split_eff_list, \
                     'split_eff_list mismatch between load()'
         else:
-            self.load(**kwargs)
+            self.load(split_eff_list=split_eff_list, **kwargs)
 
         try:
             yield self
