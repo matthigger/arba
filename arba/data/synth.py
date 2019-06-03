@@ -29,7 +29,6 @@ class SynthFileTree(FileTree):
         cov = np.atleast_2d(cov)
 
         n_feat = len(mu)
-        shape = *shape, n_feat
         feat_list = [f'feat_{x}' for x in ascii_uppercase[:n_feat]]
 
         sbj_feat_file_tree = defaultdict(dict)
