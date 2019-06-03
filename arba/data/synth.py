@@ -4,7 +4,7 @@ from string import ascii_uppercase
 
 import nibabel as nib
 import numpy as np
-
+import pathlib
 from .file_tree import FileTree
 
 
@@ -15,7 +15,7 @@ class SynthFileTree(FileTree):
     sbj are labelled numerically ('sbj_0', 'sbj_1', ...)
     """
 
-    def __init__(self, n_sbj, shape, mu=0, cov=1):
+    def __init__(self, n_sbj, shape, mu=0, cov=1, folder=None):
         """
 
         Args:
@@ -24,6 +24,10 @@ class SynthFileTree(FileTree):
             mu (np.array): average feature
             cov (np.array): feature covar
         """
+        if folder is None:
+            folder = pathlib.Path(tempfile.TemporaryDirectory().name)
+        else:
+            folder = pathlib.Path(folder)
 
         mu = np.atleast_1d(mu)
         cov = np.atleast_2d(cov)
@@ -41,8 +45,9 @@ class SynthFileTree(FileTree):
             for feat_idx, feat in enumerate(feat_list):
                 f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
                                                 prefix=f'{sbj}_{feat}_').name
+                f = folder / pathlib.Path(f).name
                 img = nib.Nifti1Image(x[..., feat_idx], affine=np.eye(4))
-                img.to_filename(f)
+                img.to_filename(str(f))
 
                 # store
                 sbj_feat_file_tree[sbj][feat] = f
