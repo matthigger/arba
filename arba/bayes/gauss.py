@@ -25,12 +25,16 @@ def get_gauss_and_min_delta(x, alpha=.05):
 
     # find mahalanobis distance maha such that 1 - alpha of prob mass has maha
     # less than or equal to it
-    maha = scipy.stats.chi2.cdf(1 - alpha, df=len(mu))
+    maha = scipy.stats.chi2.ppf(1 - alpha, df=len(mu))
 
     # move from mu towards origin until we reach point whose mahalanobis = maha
-    lower_bnd = -mu
-    _maha = lower_bnd @ np.linalg.inv(cov) @ lower_bnd
-    lower_bnd *= np.sqrt(maha / _maha)
+    cov_inv = np.linalg.inv(cov)
+    offset = -mu
+    _maha = offset @ cov_inv @ offset
+    lower_bnd = offset * np.sqrt(maha / _maha) + mu
+    assert np.isclose(maha,
+                      (lower_bnd - mu) @ cov_inv @ (lower_bnd - mu)), \
+        'compute error'
 
     # set lower_bnd to delta=0 is within the 1-alpha most probable points
     if np.linalg.norm(mu) <= np.linalg.norm(mu - lower_bnd):
