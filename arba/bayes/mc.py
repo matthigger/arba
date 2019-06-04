@@ -1,10 +1,11 @@
 import pymc3 as pm
 
+import numpy as np
 from arba.region import FeatStat
 
 
-def estimate_delta_from_file_tree(file_tree, mask, split):
-    """ estimates delta between observations (from file_tree and split)
+def get_data(file_tree, mask, split):
+    """ gets data associated with file tree, mask and split
 
     Args:
         file_tree (FileTree): data object
@@ -19,19 +20,19 @@ def estimate_delta_from_file_tree(file_tree, mask, split):
 
     data = list()
     for grp, grp_bool in split.bool_iter():
-        data.append(x[grp_bool, :])
+        _x = x[:, grp_bool, :]
+        _x = np.reshape(_x, newshape=(-1, _x.shape[-1]), order='F')
+        data.append(_x)
 
-    return estimate_delta(*data)
+    return data[0], data[1]
 
 
-def estimate_delta(data0, data1, num_sample=5000, seed=1):
+def estimate_delta(data0, data1, **kwargs):
     """ estimates delta between observations
 
     Args:
         data0 (np.array): (num_samples0, d) observations grp 0
         data1 (np.array): (num_samples1, d) observations grp 1
-        num_sample (int): number of samples to draw via mc
-        seed (hashable): seed to initialize mc sampling
 
     Returns:
         model (pm.Model)
@@ -60,6 +61,6 @@ def estimate_delta(data0, data1, num_sample=5000, seed=1):
 
         delta = pm.Deterministic('delta', mu_1 - mu_0)
 
-        trace = pm.sample(random_seed=seed, num_sample=num_sample)
+        trace = pm.sample(**kwargs)
 
     return model, trace
