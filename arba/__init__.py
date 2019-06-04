@@ -1,3 +1,4 @@
+import arba.bayes
 import arba.data
 import arba.plot
 import arba.region
