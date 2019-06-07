@@ -38,3 +38,12 @@ def get_lower_bnd(mu, cov, alpha=.05):
         lower_bnd = np.zeros(mu.shape)
 
     return lower_bnd
+
+
+def bayes_mu_delta(grp_mu_cov_dict):
+    grp0, grp1 = sorted(grp_mu_cov_dict.keys())
+    mu0, cov0 = grp_mu_cov_dict[grp0]
+    mu1, cov1 = grp_mu_cov_dict[grp1]
+    delta_mu = mu1 - mu0
+    delta_cov = cov0 + cov1
+    return delta_mu, delta_cov

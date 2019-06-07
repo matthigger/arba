@@ -4,6 +4,7 @@ from nilearn.plotting import plot_roi
 
 from .norm2d import plot_norm_2d
 from .save_fig import save_fig
+import arba.bayes
 
 sns.set(font_scale=1.2)
 
@@ -35,10 +36,7 @@ def plot_delta(mask, grp_mu_cov_dict, f_bg=None, feat_list=None, f_out=None,
 
     # plot distribution of difference between grp features
     grp0, grp1 = sorted(grp_mu_cov_dict.keys())
-    mu0, cov0 = grp_mu_cov_dict[grp0]
-    mu1, cov1 = grp_mu_cov_dict[grp1]
-    delta_mu = mu1 - mu0
-    delta_cov = cov0 + cov1
+    delta_mu, delta_cov = arba.bayes.bayes_mu_delta(grp_mu_cov_dict)
     label = f'{grp1} - {grp0}'
     _, p = plot_norm_2d(delta_mu, delta_cov, plot_mu=True, label=label,
                         ax=ax2, facecolor='r', alpha=.5)
