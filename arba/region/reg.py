@@ -59,13 +59,13 @@ class Region:
 
     def bayes_mu(self, **kwargs):
         """ computes bayes """
-        mu = sum(self.fs_dict.values()).mean
+        mu = sum(self.fs_dict.values()).mu
         d = len(mu)
 
         grp_mu_cov_dict = dict()
         for grp, fs in self.fs_dict.items():
             mvnorm = arba.bayes.MVNorm.non_inform_dplus1(d, mu=mu)
-            mvnorm = mvnorm.bayes_update(obs_mu=fs.mean,
+            mvnorm = mvnorm.bayes_update(obs_mu=fs.mu,
                                          obs_cov=fs.cov,
                                          num_obs=fs.n)
             deg_free, loc, shape = mvnorm.get_mu_marginal()
