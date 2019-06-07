@@ -8,7 +8,7 @@ sns.set(font_scale=1.2)
 
 
 def plot_norm_2d(mu, cov, plot_mu=True, cdf=[.95], label=None, ax=None,
-                 **kwargs):
+                 reset_lim=True, **kwargs):
     """ plots a 2d gaussian
 
     Args:
@@ -23,9 +23,10 @@ def plot_norm_2d(mu, cov, plot_mu=True, cdf=[.95], label=None, ax=None,
     Returns:
         ax (plt.Axes): axis plotted on
     """
-
     if ax is None:
         fig, ax = plt.subplots(1, 1)
+    else:
+        plt.sca(ax)
 
     w, v = np.linalg.eig(cov)
     eig_vec0 = w[0] * v[:, 0]
@@ -34,17 +35,20 @@ def plot_norm_2d(mu, cov, plot_mu=True, cdf=[.95], label=None, ax=None,
     def compute_draw_cdf(c):
         """ computes and draws an ellipse which contains alpha % of mass
         """
-
+        # compute target mahalanobis
         maha = scipy.stats.chi2.ppf(c, df=len(mu))
-        scale = np.sqrt(maha / w[0])
+
+        # compute vector scaling (note: maha of eig vec is eig value)
+        scale_width = np.sqrt(maha / w[0])
+        scale_height = np.sqrt(maha / w[1])
 
         if label is not None:
             _label = f'{label} {c:.2f}'
 
         # draw ellipse
         ell = Ellipse(xy=mu, angle=angle, label=_label,
-                      width=w[0] * scale * 2,
-                      height=w[1] * scale * 2, **kwargs)
+                      width=w[0] * scale_width * 2,
+                      height=w[1] * scale_height * 2, **kwargs)
         ax.add_artist(ell)
         return ell
 
@@ -54,11 +58,8 @@ def plot_norm_2d(mu, cov, plot_mu=True, cdf=[.95], label=None, ax=None,
     if plot_mu:
         plt.scatter(mu[0], mu[1], **kwargs)
 
-    # gut check: draw and plot samples to get a sense of cdf
-    x = np.random.multivariate_normal(mean=mu, cov=cov, size=100)
-    plt.scatter(x[:, 0], x[:, 1], **kwargs)
-
-    plt.grid()
+    plt.sca(ax)
+    plt.grid(True)
 
     return ax, ell
 
@@ -71,22 +72,13 @@ if __name__ == '__main__':
 
     np.random.seed(1)
 
-    kwargs = {'alpha': .3, 'ax': ax}
-
-    _, p0 = plot_norm_2d(mu=(0, 0), cov=np.eye(2),
-                         facecolor='k', label='z', **kwargs)
-    _, p1 = plot_norm_2d(mu=(1, 1), cov=np.eye(2),
-                         facecolor='b', label='shifted z', **kwargs)
-    patch_list = [p0, p1]
     for idx in range(3):
         _cov = make_spd_matrix(2)
-        _, p = plot_norm_2d(mu=(1, 1), cov=_cov,
-                            facecolor='g', label=f'random{idx}', **kwargs)
-        patch_list.append(p)
+        _, p = plot_norm_2d(mu=(0, 0), cov=_cov,
+                            facecolor='g', label=f'random{idx}', alpha=.5)
+        plt.xlim(-5, 5)
+        plt.ylim(-5, 5)
+        plt.legend(handles=[p])
+        plt.grid(True)
 
-    plt.xlim(-5, 5)
-    plt.ylim(-5, 5)
-    plt.legend(handles=patch_list)
-    plt.grid(True)
-
-    print(arba.plot.save_fig())
+        print(arba.plot.save_fig())
