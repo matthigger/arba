@@ -1,3 +1,6 @@
+import arba.bayes
+
+
 class Region:
     """ a volume and n, mu, cov of the observed features of all populations
 
@@ -53,6 +56,25 @@ class Region:
 
     def __lt__(self, other):
         return len(self) < len(other)
+
+    def bayes_mu(self, **kwargs):
+        """ computes bayes """
+        mu = sum(self.fs_dict.values()).mean
+        d = len(mu)
+
+        grp_mu_cov_dict = dict()
+        for grp, fs in self.fs_dict.items():
+            mvnorm = arba.bayes.MVNorm.non_inform_dplus1(d, mu=mu)
+            mvnorm = mvnorm.bayes_update(obs_mu=fs.mean,
+                                         obs_cov=fs.cov,
+                                         num_obs=fs.n)
+            deg_free, loc, shape = mvnorm.get_mu_marginal()
+
+            # assume params of multivariate t are gaussian (converges as
+            # deg_free diverges)
+            grp_mu_cov_dict[grp] = loc, shape
+
+        return grp_mu_cov_dict
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):
