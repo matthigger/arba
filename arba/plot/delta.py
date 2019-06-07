@@ -9,7 +9,7 @@ sns.set(font_scale=1.2)
 
 
 def plot_delta(mask, grp_mu_cov_dict, f_bg=None, feat_list=None, f_out=None,
-               feat_xylim=None, delta_xylim=None):
+               feat_xylim=None, delta_xylim=None, mask_target=None):
     fig = plt.figure()
     ax0 = plt.subplot2grid((2, 2), (0, 0), colspan=2)
     ax1 = plt.subplot2grid((2, 2), (1, 0))
@@ -17,8 +17,12 @@ def plot_delta(mask, grp_mu_cov_dict, f_bg=None, feat_list=None, f_out=None,
 
     # plot mask of position
     f_roi = mask.to_nii()
-    plot_roi(roi_img=str(f_roi), bg_img=str(f_bg), display_mode='ortho',
-             figure=fig, axes=ax0)
+    display = plot_roi(roi_img=str(f_roi), bg_img=str(f_bg),
+                       display_mode='ortho', figure=fig, axes=ax0)
+
+    if mask_target is not None:
+        f_mask_target = str(mask_target.to_nii())
+        display.add_contours(img=f_mask_target, colors='r', levels=[.5])
 
     # plot distribution of features per grp
     patch_list = list()

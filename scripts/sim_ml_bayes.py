@@ -1,24 +1,25 @@
 import pathlib
 import tempfile
 
+import matplotlib.pyplot as plt
+import networkx as nx
 import nibabel as nib
 import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
 
 import arba
 from mh_pytools import file
 
 # file tree
-n_sbj = 15
+n_sbj = 10
 mu = (0, 0)
-cov = np.eye(2)
-shape = 5, 5, 5
-
-node_to_examine = 227
+cov = np.eye(2) * 2
+shape = 8, 8, 8
 
 # effect
 mask = np.zeros(shape)
-mask[2:4, 2:4, 2:4] = 1
-offset = (3, -1)
+mask[2:5, 2:5, 2:5] = 1
+offset = (1, 1)
 
 # bayes threshold
 alpha = .05
@@ -34,6 +35,7 @@ ft = arba.data.SynthFileTree(n_sbj=n_sbj, shape=shape, mu=mu, cov=cov,
                              folder=_folder)
 
 # build effect
+mask = arba.space.Mask(mask, ref=ft.ref)
 effect = arba.simulate.Effect(mask=mask, offset=offset)
 
 # build 'split', defines sbj which are affected
@@ -57,7 +59,7 @@ with ft.loaded(split_eff_list=[(split, effect)]):
     f = folder / 'sg_hist.p.gz'
     file.save(sg_hist, f)
 
-    # run bayes on each volume, record mv_norm and lower_bnd
+    # save hierarchical segmentation
     arg_list = list()
     merge_record = sg_hist.merge_record
     merge_record.to_nii(f_out=folder / 'seg_hier.nii.gz', n=100)
@@ -68,14 +70,39 @@ with ft.loaded(split_eff_list=[(split, effect)]):
     f_bg = folder / f'{ft.feat_list[0]}_sbj_mean.nii.gz'
     img.to_filename(str(f_bg))
 
+    # find node which is closest to the effect region (via dice score)
+    node, d_max = merge_record.get_node_max_dice(effect.mask)
+    print(f'node: {node} d_max: {d_max}')
+
+    node_set = {node}
+    node_set |= nx.ancestors(merge_record, node)
+    while True:
+        node = next(merge_record.neighbors(node), None)
+        if node is None:
+            break
+        node_set.add(node)
+
     # examine node of interest
-    reg = merge_record.resolve_node(node=node_to_examine,
-                                    file_tree=ft,
-                                    split=split)
-    grp_mu_cov_dict = {grp: (fs.mu, fs.cov) for grp, fs in reg.fs_dict.items()}
-    f_out = folder / f'node_{node_to_examine}.pdf'
-    mask = reg.pc_ijk.to_mask(shape=ft.ref.shape)
-    arba.plot.plot_delta(mask=mask, grp_mu_cov_dict=grp_mu_cov_dict, f_bg=f_bg,
-                         feat_list=ft.feat_list, f_out=f_out,
-                         feat_xylim=((-3, 13), (-3, 13)),
-                         delta_xylim=((-5, 5), (-5, 5)))
+    f_out = folder / f'localize_effect.pdf'
+    with PdfPages(f_out) as pdf:
+        for node in sorted(node_set):
+            reg = merge_record.resolve_node(node=node,
+                                            file_tree=ft,
+                                            split=split)
+            grp_mu_cov_dict = reg.bayes_mu()
+
+            mask = reg.pc_ijk.to_mask(shape=ft.ref.shape)
+            arba.plot.plot_delta(mask=mask, grp_mu_cov_dict=grp_mu_cov_dict,
+                                 mask_target=effect.mask,
+                                 f_bg=f_bg,
+                                 feat_list=ft.feat_list,
+                                 feat_xylim=((-3, 3), (-3, 3)),
+                                 delta_xylim=((-3, 3), (-3, 3)))
+
+            fig = plt.gcf()
+            sens, spec = effect.get_sens_spec(estimate=mask, mask=ft.mask)
+            num_obs = mask.sum() * n_sbj
+            fig.suptitle(f'num_obs: {num_obs}, sens: {sens:.2f}, spec: {spec:.2f}')
+            fig.set_size_inches(10, 10)
+            pdf.savefig(plt.gcf(), bbox_inches='tight')
+            plt.close()
