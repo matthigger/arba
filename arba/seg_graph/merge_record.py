@@ -4,6 +4,7 @@ import tempfile
 import networkx as nx
 import nibabel as nib
 import numpy as np
+from scipy.spatial.distance import dice
 
 from .seg_graph import SegGraph
 from ..region import RegionWardGrp
@@ -94,6 +95,32 @@ class MergeRecord(nx.DiGraph):
                 return n
             else:
                 n = _n
+
+    def get_node_max_dice(self, mask):
+        pc = PointCloud.from_mask(mask)
+        node_set = set()
+        for ijk in pc:
+            # get node
+            node = self.ijk_leaf_dict[ijk]
+
+            # add node and all
+            node_set.add(node)
+            node_set |= nx.ancestors(self, node)
+
+        assert pc, 'no intersection with mask'
+
+        d_max = 0
+        for node in node_set:
+            # compute dice of the node
+            node_mask = self.get_pc(node).to_mask(shape=self.ref.shape)
+            d = 1 - dice(mask.flatten(), node_mask.flatten())
+
+            # store if max dice
+            if d > d_max:
+                node_min_dice = node
+                d_max = d
+
+        return node_min_dice, d_max
 
     def merge(self, reg_tuple=None, ijk_tuple=None):
         """ records merge() operation
