@@ -5,21 +5,25 @@ import nibabel as nib
 import numpy as np
 
 import arba
-from mh_pytools import file, parallel
+from mh_pytools import file
 
 # file tree
-n_sbj = 10
+n_sbj = 15
 mu = (0, 0)
 cov = np.eye(2)
-shape = 5, 5, 1
-t
+shape = 5, 5, 5
+
+node_to_examine = 227
+
 # effect
 mask = np.zeros(shape)
-mask[2:4, 2:4, 0] = 1
-offset = (1, 1)
+mask[2:4, 2:4, 2:4] = 1
+offset = (3, -1)
 
 # bayes threshold
 alpha = .05
+
+np.random.seed(1)
 
 # build file tree
 folder = pathlib.Path(tempfile.TemporaryDirectory().name)
@@ -56,36 +60,22 @@ with ft.loaded(split_eff_list=[(split, effect)]):
     # run bayes on each volume, record mv_norm and lower_bnd
     arg_list = list()
     merge_record = sg_hist.merge_record
-    for node in merge_record.nodes:
-        # get mask
-        pc = merge_record.get_pc(node)
-        mask = pc.to_mask()
+    merge_record.to_nii(f_out=folder / 'seg_hier.nii.gz', n=100)
 
-        #
-        data0, data1 = arba.bayes.get_data(file_tree=ft, mask=mask,
-                                           split=split)
-        d = {'data0': data0,
-             'data1': data1,
-             'node': node}
+    # build background image
+    x = ft.data[:, :, :, :, 0].mean(axis=3)
+    img = nib.Nifti1Image(x, ft.ref.affine)
+    f_bg = folder / f'{ft.feat_list[0]}_sbj_mean.nii.gz'
+    img.to_filename(str(f_bg))
 
-        arg_list.append(d)
-
-
-def fnc(data0, data1, node):
-    # run bayes
-    _, trace = arba.bayes.estimate_delta(data0=data0, data1=data1, cores=1)
-
-    x = trace['delta']
-    mu = np.mean(x, axis=0)
-    cov = np.cov(x.T)
-
-    return node, (mu, cov)
-
-
-# run par func
-res_out = parallel.run_par_fnc(fnc, arg_list, desc='bayes per region')
-node_mu_cov_dict = dict(res_out)
-
-# save
-f = folder / 'node_mu_cov_dict.p.gz'
-file.save(node_mu_cov_dict, f)
+    # examine node of interest
+    reg = merge_record.resolve_node(node=node_to_examine,
+                                    file_tree=ft,
+                                    split=split)
+    grp_mu_cov_dict = {grp: (fs.mu, fs.cov) for grp, fs in reg.fs_dict.items()}
+    f_out = folder / f'node_{node_to_examine}.pdf'
+    mask = reg.pc_ijk.to_mask(shape=ft.ref.shape)
+    arba.plot.plot_delta(mask=mask, grp_mu_cov_dict=grp_mu_cov_dict, f_bg=f_bg,
+                         feat_list=ft.feat_list, f_out=f_out,
+                         feat_xylim=((-3, 13), (-3, 13)),
+                         delta_xylim=((-5, 5), (-5, 5)))
