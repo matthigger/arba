@@ -38,14 +38,17 @@ class MVNorm:
         return deg_free, loc, shape
 
     @staticmethod
-    def non_inform_dplus1(d, num_obs=1, mu=None):
+    def non_inform_dplus1(d, cov=None, num_obs=1, mu=None):
         assert d > 1, 'd must be > 1'
 
         if mu is None:
             mu = np.zeros(d)
 
+        if cov is None:
+            cov = np.eye(d)
+
         return MVNorm(mu=mu,
-                      lam=np.eye(d),
+                      lam=cov * num_obs,
                       num_obs=num_obs,
                       deg_free=d + 1)
 

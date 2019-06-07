@@ -14,15 +14,12 @@ from mh_pytools import file
 n_sbj = 10
 mu = (0, 0)
 cov = np.eye(2) * 2
-shape = 8, 8, 8
+shape = 10, 10, 10
 
 # effect
 mask = np.zeros(shape)
-mask[2:5, 2:5, 2:5] = 1
+mask[0:5, 0:5, 0:5] = 1
 offset = (1, 1)
-
-# bayes threshold
-alpha = .05
 
 np.random.seed(1)
 
@@ -77,9 +74,10 @@ with ft.loaded(split_eff_list=[(split, effect)]):
     node_set = {node}
     node_set |= nx.ancestors(merge_record, node)
     while True:
-        node = next(merge_record.neighbors(node), None)
-        if node is None:
+        node_next = list(merge_record.neighbors(node))
+        if not node_next:
             break
+        node = max(node_next)
         node_set.add(node)
 
     # examine node of interest
@@ -102,7 +100,8 @@ with ft.loaded(split_eff_list=[(split, effect)]):
             fig = plt.gcf()
             sens, spec = effect.get_sens_spec(estimate=mask, mask=ft.mask)
             num_obs = mask.sum() * n_sbj
-            fig.suptitle(f'num_obs: {num_obs}, sens: {sens:.2f}, spec: {spec:.2f}')
+            fig.suptitle(
+                f'num_obs: {num_obs}, sens: {sens:.2f}, spec: {spec:.2f}')
             fig.set_size_inches(10, 10)
             pdf.savefig(plt.gcf(), bbox_inches='tight')
             plt.close()

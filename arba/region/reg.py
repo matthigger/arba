@@ -57,14 +57,18 @@ class Region:
     def __lt__(self, other):
         return len(self) < len(other)
 
-    def bayes_mu(self, **kwargs):
+    def bayes_mu(self, num_vox_prior_weight=5, **kwargs):
         """ computes bayes """
-        mu = sum(self.fs_dict.values()).mu
-        d = len(mu)
+        fs_sum = sum(self.fs_dict.values())
+        # prior has same weight as a single voxel's observation
+        num_obs_prior = int(fs_sum.n / len(self)) * num_vox_prior_weight
 
         grp_mu_cov_dict = dict()
         for grp, fs in self.fs_dict.items():
-            mvnorm = arba.bayes.MVNorm.non_inform_dplus1(d, mu=mu)
+            mvnorm = arba.bayes.MVNorm.non_inform_dplus1(len(fs_sum.mu),
+                                                         mu=fs_sum.mu,
+                                                         num_obs=num_obs_prior,
+                                                         cov=fs_sum.cov)
             mvnorm = mvnorm.bayes_update(obs_mu=fs.mu,
                                          obs_cov=fs.cov,
                                          num_obs=fs.n)
