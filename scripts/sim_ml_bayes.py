@@ -80,6 +80,15 @@ with ft.loaded(split_eff_list=[(split, effect)]):
         node = max(node_next)
         node_set.add(node)
 
+    # plot maha(0) vs size
+    sg, _ = merge_record.resolve_hist(file_tree=ft, split=split)
+    arba.plot.size_v_cdf_mu_bayes(sg, mask=effect.mask, mask_label='% effect')
+    arba.plot.save_fig(f_out=folder / 'size_v_cdf.pdf')
+
+    arba.plot.size_v_norm_95_mu_bayes(sg, mask=effect.mask,
+                                      mask_label='% effect')
+    arba.plot.save_fig(f_out=folder / 'size_v_lower_bnd.pdf')
+
     # examine node of interest
     f_out = folder / f'localize_effect.pdf'
     with PdfPages(f_out) as pdf:
