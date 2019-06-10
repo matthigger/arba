@@ -57,7 +57,7 @@ class Region:
     def __lt__(self, other):
         return len(self) < len(other)
 
-    def bayes_mu(self, num_vox_prior_weight=5, **kwargs):
+    def bayes_mu(self, num_vox_prior_weight=10, **kwargs):
         """ computes bayes """
         fs_sum = sum(self.fs_dict.values())
         # prior has same weight as a single voxel's observation
