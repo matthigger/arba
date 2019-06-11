@@ -9,7 +9,7 @@ import arba.bayes
 sns.set(font_scale=1.2)
 
 
-def plot_delta(mask, grp_mu_cov_dict, f_bg=None, feat_list=None, f_out=None,
+def plot_delta(mask, grp_mu_dict, f_bg=None, feat_list=None, f_out=None,
                feat_xylim=None, delta_xylim=None, mask_target=None):
     fig = plt.figure()
     ax0 = plt.subplot2grid((2, 2), (0, 0), colspan=2)
@@ -28,15 +28,15 @@ def plot_delta(mask, grp_mu_cov_dict, f_bg=None, feat_list=None, f_out=None,
     # plot distribution of features per grp
     patch_list = list()
     plt.sca(ax1)
-    for (grp, (mu, cov)), color in zip(grp_mu_cov_dict.items(), 'bg'):
+    for (grp, (mu, cov)), color in zip(grp_mu_dict.items(), 'bg'):
         _, p = plot_norm_2d(mu, cov, plot_mu=True, label=grp, ax=ax1,
                             facecolor=color, alpha=.5)
         patch_list.append(p)
     plt.legend(handles=patch_list)
 
     # plot distribution of difference between grp features
-    grp0, grp1 = sorted(grp_mu_cov_dict.keys())
-    delta_mu, delta_cov = arba.bayes.bayes_mu_delta(grp_mu_cov_dict)
+    grp0, grp1 = sorted(grp_mu_dict.keys())
+    delta_mu, delta_cov = arba.bayes.bayes_mu_delta(grp_mu_dict)
     label = f'{grp1} - {grp0}'
     _, p = plot_norm_2d(delta_mu, delta_cov, plot_mu=True, label=label,
                         ax=ax2, facecolor='r', alpha=.5)
