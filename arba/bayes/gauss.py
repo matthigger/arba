@@ -2,6 +2,40 @@ import numpy as np
 import scipy.stats
 
 
+def get_maha(reg, **kwargs):
+    grp_mu_dict, grp_cov_dict = reg.bayes()
+
+    # estimate mu via normal approximation of t distribution
+    mu, cov = bayes_mu_delta(grp_mu_dict)
+
+    # get vector closest to origin which has at least
+    lower_bnd = get_lower_bnd(mu, cov, **kwargs)
+
+    # average grp covariance
+    cov_point_est = np.mean([lam / d for lam, d in grp_cov_dict.values()],
+                            axis=0)
+
+    # compute maha
+    maha = lower_bnd @ np.linalg.inv(cov_point_est) @ lower_bnd
+
+    return maha
+
+
+def bayes_mu_delta(grp_mu_dict):
+    # order groups
+    grp0, grp1 = sorted(grp_mu_dict.keys())
+
+    # get mean covar per grp
+    mu0, cov0 = grp_mu_dict[grp0]
+    mu1, cov1 = grp_mu_dict[grp1]
+
+    # estimate group difference as gaussian
+    delta_mu = mu1 - mu0
+    delta_cov = cov0 + cov1
+
+    return delta_mu, delta_cov
+
+
 def get_lower_bnd(mu, cov, alpha=.05):
     """ estimate prob of delta as a gaussian, returns lower bound on delta
 
@@ -38,12 +72,3 @@ def get_lower_bnd(mu, cov, alpha=.05):
         lower_bnd = np.zeros(mu.shape)
 
     return lower_bnd
-
-
-def bayes_mu_delta(grp_mu_dict):
-    grp0, grp1 = sorted(grp_mu_dict.keys())
-    mu0, cov0 = grp_mu_dict[grp0]
-    mu1, cov1 = grp_mu_dict[grp1]
-    delta_mu = mu1 - mu0
-    delta_cov = cov0 + cov1
-    return delta_mu, delta_cov

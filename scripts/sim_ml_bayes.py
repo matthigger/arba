@@ -49,12 +49,17 @@ with ft.loaded(split_eff_list=[(split, effect)]):
         img.to_filename(str(folder / f'{feat}.nii.gz'))
 
     # agglomerative clustering
-    sg_hist = arba.seg_graph.SegGraphHistory(file_tree=ft, split=split)
+    sg_hist = arba.seg_graph.SegGraphBayes(file_tree=ft, split=split)
     sg_hist.reduce_to(1)
 
     # save
     f = folder / 'sg_hist.p.gz'
     file.save(sg_hist, f)
+
+    # build maha img
+    maha = sg_hist.get_max_lower_bnd_array()
+    maha = nib.Nifti1Image(maha, ft.ref.affine)
+    maha.to_filename(str(folder / 'maha.nii.gz'))
 
     # save hierarchical segmentation
     arg_list = list()

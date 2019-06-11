@@ -5,14 +5,14 @@ import numpy as np
 import scipy.stats
 import seaborn as sns
 
-from arba.bayes import bayes_mu_delta, get_lower_bnd
+import arba.bayes
 from arba.space.mask import Mask
 
 
 def size_v_cdf_mu_bayes(*args, **kwargs):
     def get_norm_delta(reg):
         grp_mu_cov_dict = reg.bayes_mu()
-        mu, cov = bayes_mu_delta(grp_mu_cov_dict)
+        mu, cov = arba.bayes.bayes_mu_delta(grp_mu_cov_dict)
         maha = mu @ np.linalg.inv(cov) @ mu
         raise NotImplementedError('line below has theory error!')
         cdf = 1 - scipy.stats.chi2.cdf(maha, df=len(mu))
@@ -22,18 +22,12 @@ def size_v_cdf_mu_bayes(*args, **kwargs):
     return scatter_tree(*args, fnc=get_norm_delta, ylabel=ylabel, **kwargs)
 
 
-def size_v_norm_95_mu_bayes(*args, **kwargs):
-    def get_norm_delta(reg):
-        grp_mu_dict, grp_cov_dict = reg.bayes()
-        mu, cov = bayes_mu_delta(grp_mu_dict)
-        lower_bnd = get_lower_bnd(mu, cov, alpha=.05)
-        cov_point_est = np.mean([lam / d for lam, d in grp_cov_dict.values()],
-                                axis=0)
-        return lower_bnd @ np.linalg.inv(cov_point_est) @ lower_bnd
+def size_v_norm_95_mu_bayes(*args, alpha=.05, **kwargs):
+    def fnc(reg):
+        return arba.bayes.get_maha(reg, alpha=alpha)
 
-    ylabel = r'lower bound on maha'
-    return scatter_tree(*args, fnc=get_norm_delta, ylabel=ylabel, log_y=False,
-                        **kwargs)
+    ylabel = f'lower bound ({alpha:.2f}) maha'
+    return scatter_tree(*args, fnc=fnc, ylabel=ylabel, log_y=False, **kwargs)
 
 
 def size_v_mu_diff(*args, **kwargs):
