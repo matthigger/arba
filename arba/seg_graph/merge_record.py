@@ -29,9 +29,11 @@ class MergeRecord(nx.DiGraph):
     def __init__(self, mask=None, pc=None, ref=None):
         super().__init__()
 
-        assert (mask is None) != (pc is None), 'either mask xor pc required'
         if pc is None:
-            pc = PointCloud.from_mask(mask)
+            if mask is None:
+                pc = set()
+            else:
+                pc = PointCloud.from_mask(mask)
 
         # define space
         self.ref = ref
