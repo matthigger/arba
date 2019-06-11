@@ -11,15 +11,15 @@ import arba
 from mh_pytools import file
 
 # file tree
-n_sbj = 10
+n_sbj = 100
 mu = (0, 0)
-cov = np.eye(2) * 2
+cov = np.eye(2) * 1
 shape = 10, 10, 10
 
 # effect
 mask = np.zeros(shape)
 mask[0:5, 0:5, 0:5] = 1
-offset = (1, 1)
+offset = (.5, .5)
 
 np.random.seed(1)
 
@@ -82,8 +82,8 @@ with ft.loaded(split_eff_list=[(split, effect)]):
 
     # plot maha(0) vs size
     sg, _ = merge_record.resolve_hist(file_tree=ft, split=split)
-    arba.plot.size_v_cdf_mu_bayes(sg, mask=effect.mask, mask_label='% effect')
-    arba.plot.save_fig(f_out=folder / 'size_v_cdf.pdf')
+    # arba.plot.size_v_cdf_mu_bayes(sg, mask=effect.mask, mask_label='% effect')
+    # arba.plot.save_fig(f_out=folder / 'size_v_cdf.pdf')
 
     arba.plot.size_v_norm_95_mu_bayes(sg, mask=effect.mask,
                                       mask_label='% effect')
@@ -96,10 +96,10 @@ with ft.loaded(split_eff_list=[(split, effect)]):
             reg = merge_record.resolve_node(node=node,
                                             file_tree=ft,
                                             split=split)
-            grp_mu_cov_dict = reg.bayes_mu()
+            grp_mu_dict, grp_cov_dict = reg.bayes()
 
             mask = reg.pc_ijk.to_mask(shape=ft.ref.shape)
-            arba.plot.plot_delta(mask=mask, grp_mu_cov_dict=grp_mu_cov_dict,
+            arba.plot.plot_delta(mask=mask, grp_mu_dict=grp_mu_dict,
                                  mask_target=effect.mask,
                                  f_bg=f_bg,
                                  feat_list=ft.feat_list,

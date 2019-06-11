@@ -14,6 +14,7 @@ def size_v_cdf_mu_bayes(*args, **kwargs):
         grp_mu_cov_dict = reg.bayes_mu()
         mu, cov = bayes_mu_delta(grp_mu_cov_dict)
         maha = mu @ np.linalg.inv(cov) @ mu
+        raise NotImplementedError('line below has theory error!')
         cdf = 1 - scipy.stats.chi2.cdf(maha, df=len(mu))
         return cdf
 
@@ -23,12 +24,14 @@ def size_v_cdf_mu_bayes(*args, **kwargs):
 
 def size_v_norm_95_mu_bayes(*args, **kwargs):
     def get_norm_delta(reg):
-        grp_mu_cov_dict = reg.bayes_mu()
-        mu, cov = bayes_mu_delta(grp_mu_cov_dict)
+        grp_mu_dict, grp_cov_dict = reg.bayes()
+        mu, cov = bayes_mu_delta(grp_mu_dict)
         lower_bnd = get_lower_bnd(mu, cov, alpha=.05)
-        return np.linalg.norm(lower_bnd)
+        cov_point_est = np.mean([lam / d for lam, d in grp_cov_dict.values()],
+                                axis=0)
+        return lower_bnd @ np.linalg.inv(cov_point_est) @ lower_bnd
 
-    ylabel = r'min ||delta|| @ cdf = .05'
+    ylabel = r'lower bound on maha'
     return scatter_tree(*args, fnc=get_norm_delta, ylabel=ylabel, log_y=False,
                         **kwargs)
 
