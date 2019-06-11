@@ -50,7 +50,7 @@ with ft.loaded(split_eff_list=[(split, effect)]):
 
     # agglomerative clustering
     sg_hist = arba.seg_graph.SegGraphBayes(file_tree=ft, split=split)
-    sg_hist.reduce_to(1)
+    sg_hist.reduce_to(1, verbose=True)
 
     # save
     f = folder / 'sg_hist.p.gz'
@@ -58,8 +58,14 @@ with ft.loaded(split_eff_list=[(split, effect)]):
 
     # build maha img
     maha = sg_hist.get_max_lower_bnd_array()
-    maha = nib.Nifti1Image(maha, ft.ref.affine)
-    maha.to_filename(str(folder / 'maha.nii.gz'))
+    maha_img = nib.Nifti1Image(maha, ft.ref.affine)
+    maha_img.to_filename(str(folder / 'maha.nii.gz'))
+
+    # print auc
+    auc = effect.get_auc(maha, ft.mask)
+    with open(str(folder / 'auc.txt'), 'w') as f:
+        print(f'auc: {auc:.4f}', file=f)
+    print(f'auc: {auc:.4f}')
 
     # save hierarchical segmentation
     arg_list = list()
