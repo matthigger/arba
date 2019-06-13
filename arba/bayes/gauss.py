@@ -6,7 +6,7 @@ def get_maha(reg, **kwargs):
     grp_mu_dict, grp_cov_dict = reg.bayes()
 
     # estimate mu via normal approximation of t distribution
-    mu, cov = bayes_mu_delta(grp_mu_dict)
+    _, mu, cov = bayes_mu_delta(grp_mu_dict)
 
     # get vector closest to origin which has at least
     lower_bnd = get_lower_bnd(mu, cov, **kwargs)
@@ -21,9 +21,15 @@ def get_maha(reg, **kwargs):
     return maha
 
 
-def bayes_mu_delta(grp_mu_dict):
+def bayes_mu_delta(grp_mu_dict, grp1=None):
     # order groups
-    grp0, grp1 = sorted(grp_mu_dict.keys())
+    if grp1 is None:
+        # choose arbitrary grp ordering
+        grp0, grp1 = sorted(grp_mu_dict.keys())
+    else:
+        assert len(grp_mu_dict) == 2
+        assert grp1 in grp_mu_dict.keys()
+        grp0 = next(grp for grp in grp_mu_dict.keys() if grp != grp1)
 
     # get mean covar per grp
     mu0, cov0 = grp_mu_dict[grp0]
@@ -33,7 +39,7 @@ def bayes_mu_delta(grp_mu_dict):
     delta_mu = mu1 - mu0
     delta_cov = cov0 + cov1
 
-    return delta_mu, delta_cov
+    return (grp0, grp1), delta_mu, delta_cov
 
 
 def get_lower_bnd(mu, cov, alpha=.05):

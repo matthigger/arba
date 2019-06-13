@@ -12,7 +12,7 @@ from arba.space.mask import Mask
 def size_v_cdf_mu_bayes(*args, **kwargs):
     def get_norm_delta(reg):
         grp_mu_cov_dict = reg.bayes_mu()
-        mu, cov = arba.bayes.bayes_mu_delta(grp_mu_cov_dict)
+        _, mu, cov = arba.bayes.bayes_mu_delta(grp_mu_cov_dict)
         maha = mu @ np.linalg.inv(cov) @ mu
         raise NotImplementedError('line below has theory error!')
         cdf = 1 - scipy.stats.chi2.cdf(maha, df=len(mu))
