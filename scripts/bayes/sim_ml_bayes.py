@@ -14,22 +14,34 @@ from mh_pytools import file
 from pnl_data.set.hcp_100 import get_file_tree
 
 
-def get_f_out(fnc, suffix='.nii.gz'):
-    def wrapped(*args, f_out=None, **kwargs):
-        if f_out is None:
-            f_out = tempfile.NamedTemporaryFile(suffix=suffix)
-        f_out = pathlib.Path(f_out)
-        return fnc(*args, f_out=f_out, **kwargs)
-
-    return wrapped
-
-
-@get_f_out
 def print_score_arba(sg_hist, f_out):
     maha = sg_hist.get_max_lower_bnd_array()
     maha_img = nib.Nifti1Image(maha, sg_hist.file_tree.ref.affine)
     maha_img.to_filename(str(f_out))
-    return f_out
+
+
+def get_maha(reg):
+    fs0, fs1 = reg.fs_dict.values()
+    delta = fs1.mu - fs0.mu
+    cov = (fs1 + fs0).cov
+    return np.sqrt(delta @ np.linalg.inv(cov) @ delta)
+
+
+def print_score_vba_rba(sg_hist, f_out_vba, f_rba=None, f_out_rba=None):
+    assert sg_hist.file_tree.is_loaded, 'file_tree must be loaded'
+
+    file_tree = sg_hist.file_tree
+    split = file_tree.split_eff_grp_list[0][0]
+
+    sg_vba, _, _ = next(sg_hist.merge_record.get_iter_sg(file_tree=file_tree,
+                                                         split=split))
+
+    sg_vba.to_nii(f_out=f_out_vba, fnc=get_maha)
+
+    if f_rba is not None:
+        sg_vba.merge_by_atlas(f_region=f_rba, skip_zero=False)
+        sg_rba = sg_vba
+        sg_rba.to_nii(f_out=f_out_rba, fnc=get_maha)
 
 
 def compute_auc():
@@ -67,9 +79,13 @@ def run(file_tree, split_eff_grp, folder=None, verbose=True,
         file.save(sg_hist, f)
 
         # print effect mask
-        effect.mask.to_nii(folder / 'effect_mask.nii.gz')
+        f_effect_mask = folder / 'effect_mask.nii.gz'
+        effect.mask.to_nii(f_effect_mask)
 
         print_score_arba(sg_hist, f_out=folder / 'score_arba.nii.gz')
+        print_score_vba_rba(sg_hist, f_rba=f_effect_mask,
+                            f_out_vba=folder / 'score_vba.nii.gz',
+                            f_out_rba=folder / 'score_rba.nii.gz')
 
         # save hierarchical segmentation
         if print_hier_seg:
