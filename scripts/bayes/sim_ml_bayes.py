@@ -1,5 +1,4 @@
 import pathlib
-import shutil
 import tempfile
 
 import matplotlib.pyplot as plt
@@ -7,11 +6,10 @@ import networkx as nx
 import nibabel as nib
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.ndimage.morphology import binary_dilation
 
 import arba
+from arba.permute import apply_tfce_file, apply_ptfce
 from mh_pytools import file
-from pnl_data.set.hcp_100 import get_file_tree
 
 
 def print_score_arba(sg_hist, f_out):
@@ -44,16 +42,34 @@ def print_score_vba_rba(sg_hist, f_out_vba, f_rba=None, f_out_rba=None):
         sg_rba.to_nii(f_out=f_out_rba, fnc=get_maha)
 
 
-def compute_auc():
-    raise NotImplementedError
-    # print auc
-    auc = effect.get_auc(maha, file_tree.mask)
-    with open(str(folder / 'auc.txt'), 'w') as f:
-        print(f'auc: {auc:.4f}', file=f)
-    print(f'auc: {auc:.4f}')
+def print_score_tfce(f_in, f_tfce_out=None, f_ptfce_out=None, f_mask=None):
+    if f_tfce_out:
+        apply_tfce_file(f_in, f_out=f_tfce_out)
+    if f_ptfce_out:
+        apply_ptfce(f_in, f_out=f_ptfce_out, f_mask=f_mask)
 
 
-def run(file_tree, split_eff_grp, folder=None, verbose=True,
+def compute_auc(folder, effect, mask, f_out):
+    s_glob = 'score*.nii.gz'
+
+    auc_dict = dict()
+    for f in folder.glob(s_glob):
+        label = f.name.split('.')[0].split('_')[-1]
+        score = nib.load(str(f)).get_data()
+
+        auc_dict[label] = effect.get_auc(score, mask)
+
+    label_auc_list = sorted(auc_dict.items(), key=lambda x: x[1], reverse=True)
+    for label, auc in label_auc_list:
+        print(f'label: {label} auc: {auc:.4f}')
+
+    if f_out is not None:
+        with open(str(f_out), 'w') as f:
+            for label, auc in label_auc_list:
+                print(f'label: {label} auc: {auc:.4f}', file=f)
+
+
+def run(file_tree, split_eff_grp, folder=None, verbose=True, f_rba=None,
         print_per_sbj=False, print_hier_seg=False, print_lower_bnd=False,
         print_eff_zoom=False):
     # build folder
@@ -82,10 +98,19 @@ def run(file_tree, split_eff_grp, folder=None, verbose=True,
         f_effect_mask = folder / 'effect_mask.nii.gz'
         effect.mask.to_nii(f_effect_mask)
 
+        if f_rba is None:
+            f_rba = f_effect_mask
+
         print_score_arba(sg_hist, f_out=folder / 'score_arba.nii.gz')
-        print_score_vba_rba(sg_hist, f_rba=f_effect_mask,
+        print_score_vba_rba(sg_hist, f_rba=f_rba,
                             f_out_vba=folder / 'score_vba.nii.gz',
                             f_out_rba=folder / 'score_rba.nii.gz')
+        print_score_tfce(folder / 'score_vba.nii.gz',
+                         f_tfce_out=folder / 'score_tfce.nii.gz',
+                         f_ptfce_out=None,
+                         f_mask=str(file_tree.mask.to_nii()))
+        compute_auc(folder, effect=effect, mask=file_tree.mask,
+                    f_out=folder / 'auc.txt')
 
         # save hierarchical segmentation
         if print_hier_seg:
@@ -162,6 +187,10 @@ def effect_zoom(sg_hist, f_out):
 
 
 if __name__ == '__main__':
+    from pnl_data.set.hcp_100 import get_file_tree, folder
+    from scipy.ndimage.morphology import binary_dilation
+    import shutil
+
     # file tree
     n_sbj = 10
     mu = (0, 0)
@@ -170,12 +199,13 @@ if __name__ == '__main__':
 
     offset = (1, 1)
 
-    fake_data = True
+    fake_data = False
     one_vs_many = False
 
     np.random.seed(1)
 
     # build file tree
+    folder_hcp = folder
     folder = pathlib.Path(tempfile.TemporaryDirectory().name)
     print(folder)
     folder.mkdir(exist_ok=True, parents=True)
@@ -195,6 +225,8 @@ if __name__ == '__main__':
     else:
         # get file tree
         ft = get_file_tree(lim_sbj=10, low_res=True)
+
+        f_rba = folder_hcp / 'to_100307_low_res/100307aparc+aseg.nii.gz'
 
         # build effect
         with ft.loaded():
@@ -225,5 +257,5 @@ if __name__ == '__main__':
     split_eff_grp = (split, effect, 'grp_eff')
 
     run(file_tree=ft, split_eff_grp=split_eff_grp, folder=folder, verbose=True,
-        print_per_sbj=True, print_hier_seg=True, print_lower_bnd=True,
-        print_eff_zoom=True)
+        f_rba=f_rba, print_per_sbj=True, print_hier_seg=True,
+        print_lower_bnd=True, print_eff_zoom=True)
