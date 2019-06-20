@@ -40,6 +40,8 @@ class SynthFileTree(FileTree):
             folder = pathlib.Path(tempfile.TemporaryDirectory().name)
         else:
             folder = pathlib.Path(folder)
+        if not folder.exists():
+            folder.mkdir(exist_ok=True, parents=True)
 
         assert len(data.shape) == 5, 'data must be of dimension 5'
 
@@ -49,9 +51,7 @@ class SynthFileTree(FileTree):
         for sbj_idx, sbj in enumerate(cls.get_sbj_list(num_sbj)):
             for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
                 # write img to file
-                f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
-                                                prefix=f'{sbj}_{feat}_').name
-                f = folder / f
+                f = folder / f'{sbj}_{feat}.nii.gz'
                 x = data[:, :, :, sbj_idx, feat_idx]
                 img = nib.Nifti1Image(x, affine=np.eye(4))
                 img.to_filename(str(f))
