@@ -42,8 +42,7 @@ class FileTree:
         mask (Mask): mask of active area
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): if data is loaded, a read only memmap of data
-        split_eff_list = (list): pairs of (split, effect), each effect has been
-                                 applied to sbj in split[True]
+        split_eff_grp_list = (list): pairs of (split, effect, grp)
 
     Hidden Attributes:
         __mask (Mask): mask of intersection of all files (only available when
@@ -84,7 +83,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.split_eff_list = []
+        self.split_eff_grp_list = []
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only n_sbj remains (in place)
@@ -135,7 +134,7 @@ class FileTree:
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, split_eff_list=None, **kwargs):
+    def loaded(self, split_eff_grp_list=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
@@ -145,11 +144,11 @@ class FileTree:
 
         # load or check that previous load was equivilent
         if was_loaded:
-            if split_eff_list is not None:
-                assert split_eff_list == self.split_eff_list, \
-                    'split_eff_list mismatch between load()'
+            if split_eff_grp_list is not None:
+                assert split_eff_grp_list == self.split_eff_grp_list, \
+                    'split_eff_grp_list mismatch between load()'
         else:
-            self.load(**kwargs)
+            self.load(split_eff_grp_list=split_eff_grp_list, **kwargs)
 
         try:
             yield self
@@ -157,12 +156,11 @@ class FileTree:
             if not was_loaded:
                 self.unload()
 
-    def load(self, split_eff_list=None, verbose=False, memmap=False):
+    def load(self, split_eff_grp_list=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
-            split_eff_list = (list): pairs of (split, effect), each effect has
-                                     been applied to sbj in split[True]
+            split_eff_grp_list = (list): pairs of (split, effect, grp)
             verbose (bool): toggles command line output
             memmap (bool): toggles memory map (self.data becomes read only, but
                            accesible from all threads to save on memory)
@@ -198,7 +196,7 @@ class FileTree:
             fnc(self)
 
         # apply effects
-        self.reset_effect(split_eff_list)
+        self.reset_effect(split_eff_grp_list)
 
         # flush data to memmap, make read only copy
         if memmap:
@@ -212,28 +210,28 @@ class FileTree:
                                   shape=shape)
 
     @check_loaded
-    def reset_effect(self, split_eff_list=None):
+    def reset_effect(self, split_eff_grp_list=None):
 
-        def _apply(split_eff_list, negate=False):
-            if split_eff_list is None:
+        def _apply(split_eff_grp_list, negate=False):
+            if split_eff_grp_list is None:
                 return
 
-            for split, effect in split_eff_list:
+            for split, effect, grp in split_eff_grp_list:
                 # note: group True has the effect applied
-                for sbj in split[True]:
+                for sbj in split[grp]:
                     sbj_idx = self.sbj_list.index(sbj)
                     x = self.data[:, :, :, sbj_idx, :]
                     x = effect.apply(x, negate=negate)
                     self.data[:, :, :, sbj_idx, :] = x
 
         # rm old effects
-        _apply(self.split_eff_list, negate=True)
+        _apply(self.split_eff_grp_list, negate=True)
 
         # add new effects
-        _apply(split_eff_list, negate=False)
+        _apply(split_eff_grp_list, negate=False)
 
         # record updates (changes may spoil our record of self.data)
-        self.split_eff_list = deepcopy(split_eff_list)
+        self.split_eff_grp_list = deepcopy(split_eff_grp_list)
 
     def unload(self):
         # delete memory map file
@@ -243,7 +241,7 @@ class FileTree:
 
         self.data = None
         self.__mask = None
-        self.split_eff_list = list()
+        self.split_eff_grp_list = list()
 
     @check_loaded
     def to_nii(self, folder=None):

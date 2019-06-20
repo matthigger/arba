@@ -4,7 +4,7 @@ import tempfile
 import networkx as nx
 import nibabel as nib
 import numpy as np
-from tqdm import tqdm
+from scipy.spatial.distance import dice
 
 from .seg_graph import SegGraph
 from ..region import RegionWardGrp
@@ -29,9 +29,11 @@ class MergeRecord(nx.DiGraph):
     def __init__(self, mask=None, pc=None, ref=None):
         super().__init__()
 
-        assert (mask is None) != (pc is None), 'either mask xor pc required'
         if pc is None:
-            pc = PointCloud.from_mask(mask)
+            if mask is None:
+                pc = set()
+            else:
+                pc = PointCloud.from_mask(mask)
 
         # define space
         self.ref = ref
@@ -95,6 +97,32 @@ class MergeRecord(nx.DiGraph):
                 return n
             else:
                 n = _n
+
+    def get_node_max_dice(self, mask):
+        pc = PointCloud.from_mask(mask)
+        node_set = set()
+        for ijk in pc:
+            # get node
+            node = self.ijk_leaf_dict[ijk]
+
+            # add node and all
+            node_set.add(node)
+            node_set |= nx.ancestors(self, node)
+
+        assert pc, 'no intersection with mask'
+
+        d_max = 0
+        for node in node_set:
+            # compute dice of the node
+            node_mask = self.get_pc(node).to_mask(shape=self.ref.shape)
+            d = 1 - dice(mask.flatten(), node_mask.flatten())
+
+            # store if max dice
+            if d > d_max:
+                node_min_dice = node
+                d_max = d
+
+        return node_min_dice, d_max
 
     def merge(self, reg_tuple=None, ijk_tuple=None):
         """ records merge() operation
@@ -235,22 +263,50 @@ class MergeRecord(nx.DiGraph):
 
         return tree_hist, node_reg_dict
 
-    def to_nii(self, f_out, fnc=None, n=100, n_list=None, verbose=False,
-               **kwargs):
+    def iter_node_pc_dict(self, as_mask=False):
+        node_pc_dict = {leaf: PointCloud({ijk})
+                        for leaf, ijk in self.leaf_ijk_dict.items()}
+
+        if as_mask:
+            node_pc_dict = {n: pc.to_mask(shape=self.ref.shape)
+                            for n, pc in node_pc_dict.items()}
+
+        yield node_pc_dict
+
+        node_next = len(node_pc_dict)
+        while node_next in self.nodes:
+            children = self.neighbors(node_next)
+
+            # build pc_next
+            pc_next = PointCloud({}, ref=self.ref)
+            if as_mask:
+                pc_next = pc_next.to_mask(shape=self.ref.shape)
+
+            for n in children:
+                if as_mask:
+                    pc_next += node_pc_dict[n]
+                else:
+                    pc_next |= node_pc_dict[n]
+                del node_pc_dict[n]
+
+            node_pc_dict[node_next] = pc_next.astype(bool)
+
+            yield node_pc_dict
+            node_next += 1
+
+    def to_nii(self, f_out, n=100, n_list=None):
         """ writes a 4d volume with at different granularities
 
         Args:
             f_out (str or Path): output file
-            fnc (fnc): accepts region, returns scalar
             n (int): number of granularities to output.  defaults to 100
             n_list (list): explicitly pass the granularities to output
-            verbose (bool): toggles cmd line output
 
         Returns:
              f_out (Path): a 4d nii volume, first 3d are space.  the 4th
              n_list (array): number
         """
-        assert (n is None) != (n_list is None), 'either xor n_list required'
+        assert (n is None) != (n_list is None), 'either n xor n_list required'
 
         # get n_list
         if n_list is None:
@@ -268,15 +324,11 @@ class MergeRecord(nx.DiGraph):
         # build array
         shape = (*self.ref.shape, len(n_list))
         x = np.zeros(shape)
-        sg_iter = self.get_iter_sg(**kwargs)
-        tqdm_dict = {'disable': not verbose,
-                     'desc': 'build img per n',
-                     'total': len(n_list)}
-        sg, _, _ = next(sg_iter)
-        for n_idx, n in tqdm(enumerate(n_list), **tqdm_dict):
-            while len(sg.nodes) != n:
-                sg, _, _ = next(sg_iter)
-            x[:, :, :, n_idx] = sg.to_array(fnc=fnc)
+        for n_idx, n in enumerate(n_list):
+            for node_mask_dict in self.iter_node_pc_dict(as_mask=True):
+                if len(node_mask_dict) == n:
+                    x[:, :, :, n_idx] = sum(n * mask for
+                                            n, mask in node_mask_dict.items())
 
         # write to nii
         img = nib.Nifti1Image(x, self.ref.affine)

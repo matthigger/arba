@@ -14,6 +14,41 @@ from tqdm import tqdm
 from .permute import PermuteBase
 
 f_run_ptfce = pathlib.Path(__file__).parent / 'run_ptfce.R'
+Z_MAX = 20
+
+
+def apply_ptfce(f_in, f_mask, f_out=None, sqrt=False):
+    # get f_out
+    if f_out is None:
+        f_out = tempfile.NamedTemporaryFile(suffix='_ptfce.nii.gz').name
+
+    img_in = nib.load(str(f_in))
+    z = img_in.get_data()
+
+    if sqrt:
+        # useful for input img which are maha or t2
+        z = np.sqrt(z)
+
+    # https://github.com/spisakt/pTFCE/issues/3
+    z[z > Z_MAX] = Z_MAX
+
+    # write to file
+    img_z = nib.Nifti1Image(z, img_in.affine)
+    f_z = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
+    img_z.to_filename(f_z)
+
+    # compute smoothness via FSL
+    smooth_dict = compute_smooth(f_z=f_z, f_mask=f_mask)
+    v = int(smooth_dict['VOLUME'])
+    r = smooth_dict['RESELS']
+
+    # apply ptfce
+    cmd = f'Rscript {f_run_ptfce} -i {f_z} -m {f_mask} -o {f_out} -v {v} -r {r}'
+    proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.DEVNULL)
+
+    proc.wait()
+
+    return f_out
 
 
 def compute_smooth(f_z, f_mask):
@@ -41,7 +76,6 @@ class PermutePTFCE(PermuteBase):
     # memory needed to run each
     mem_buff = 5e9
     mem_per_run = 24e8
-    Z_MAX = 20
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -116,29 +150,8 @@ class PermutePTFCE(PermuteBase):
         # make it a z score
         t = np.sqrt(t2)
 
-        # assume that covariance matrix is known (not estimated)
-        z = t
+        raise NotImplementedError('use apply_tfce_file from above')
 
-        # https://github.com/spisakt/pTFCE/issues/3
-        z[z > self.Z_MAX] = self.Z_MAX
-
-        # write to file
-        img_z = nib.Nifti1Image(z, self.file_tree.ref.affine)
-        f_z = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
-        img_z.to_filename(f_z)
-
-        # compute smoothness via FSL
-        smooth_dict = compute_smooth(f_z=f_z, f_mask=self.f_mask)
-        v = int(smooth_dict['VOLUME'])
-        r = smooth_dict['RESELS']
-
-        # apply ptfce
-        f_z_ptfce = tempfile.NamedTemporaryFile().name
-        cmd = f'Rscript {f_run_ptfce} -i {f_z} -m {self.f_mask} -o {f_z_ptfce} -v {v} -r {r}'
-        proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.DEVNULL)
-
-        # todo: file ending always added in run_ptfce.R, even if already there
-        f_z_ptfce += '.nii.gz'
         return proc, f_z_ptfce
 
     def run_split(self, split, **kwargs):

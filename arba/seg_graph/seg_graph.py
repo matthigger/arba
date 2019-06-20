@@ -76,7 +76,7 @@ class SegGraph(nx.Graph):
     def to_nii(self, f_out, **kwargs):
         """ saves nifti image """
         # build array
-        x = self.to_array(shape=self.file_tree.ref.shape, **kwargs)
+        x = self.to_array(**kwargs)
 
         # save
         img_out = nib.Nifti1Image(x, self.file_tree.ref.affine)
@@ -146,7 +146,7 @@ class SegGraph(nx.Graph):
 
         return reg_sum
 
-    def merge_by_atlas(self, f_region, verbose=False):
+    def merge_by_atlas(self, f_region, verbose=False, skip_zero=True):
         """ builds atlas region by merging regions per voxel
 
         Note: regions must all be single voxel at outset
@@ -170,7 +170,7 @@ class SegGraph(nx.Graph):
         reg_idx_reg_dict = defaultdict(list)
         ijk_missing = list()
         for reg_idx in reg_idx_list:
-            if reg_idx == 0:
+            if reg_idx == 0 and skip_zero:
                 continue
             mask = x == reg_idx
             ijk_array = np.vstack(np.where(mask)).T

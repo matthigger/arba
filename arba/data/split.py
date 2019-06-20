@@ -55,9 +55,6 @@ class Split(dict):
 
         self.tuple = tuple(self.sbj_grp_dict[sbj] for sbj in self.sbj_list)
 
-    def __len__(self):
-        return len(self.sbj_list)
-
     def sample(self):
         """ returns a permuted split
 

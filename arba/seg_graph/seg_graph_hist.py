@@ -17,7 +17,6 @@ class SegGraphHistory(SegGraph):
 
     Attributes:
         merge_record (MergeRecord)
-        max_t2 (float): max t2 observed across all regions
         _err_edge_list (SortedList): tuples of (error, (reg_a, reg_b)) associated
                                      with joining reg_a, reg_b
     """
@@ -26,8 +25,6 @@ class SegGraphHistory(SegGraph):
         super().__init__(*args, **kwargs)
         self.merge_record = MergeRecord(self.file_tree.mask,
                                         ref=self.file_tree.ref)
-        self.max_t2 = max(r.t2 for r in self.nodes)
-
         self.obj_fnc = obj_fnc
         self._err_edge_list = None
         if self.obj_fnc is None:
@@ -38,9 +35,6 @@ class SegGraphHistory(SegGraph):
         self.merge_record.merge(reg_tuple=reg_tuple)
 
         reg_sum = super().merge(reg_tuple)
-
-        if reg_sum.t2 > self.max_t2:
-            self.max_t2 = reg_sum.t2
 
         return reg_sum
 

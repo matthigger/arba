@@ -1,3 +1,6 @@
+import arba.bayes
+
+
 class Region:
     """ a volume and n, mu, cov of the observed features of all populations
 
@@ -53,6 +56,32 @@ class Region:
 
     def __lt__(self, other):
         return len(self) < len(other)
+
+    def bayes(self, num_vox_prior_weight=1, **kwargs):
+        """ computes bayes """
+        fs_sum = sum(self.fs_dict.values())
+        # prior has same weight as a single voxel's observation
+        num_obs_prior = int(fs_sum.n / len(self)) * num_vox_prior_weight
+
+        grp_mu_dict = dict()
+        grp_cov_dict = dict()
+        for grp, fs in self.fs_dict.items():
+            mvnorm = arba.bayes.MVNorm.non_inform_dplus1(len(fs_sum.mu),
+                                                         mu=fs_sum.mu,
+                                                         num_obs=num_obs_prior,
+                                                         cov=fs_sum.cov)
+            mvnorm = mvnorm.bayes_update(obs_mu=fs.mu,
+                                         obs_cov=fs.cov,
+                                         num_obs=fs.n)
+            deg_free, loc, shape = mvnorm.get_mu_marginal()
+
+            # assume params of multivariate t are gaussian (converges as
+            # deg_free diverges)
+            grp_mu_dict[grp] = loc, shape
+
+            grp_cov_dict[grp] = mvnorm.lam, mvnorm.deg_free
+
+        return grp_mu_dict, grp_cov_dict
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):

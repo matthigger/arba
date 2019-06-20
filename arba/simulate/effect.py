@@ -223,7 +223,8 @@ class Effect:
         if not estimate.sum():
             return 0, 1
 
-        true_pos = np.count_nonzero(signal & estimate)
+        true_pos = np.count_nonzero(np.logical_and(signal,
+                                                   estimate))
         true = np.count_nonzero(signal)
 
         if true:
@@ -232,8 +233,10 @@ class Effect:
             # if nothing to detect, we default to sensitivity 0 (graphing)
             sens = np.nan
 
-        neg = np.count_nonzero(~signal)
-        true_neg = np.count_nonzero((~signal) & (~estimate))
+        signal_not = np.logical_not(signal)
+        neg = np.count_nonzero(signal_not)
+        true_neg = np.count_nonzero(np.logical_and(signal_not,
+                                                   np.logical_not(estimate)))
 
         if neg:
             spec = true_neg / neg
