@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 from .merge_record import MergeRecord
 from .seg_graph import SegGraph
-from ..region import RegionWardGrp
 
 
 class SegGraphHistory(SegGraph):
@@ -21,20 +20,18 @@ class SegGraphHistory(SegGraph):
                                      with joining reg_a, reg_b
     """
 
-    def __init__(self, *args, obj_fnc=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.merge_record = MergeRecord(self.file_tree.mask,
-                                        ref=self.file_tree.ref)
-        self.obj_fnc = obj_fnc
+                                        ref=self.file_tree.ref,
+                                        **kwargs)
         self._err_edge_list = None
-        if self.obj_fnc is None:
-            self.obj_fnc = RegionWardGrp.get_error_det
 
     def merge(self, reg_tuple):
         """ record combination in merge_record """
-        self.merge_record.merge(reg_tuple=reg_tuple)
-
         reg_sum = super().merge(reg_tuple)
+
+        self.merge_record.merge(reg_tuple=reg_tuple, reg_sum=reg_sum)
 
         return reg_sum
 
@@ -213,5 +210,6 @@ class SegGraphHistory(SegGraph):
         tqdm_dict = {'desc': 'compute error per edge',
                      'disable': not verbose}
         for reg_pair in tqdm(edge_list, **tqdm_dict):
-            error = self.obj_fnc(*reg_pair)
+            obj_fnc = reg_pair[0].get_error
+            error = obj_fnc(*reg_pair)
             self._err_edge_list.add((error, reg_pair))

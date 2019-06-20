@@ -3,10 +3,8 @@ from collections import defaultdict
 import networkx as nx
 import nibabel as nib
 import numpy as np
-from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
 
-from ..region import RegionWardGrp
 from ..space import PointCloud
 
 
@@ -21,26 +19,25 @@ class SegGraph(nx.Graph):
         split (Split):
     """
 
-    def __init__(self, file_tree, split, _add_nodes=True, **kwargs):
+    def __init__(self, file_tree, cls_reg, _add_nodes=True, **kwargs):
         """
 
         Args:
             file_tree (FileTree): file tree
-            split (Split):
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
         super().__init__()
         self.file_tree = file_tree
-        self.split = split
 
         if _add_nodes:
             with file_tree.loaded():
-                self._add_nodes(**kwargs)
+                self._add_nodes(cls_reg, **kwargs)
                 self.connect_neighbors(**kwargs)
 
-    def _add_nodes(self, verbose=False, **kwargs):
-        assert len(self.file_tree.mask) > 0, 'no active area found in file_tree'
+    def _add_nodes(self, cls_reg, verbose=False, **kwargs):
+        assert len(self.file_tree.mask) > 0, \
+            'no active area found in file_tree'
 
         tqdm_dict = {'desc': 'build node per ijk',
                      'disable': not verbose,
@@ -51,9 +48,8 @@ class SegGraph(nx.Graph):
             pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
 
             # build and store in graph
-            reg = RegionWardGrp.from_data(pc_ijk=pc_ijk,
-                                          file_tree=self.file_tree,
-                                          split=self.split)
+            reg = cls_reg.from_data(pc_ijk=pc_ijk,
+                                    file_tree=self.file_tree)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
@@ -190,37 +186,3 @@ class SegGraph(nx.Graph):
                                       desc='combining',
                                       disable=not verbose):
             reg_new_dict[reg_idx] = self.merge(reg_list)
-
-    def get_sig(self, alpha=.05, method='holm', _reg_pval_dict=None):
-        """ returns a SegGraph containing only significant regions in self
-
-        Args:
-            alpha (float): significance level
-            method (str): see multipletests, defaults to Holm's
-            _reg_pval_dict (dict):
-
-        Returns:
-            sg (SegGraph): contains only significant regions
-        """
-
-        # init seg graph
-        sg = SegGraph(file_tree=self.file_tree, split=self.split,
-                      _add_nodes=False)
-
-        # if self is empty, return empty SegGraph
-        if not self.nodes:
-            return sg
-
-        if _reg_pval_dict is None:
-            _reg_pval_dict = {reg: reg.pval for reg in self.nodes}
-
-        # get only the significant regions
-        sig_vec = multipletests(list(_reg_pval_dict.values()),
-                                alpha=alpha, method=method)[0]
-        reg_sig_list = [r for r, sig in zip(_reg_pval_dict.keys(), sig_vec)
-                        if sig]
-
-        # add sig regions
-        sg.add_nodes_from(reg_sig_list)
-
-        return sg
