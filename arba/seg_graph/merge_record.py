@@ -24,9 +24,11 @@ class MergeRecord(nx.DiGraph):
         ref: reference space
         ijk_leaf_dict (dict): keys are ijk, values are leaf nodes
         leaf_ijk_dict (dict): keys are leaf nodes, values are ijk
+        fnc_node_val_list (dict): keys are functions, values are dicts (whose
+                                  keys are nodes and values are fnc returns)
     """
 
-    def __init__(self, mask=None, pc=None, ref=None):
+    def __init__(self, mask=None, pc=None, ref=None, fnc_tuple=(), **kwargs):
         super().__init__()
 
         if pc is None:
@@ -34,6 +36,8 @@ class MergeRecord(nx.DiGraph):
                 pc = set()
             else:
                 pc = PointCloud.from_mask(mask)
+
+        self.fnc_node_val_list = {fnc: dict() for fnc in fnc_tuple}
 
         # define space
         self.ref = ref
@@ -124,7 +128,7 @@ class MergeRecord(nx.DiGraph):
 
         return node_min_dice, d_max
 
-    def merge(self, reg_tuple=None, ijk_tuple=None):
+    def merge(self, reg_tuple=None, ijk_tuple=None, reg_sum=None):
         """ records merge() operation
 
         Args:
@@ -152,6 +156,12 @@ class MergeRecord(nx.DiGraph):
         # add new edges in tree_hist
         for node in node_tuple:
             self.add_edge(node_sum, node)
+
+        # compute fnc on sum
+        for fnc in self.fnc_node_val_list.keys():
+            assert reg_sum is not None, 'reg_sum required if fnc'
+            val = fnc(reg_sum)
+            self.fnc_node_val_list[fnc][node_sum] = val
 
         return node_sum
 
@@ -294,7 +304,7 @@ class MergeRecord(nx.DiGraph):
             yield node_pc_dict
             node_next += 1
 
-    def to_nii(self, f_out, n=100, n_list=None):
+    def to_nii(self, f_out=None, n=10, n_list=None):
         """ writes a 4d volume with at different granularities
 
         Args:
@@ -318,7 +328,7 @@ class MergeRecord(nx.DiGraph):
 
         # get f_out
         if f_out is None:
-            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz')
+            f_out = tempfile.NamedTemporaryFile(suffix='.nii.gz').name
             f_out = pathlib.Path(f_out)
 
         # build array
