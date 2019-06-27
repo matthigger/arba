@@ -1,13 +1,14 @@
 import pathlib
 import tempfile
 
+import matplotlib.pyplot as plt
 import networkx as nx
 import nibabel as nib
 import numpy as np
+import seaborn as sns
 from scipy.spatial.distance import dice
 
 from .seg_graph import SegGraph
-from ..region import RegionWardGrp
 from ..space import PointCloud
 
 
@@ -48,6 +49,14 @@ class MergeRecord(nx.DiGraph):
                               for ijk, idx in self.ijk_leaf_dict.items()}
 
         self.add_nodes_from(self.leaf_ijk_dict.keys())
+
+    def apply_fnc_leaf(self, sg):
+        for reg in sg.nodes:
+            ijk = next(iter(reg.pc_ijk))
+            node = self.ijk_leaf_dict[ijk]
+            for fnc in self.fnc_node_val_list.keys():
+                val = fnc(reg)
+                self.fnc_node_val_list[fnc][node] = val
 
     def leaf_iter(self, node):
         """ returns an iterator over the leafs which make up node
@@ -165,21 +174,19 @@ class MergeRecord(nx.DiGraph):
 
         return node_sum
 
-    def resolve_node(self, node, file_tree, split):
+    def resolve_node(self, node, file_tree, reg_cls):
         """ gets the region associated with the node from the file_trees given
 
         Args:
             node (int): node
             file_tree (FileTree): file tree
-            split (Split):
 
         Returns:
             reg (RegionWardT2): region
         """
 
-        return RegionWardGrp.from_data(pc_ijk=self.get_pc(node),
-                                       file_tree=file_tree,
-                                       split=split)
+        return reg_cls.from_data(pc_ijk=self.get_pc(node),
+                                 file_tree=file_tree)
 
     def get_iter_sg(self, file_tree, split):
         """ iterator over seg_graph which undergoes recorded merge operations
@@ -345,3 +352,47 @@ class MergeRecord(nx.DiGraph):
         img.to_filename(str(f_out))
 
         return f_out, n_list
+
+    def plot_size_v(self, fnc, label=None, mask=None):
+        if label is None:
+            label = fnc.__name__
+
+        num_nodes = len(self.nodes)
+
+        sns.set(font_scale=1.2)
+        node_size_dict = dict()
+        if mask is None:
+            node_color = None
+        else:
+            node_color = dict()
+
+        for node in range(num_nodes):
+            if node < len(self.leaf_ijk_dict.keys()):
+                node_size_dict[node] = 1
+                if mask is not None:
+                    ijk = self.leaf_ijk_dict[node]
+                    node_color[node] = mask[ijk].astype(bool)
+            else:
+                n0, n1 = list(self.neighbors(node))
+                s0, s1 = node_size_dict[n0], node_size_dict[n1]
+                node_size_dict[node] = s0 + s1
+                if mask is not None:
+                    c0, c1 = node_color[n0], node_color[n1]
+                    lam0 = s0 / (s0 + s1)
+                    node_color[node] = c0 * lam0 + c1 * (1 - lam0)
+
+        node_pos = {n: (size, self.fnc_node_val_list[fnc][n])
+                    for n, size in node_size_dict.items()}
+
+        nodelist = [n for n, c in node_color.items() if c > 0]
+        node_color = {n: node_color[n] for n in nodelist}
+        nx.draw_networkx_nodes(self, nodelist=nodelist, pos=node_pos,
+                               node_color=np.array(list(node_color.values())),
+                               vmin=0, vmax=1, cmap=plt.get_cmap('bwr'))
+        nx.draw_networkx_edges(self, pos=node_pos)
+        plt.xlabel('size')
+        plt.ylabel(label)
+
+        ax = plt.gca()
+        ax.set_xscale('log')
+        ax.set_xlim(left=1, right=num_nodes)

@@ -25,6 +25,7 @@ class SegGraphHistory(SegGraph):
         self.merge_record = MergeRecord(self.file_tree.mask,
                                         ref=self.file_tree.ref,
                                         **kwargs)
+        self.merge_record.apply_fnc_leaf(self)
         self._err_edge_list = None
 
     def merge(self, reg_tuple):
@@ -36,7 +37,7 @@ class SegGraphHistory(SegGraph):
         return reg_sum
 
     def _cut_greedy(self, node_val_dict, max_flag=True):
-        """ gets SegGraph of disjoint reg which minimize val
+        """ gets node of disjoint reg which minimize val
 
         NOTE: the resultant node_list covers node_val_dict, ie each node in
         node_val_dict has some ancestor, descendant or itself in node_list
@@ -166,6 +167,12 @@ class SegGraphHistory(SegGraph):
         edge_list = list()
         err_list = list()
         while len(edge_list) < n:
+            #
+            # x = [(err,
+            #       mask[next(iter(r0.pc_ijk))] &
+            #       mask[next(iter(r1.pc_ijk))])
+            #      for err, (r0, r1) in self._err_edge_list]
+
             if not self._err_edge_list:
                 # no more edges
                 break
