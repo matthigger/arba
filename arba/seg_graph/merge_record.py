@@ -185,8 +185,8 @@ class MergeRecord(nx.DiGraph):
             reg (RegionWardT2): region
         """
 
-        return reg_cls.from_data(pc_ijk=self.get_pc(node),
-                                 file_tree=file_tree)
+        return reg_cls.from_file_tree(pc_ijk=self.get_pc(node),
+                                      file_tree=file_tree)
 
     def get_iter_sg(self, file_tree, split):
         """ iterator over seg_graph which undergoes recorded merge operations

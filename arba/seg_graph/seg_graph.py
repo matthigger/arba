@@ -5,8 +5,6 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from ..space import PointCloud
-
 
 class SegGraph(nx.Graph):
     """ segmentation graph, stores and merges region objects as a graph
@@ -44,12 +42,8 @@ class SegGraph(nx.Graph):
                      'total': self.file_tree.mask.sum().astype(int)}
 
         for ijk in tqdm(self.file_tree.mask.iter_ijk(), **tqdm_dict):
-            # space region occupies
-            pc_ijk = PointCloud({tuple(ijk)}, ref=self.file_tree.ref)
-
-            # build and store in graph
-            reg = cls_reg.from_data(pc_ijk=pc_ijk,
-                                    file_tree=self.file_tree)
+            reg = cls_reg.from_file_tree(ijk=ijk,
+                                         file_tree=self.file_tree)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):

@@ -64,7 +64,8 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None, mask=None):
+    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None,
+                 mask=None):
         self.sbj_feat_file_tree = sbj_feat_file_tree
         if sbj_list is None:
             self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
@@ -115,10 +116,12 @@ class FileTree:
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     @check_loaded
-    def get_fs(self, ijk=None, mask=None, sbj_list=None, sbj_bool=None):
+    def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
+               sbj_bool=None):
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
-        assert (ijk is None) != (mask is None), 'ijk xor mask required'
+        assert 2 == ((ijk is None) + (mask is None) + (pc_ijk is None)), \
+            'xor(ijk, mask, pc_ijk) required'
 
         # get sbj_bool
         if sbj_bool is None:
@@ -132,10 +135,17 @@ class FileTree:
             i, j, k = ijk
             x = self.data[i, j, k, :, :]
             x = x[sbj_bool, :].reshape((-1, self.d), order='F')
-        else:
+        elif mask is not None:
             # mask
             x = self.data[mask, :, :]
             x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
+        else:
+            n = len(pc_ijk)
+            x = np.empty((n, self.d))
+            for idx, (i, j, k) in enumerate(pc_ijk):
+                _x = self.data[i, j, k, :, :]
+                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.d), order='F')
+
         return FeatStat.from_array(x.T)
 
     @contextmanager
