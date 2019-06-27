@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+import arba.space
+from .reg import Region
+
 sns.set(font_scale=1.2)
 
 
@@ -13,7 +16,7 @@ def append_col_one(x):
     return np.hstack((x, ones))
 
 
-class RegionRegress:
+class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
 
     Class Attributes:
@@ -32,16 +35,11 @@ class RegionRegress:
 
     feat_sbj = None
     pseudo_inv = None
-
-    @staticmethod
-    def from_data(pc_ijk, file_tree):
-        assert file_tree.is_loaded, 'file tree must not loaded'
-        mask = pc_ijk.to_mask()
-        feat_img = np.mean(file_tree.data[mask, :, :], axis=0)
-        return RegionRegress(feat_img=feat_img, pc_ijk=pc_ijk)
+    sbj_list = None
 
     @classmethod
-    def set_feat_sbj(cls, feat_sbj):
+    def set_feat_sbj(cls, feat_sbj, sbj_list):
+        cls.sbj_list = sbj_list
         cls.feat_sbj = np.atleast_2d(feat_sbj)
         cls.feat_sbj = append_col_one(cls.feat_sbj)
 
@@ -64,39 +62,63 @@ class RegionRegress:
         r2 = 1 - np.linalg.det(err_cov) / \
              np.linalg.det(self.feat_img_cov)
 
+        raise NotImplementedError('r2 overestimate ... use sum(fs_dict.values())')
+
         return err_cov, r2
 
-    def __init__(self, feat_img, pc_ijk):
-        self.feat_img = np.atleast_2d(feat_img)
+    @staticmethod
+    def from_file_tree(file_tree, ijk=None, pc_ijk=None):
+        assert (ijk is None) != (pc_ijk is None), 'ijk or pc_ijk required'
+        if pc_ijk is None:
+            pc_ijk = arba.space.PointCloud({ijk}, ref=file_tree.ref)
+
+        fs_dict = {sbj: file_tree.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
+                   for sbj in RegionRegress.sbj_list}
+
+        return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
+
+    def __init__(self, pc_ijk, fs_dict):
+        super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
+
+        img_dim = next(iter(fs_dict.values())).d
+        self.feat_img = np.ones(shape=(len(fs_dict), img_dim))
+        for idx, sbj in enumerate(self.sbj_list):
+            self.feat_img[idx, :] = self.fs_dict[sbj].mu
+
         self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
 
         self.pc_ijk = pc_ijk
 
-        self.fit(feat_img)
-        self.err_cov, self.r2 = self.get_err(feat_img)
+        self.fit(self.feat_img)
+        self.err_cov, self.r2 = self.get_err(self.feat_img)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
         if isinstance(other, type(0)) and other == 0:
             return type(self)(self.feat_img, self.pc_ijk)
 
-        # compute feat_img
-        lam = len(self) / (len(self) + len(other))
-        feat_img = self.feat_img * lam + \
-                   other.feat_img * (1 - lam)
+        fs_dict = {sbj: self.fs_dict[sbj] + other.fs_dict[sbj]
+                   for sbj in self.sbj_list}
 
         return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
-                          feat_img=feat_img)
+                          fs_dict=fs_dict)
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):
         if reg_u is None:
             reg_u = reg_1 + reg_2
-        delta = reg_u.r2 * len(reg_u) - \
-                reg_1.r2 * len(reg_1) - \
-                reg_2.r2 * len(reg_2)
 
-        return np.abs(delta)
+        # covariance of
+        spatial_cov = sum(np.trace(fs.cov) for fs in reg_u.fs_dict.values())
+        spatial_cov *= len(reg_u)
+
+        err_cov, r2 = reg_u.get_err()
+        reg_error = np.trace(err_cov) * len(reg_u) * len(reg_u.sbj_list)
+
+        fs_all = sum(reg_u.fs_dict.values())
+        tr_cov = np.trace(fs_all.cov)
+
+        return (spatial_cov + reg_error) / tr_cov
 
     __radd__ = __add__
 

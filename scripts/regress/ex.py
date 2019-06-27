@@ -50,7 +50,8 @@ f_mask = folder / 'target_mask.nii.gz'
 mask.to_nii(f_mask)
 
 # set feat_sbj
-arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj)
+arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj,
+                                       sbj_list=file_tree.sbj_list)
 
 with file_tree.loaded():
     sg_hist = arba.seg_graph.SegGraphHistory(file_tree=file_tree,
