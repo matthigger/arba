@@ -54,7 +54,7 @@ class RegionRegress:
 
         self.beta = self.pseudo_inv @ feat_img
 
-    def get_err(self, feat_img):
+    def get_err(self, feat_img=None):
         if feat_img is None:
             feat_img = self.feat_img
 
