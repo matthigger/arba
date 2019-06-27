@@ -9,6 +9,12 @@ import arba.bayes
 from arba.space.mask import Mask
 
 
+def size_v_r2(*args, fnc, **kwargs):
+
+    ylabel = 'r2'
+    return scatter_tree(*args, fnc=fnc, ylabel=ylabel, **kwargs)
+
+
 def size_v_cdf_mu_bayes(*args, **kwargs):
     def get_norm_delta(reg):
         grp_mu_cov_dict = reg.bayes_mu()
