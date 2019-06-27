@@ -64,9 +64,14 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, fnc_list=None, mask=None):
+    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None, mask=None):
         self.sbj_feat_file_tree = sbj_feat_file_tree
-        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        if sbj_list is None:
+            self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        else:
+            self.sbj_list = sbj_list
+            assert set(sbj_list) == set(sbj_feat_file_tree), 'sbj_list error'
+
         feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
         self.feat_list = sorted(feat_file_dict.keys())
         self.scale = np.eye(self.d)

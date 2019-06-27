@@ -47,8 +47,10 @@ class SynthFileTree(FileTree):
 
         num_sbj, num_feat = data.shape[3:]
 
+        sbj_list = cls.get_sbj_list(num_sbj)
+
         sbj_feat_file_tree = defaultdict(dict)
-        for sbj_idx, sbj in enumerate(cls.get_sbj_list(num_sbj)):
+        for sbj_idx, sbj in enumerate(sbj_list):
             for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
                 # write img to file
                 f = folder / f'{sbj}_{feat}.nii.gz'
@@ -60,7 +62,8 @@ class SynthFileTree(FileTree):
                 sbj_feat_file_tree[sbj][feat] = f
 
         # todo: type should be SynthFileTree ... but this is classmethod?
-        return FileTree(sbj_feat_file_tree=sbj_feat_file_tree)
+        return FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
+                        sbj_list=sbj_list)
 
     def __init__(self, n_sbj, shape, mu=0, cov=1, folder=None):
         """
