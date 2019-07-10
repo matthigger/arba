@@ -52,17 +52,15 @@ class RegionRegress(Region):
 
         self.beta = self.pseudo_inv @ feat_img
 
-    def get_err(self, feat_img=None):
-        if feat_img is None:
-            feat_img = self.feat_img
+    def get_err(self):
+        # covariance of imaging features around mean (per sbj)
+        spatial_cov = sum(fs.cov for fs in self.fs_dict.values())
+        delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
+        regress_cov = delta.T @ delta
+        err_cov = (spatial_cov + regress_cov) / len(self.sbj_list)
 
-        delta = feat_img - self.project(self.feat_sbj, append_flag=False)
-
-        err_cov = np.atleast_2d(np.cov(delta.T, ddof=0))
-        r2 = 1 - np.linalg.det(err_cov) / \
-             np.linalg.det(self.feat_img_cov)
-
-        raise NotImplementedError('r2 overestimate ... use sum(fs_dict.values())')
+        cov = sum(self.fs_dict.values()).cov
+        r2 = 1 - (np.trace(err_cov) / np.trace(cov))
 
         return err_cov, r2
 
@@ -88,9 +86,10 @@ class RegionRegress(Region):
         self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
 
         self.pc_ijk = pc_ijk
-
+        self.beta = None
         self.fit(self.feat_img)
-        self.err_cov, self.r2 = self.get_err(self.feat_img)
+        self.err_cov, self.r2 = self.get_err()
+        self.mse = np.trace(self.err_cov)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
@@ -108,17 +107,13 @@ class RegionRegress(Region):
         if reg_u is None:
             reg_u = reg_1 + reg_2
 
-        # covariance of
-        spatial_cov = sum(np.trace(fs.cov) for fs in reg_u.fs_dict.values())
-        spatial_cov *= len(reg_u)
+        err = reg_u.mse * len(reg_u) - \
+              reg_1.mse * len(reg_1) - \
+              reg_2.mse * len(reg_2)
 
-        err_cov, r2 = reg_u.get_err()
-        reg_error = np.trace(err_cov) * len(reg_u) * len(reg_u.sbj_list)
+        assert err >= 0, 'err is negative'
 
-        fs_all = sum(reg_u.fs_dict.values())
-        tr_cov = np.trace(fs_all.cov)
-
-        return (spatial_cov + reg_error) / tr_cov
+        return err
 
     __radd__ = __add__
 
@@ -143,7 +138,8 @@ class RegionRegress(Region):
         feat_img_line = self.project(feat_sbj_line, append_flag=True)
 
         plt.scatter(feat_sbj, self.feat_img)
-        plt.suptitle(f'r2={self.r2:.2f}, size={len(self)} vox')
+        plt.suptitle(
+            f'mse={self.mse:.2f}, r2={self.r2:.2f}, size={len(self)} vox')
         plt.plot(feat_sbj_line, feat_img_line)
         plt.xlabel(sbj_feat_label)
         plt.ylabel(img_feat_label)
