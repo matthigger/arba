@@ -169,7 +169,7 @@ class MergeRecord(nx.DiGraph):
         # compute fnc on sum
         for fnc in self.fnc_node_val_list.keys():
             assert reg_sum is not None, 'reg_sum required if fnc'
-            val = fnc(reg_sum)
+            val = fnc(reg_sum, reg_tuple=reg_tuple)
             self.fnc_node_val_list[fnc][node_sum] = val
 
         return node_sum
@@ -187,6 +187,24 @@ class MergeRecord(nx.DiGraph):
 
         return reg_cls.from_file_tree(pc_ijk=self.get_pc(node),
                                       file_tree=file_tree)
+
+    def resolve_pc(self, pc):
+        """ gets node associated with point cloud
+        """
+        raise NotImplementedError('untested')
+
+        _pc = pc
+
+        ijk = next(iter(pc))
+        node = self.ijk_leaf_dict[ijk]
+        ijk_cover = {ijk}
+
+        while _pc - ijk_cover:
+            node = next(self.predecessors(node))
+            ijk_cover = set(self.leaf_iter(node))
+            assert not (ijk_cover - pc), 'invalid point cloud'
+
+        return node
 
     def get_iter_sg(self, file_tree, split):
         """ iterator over seg_graph which undergoes recorded merge operations
@@ -353,7 +371,7 @@ class MergeRecord(nx.DiGraph):
 
         return f_out, n_list
 
-    def plot_size_v(self, fnc, label=None, mask=None):
+    def plot_size_v(self, fnc, label=None, mask=None, log_y=False):
         if label is None:
             label = fnc.__name__
 
@@ -394,5 +412,7 @@ class MergeRecord(nx.DiGraph):
         plt.ylabel(label)
 
         ax = plt.gca()
+        if log_y:
+            ax.set_yscale('log')
         ax.set_xscale('log')
         ax.set_xlim(left=1, right=num_nodes)
