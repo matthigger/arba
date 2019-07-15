@@ -62,7 +62,15 @@ class RegionRegress(Region):
         cov = sum(self.fs_dict.values()).cov
         r2 = 1 - (np.trace(err_cov) / np.trace(cov))
 
-        return err_cov, r2
+        # compute log_like
+        m = self.feat_img.shape[1]
+        log_like = m * np.log(2 * np.pi) + np.log(np.linalg.det(err_cov))
+        log_like *= len(self.sbj_list)
+        c = np.linalg.inv(err_cov) @ (delta.T @ delta + spatial_cov)
+        log_like += np.trace(c)
+        log_like *= -.5 * len(self)
+
+        return err_cov, r2, log_like
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
@@ -88,7 +96,7 @@ class RegionRegress(Region):
         self.pc_ijk = pc_ijk
         self.beta = None
         self.fit(self.feat_img)
-        self.err_cov, self.r2 = self.get_err()
+        self.err_cov, self.r2, self.log_like = self.get_err()
         self.mse = np.trace(self.err_cov)
 
     def __add__(self, other):
