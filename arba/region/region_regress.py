@@ -38,13 +38,24 @@ class RegionRegress(Region):
     sbj_list = None
 
     @classmethod
-    def set_feat_sbj(cls, feat_sbj, sbj_list):
+    def set_feat_sbj(cls, feat_sbj, sbj_list, append_ones=True):
         cls.sbj_list = sbj_list
         cls.feat_sbj = np.atleast_2d(feat_sbj)
-        cls.feat_sbj = append_col_one(cls.feat_sbj)
+        if append_ones:
+            cls.feat_sbj = append_col_one(cls.feat_sbj)
 
         x = cls.feat_sbj
         cls.pseudo_inv = np.linalg.inv(x.T @ x) @ x.T
+
+    @classmethod
+    def shuffle_feat_sbj(cls, seed=None):
+        if seed is not None:
+            np.random.seed(seed)
+        idx = np.array(range(cls.feat_sbj.shape[0]))
+        np.random.shuffle(idx)
+        cls.set_feat_sbj(feat_sbj=cls.feat_sbj[idx, :],
+                         sbj_list=cls.sbj_list,
+                         append_ones=False)
 
     def fit(self, feat_img):
         assert self.feat_sbj is not None, \

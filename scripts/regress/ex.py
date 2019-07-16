@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 import numpy as np
+from tqdm import tqdm
 
 import arba
 
@@ -62,17 +63,43 @@ def weighted_r2(reg, **kwargs):
 f_mask = folder / 'target_mask.nii.gz'
 mask.to_nii(f_mask)
 
-# set feat_sbj
-arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj,
-                                       sbj_list=file_tree.sbj_list)
 
-with file_tree.loaded():
+def run(feat_sbj, file_tree, fnc_tuple=(mse, weighted_r2), permute_seed=None):
+    # set feat_sbj
+    arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj,
+                                           sbj_list=file_tree.sbj_list)
+
+    if permute_seed:
+        arba.region.RegionRegress.shuffle_feat_sbj(seed=permute_seed)
+
     sg_hist = arba.seg_graph.SegGraphHistory(file_tree=file_tree,
                                              cls_reg=arba.region.RegionRegress,
-                                             fnc_tuple=(mse, weighted_r2))
+                                             fnc_tuple=fnc_tuple)
 
-    # sg_hist.merge_by_atlas(f_mask, skip_zero=False)
     sg_hist.reduce_to(1, verbose=True)
+
+    return sg_hist
+
+
+def permute_run(target_fnc, n=5000, max_flag=True, **kwargs):
+    val_list = list()
+    for _n in tqdm(range(n), desc='permute'):
+        sg_hist = run(permute_seed=_n + 1, **kwargs)
+        node_val_dict = sg_hist.merge_record.fnc_node_val_list[target_fnc]
+        if max_flag:
+            val = max(node_val_dict.values())
+        else:
+            val = min(node_val_dict.values())
+        val_list.append(val)
+
+    return val_list
+
+
+with file_tree.loaded():
+    val_list = permute_run(n=10, target_fnc=weighted_r2, max_flag=True,
+                           feat_sbj=feat_sbj, file_tree=file_tree)
+
+    sg_hist = run(feat_sbj=feat_sbj, file_tree=file_tree)
 
     merge_record = sg_hist.merge_record
     merge_record.to_nii(folder / 'seg_hier.nii.gz', n=10)
