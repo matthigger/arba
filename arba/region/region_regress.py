@@ -52,25 +52,16 @@ class RegionRegress(Region):
 
         self.beta = self.pseudo_inv @ feat_img
 
-    def get_err(self):
+    def compute_err(self):
         # covariance of imaging features around mean (per sbj)
         spatial_cov = sum(fs.cov for fs in self.fs_dict.values())
         delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
         regress_cov = delta.T @ delta
-        err_cov = (spatial_cov + regress_cov) / len(self.sbj_list)
+        self.err_cov = (spatial_cov + regress_cov) / len(self.sbj_list)
+        self.mse = np.trace(self.err_cov)
 
         cov = sum(self.fs_dict.values()).cov
-        r2 = 1 - (np.trace(err_cov) / np.trace(cov))
-
-        # compute log_like
-        m = self.feat_img.shape[1]
-        log_like = m * np.log(2 * np.pi) + np.log(np.linalg.det(err_cov))
-        log_like *= len(self.sbj_list)
-        c = np.linalg.inv(err_cov) @ (delta.T @ delta + spatial_cov)
-        log_like += np.trace(c)
-        log_like *= -.5 * len(self)
-
-        return err_cov, r2, log_like
+        self.r2 = 1 - (np.trace(self.err_cov) / np.trace(cov))
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
@@ -96,8 +87,7 @@ class RegionRegress(Region):
         self.pc_ijk = pc_ijk
         self.beta = None
         self.fit(self.feat_img)
-        self.err_cov, self.r2, self.log_like = self.get_err()
-        self.mse = np.trace(self.err_cov)
+        self.compute_err()
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
