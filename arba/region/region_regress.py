@@ -36,10 +36,12 @@ class RegionRegress(Region):
     feat_sbj = None
     pseudo_inv = None
     sbj_list = None
+    num_sbj = None
 
     @classmethod
     def set_feat_sbj(cls, feat_sbj, sbj_list, append_ones=True):
         cls.sbj_list = sbj_list
+        cls.num_sbj = len(sbj_list)
         cls.feat_sbj = np.atleast_2d(feat_sbj)
         if append_ones:
             cls.feat_sbj = append_col_one(cls.feat_sbj)
@@ -63,17 +65,6 @@ class RegionRegress(Region):
 
         self.beta = self.pseudo_inv @ feat_img
 
-    def compute_err(self):
-        # covariance of imaging features around mean (per sbj)
-        spatial_cov = sum(fs.cov for fs in self.fs_dict.values())
-        delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
-        regress_cov = delta.T @ delta
-        self.err_cov = (spatial_cov + regress_cov) / len(self.sbj_list)
-        self.mse = np.trace(self.err_cov)
-
-        cov = sum(self.fs_dict.values()).cov
-        self.r2 = 1 - (np.trace(self.err_cov) / np.trace(cov))
-
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
         assert (ijk is None) != (pc_ijk is None), 'ijk or pc_ijk required'
@@ -96,9 +87,28 @@ class RegionRegress(Region):
         self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
 
         self.pc_ijk = pc_ijk
+
+        # fit beta
         self.beta = None
         self.fit(self.feat_img)
-        self.compute_err()
+
+        # covariance of imaging features around mean (per sbj)
+        self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
+                              self.num_sbj
+        delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
+        self.eps_mean = delta.T @ delta / self.num_sbj
+
+        self.eps = self.space_cov_pool + self.eps_mean
+
+        # compute derivative stats
+        self.mse = np.trace(self.eps)
+        self.mse_mean = np.trace(self.eps_mean)
+
+        self.cov = sum(self.fs_dict.values()).cov
+        self.cov_mean = self.cov - self.space_cov_pool
+
+        self.r2 = 1 - (np.trace(self.eps) / np.trace(self.cov))
+        self.r2_mean = 1 - (np.trace(self.eps_mean) / np.trace(self.cov_mean))
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
@@ -116,9 +126,15 @@ class RegionRegress(Region):
         if reg_u is None:
             reg_u = reg_1 + reg_2
 
-        err = reg_u.mse * len(reg_u) - \
-              reg_1.mse * len(reg_1) - \
-              reg_2.mse * len(reg_2)
+        # min mean squared error of resultant segmentation
+        # err = reg_u.mse * len(reg_u) - \
+        #       reg_1.mse * len(reg_1) - \
+        #       reg_2.mse * len(reg_2)
+
+        # max mean r2 of resultant segmentation
+        err = -(reg_u.r2 * len(reg_u) -
+                reg_1.r2 * len(reg_1) -
+                reg_2.r2 * len(reg_2))
 
         assert err >= 0, 'err is negative'
 
