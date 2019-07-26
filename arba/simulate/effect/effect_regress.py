@@ -92,12 +92,11 @@ class EffectRegress(Effect):
                                   offset (zero outside mask)
         """
 
-        shape = self.mask.shape + (len(sbj_list), self.feat_mapper.dim)
+        shape = self.mask.shape + (len(sbj_list), self.eps_img.shape[0])
         eff_delta = np.zeros(shape)
 
         for sbj_idx, sbj in enumerate(sbj_list):
             sbj_delta = self.project(sbj=sbj)
-            assert len(sbj_delta) == 1, 'multi-dim not tested with idx below'
             eff_delta[self.mask, sbj_idx, ...] += sbj_delta
 
         return eff_delta
