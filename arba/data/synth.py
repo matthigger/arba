@@ -12,7 +12,7 @@ from .file_tree import FileTree
 class SynthFileTree(FileTree):
     """ builds gaussian noise nii in temp location (for testing purposes)
 
-    features are labelled alphabetically ('feat_A', 'feat_B', ....)
+    features are labelled alphabetically ('img_feat_A', 'img_feat_B', ....)
     sbj are labelled numerically ('sbj_0', 'sbj_1', ...)
     """
 
@@ -22,7 +22,7 @@ class SynthFileTree(FileTree):
 
     @staticmethod
     def get_feat_list(n):
-        return [f'feat_{x}' for x in ascii_uppercase[:n]]
+        return [f'img_feat_{x}' for x in ascii_uppercase[:n]]
 
     @classmethod
     def from_array(cls, data, folder=None):

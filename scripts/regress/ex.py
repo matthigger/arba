@@ -9,51 +9,64 @@ from tqdm import tqdm
 
 import arba
 
-dim_sbj = 1
-dim_img = 1
+dim_sbj = 2
+dim_img = 3
 
+# subject params
 mu_sbj = np.zeros(dim_sbj)
 sig_sbj = np.eye(dim_sbj)
 num_sbj = 50
 
+# imaging params
+mu_img = np.zeros(dim_img)
+sig_img = np.eye(dim_img)
+shape = 6, 6, 6
+
+# detection params
 cutoff_perc = 95
 num_perm = 10
 
-shape = 6, 6, 6
+# regression params
+r2 = .95
 mask = np.zeros(shape)
 mask[2:5, 2:5, 2:5] = True
+
+# build effect
 ref = arba.space.RefSpace(affine=np.eye(4))
 mask = arba.space.Mask(mask, ref=ref)
 
-np.random.seed(1)
-# beta = np.random.normal(0, 1, (dim_sbj, dim_img))
-beta = np.atleast_2d(1)
-print(f'beta = {beta}')
-cov_eps = np.diag(np.random.normal(0, 1, dim_img) ** 2)
-
+# build output folder
 folder = pathlib.Path(tempfile.TemporaryDirectory().name)
 folder.mkdir()
 print(folder)
 shutil.copy(__file__, folder / 'ex.py')
 
 # sample sbj features
-feat_sbj = np.random.multivariate_normal(mean=mu_sbj, cov=sig_sbj,
+feat_sbj = np.random.multivariate_normal(mean=mu_sbj,
+                                         cov=sig_sbj,
                                          size=num_sbj)
 
 # build feat_img (shape0, shape1, shape2, num_sbj, dim_img)
-feat_img = np.random.multivariate_normal(mean=np.zeros(dim_img),
-                                         cov=cov_eps,
+feat_img = np.random.multivariate_normal(mean=mu_img,
+                                         cov=sig_img,
                                          size=(*shape, num_sbj))
-# add offset to induce beta
-for sbj_idx, offset in enumerate(feat_sbj @ beta):
-    feat_img[mask, sbj_idx, :] += offset
-
-# add offset to introduce second 'tissue type'
-feat_img[2:5, 5:, 5:, ...] += 1
 
 # build file_tree
 file_tree = arba.data.SynthFileTree.from_array(data=feat_img,
                                                folder=folder / 'data')
+
+feat_mapper = arba.regress.FeatMapperStatic(n=dim_sbj,
+                                            sbj_list=file_tree.sbj_list,
+                                            feat_sbj=feat_sbj)
+
+# build regression, impose it
+with file_tree.loaded():
+    fs = file_tree.get_fs(mask=mask)
+eff = arba.simulate.EffectRegress.from_r2(r2=r2,
+                                          mask=mask,
+                                          eps_img=fs.cov,
+                                          cov_sbj=np.cov(feat_sbj.T),
+                                          feat_mapper=feat_mapper)
 
 
 #
@@ -100,7 +113,7 @@ def permute_run(target_fnc, n=5000, max_flag=True, **kwargs):
     return val_list
 
 
-with file_tree.loaded():
+with file_tree.loaded(effect_list=[eff]):
     val_list = permute_run(n=num_perm, target_fnc=weighted_r2, max_flag=True,
                            feat_sbj=feat_sbj, file_tree=file_tree)
 
@@ -148,6 +161,7 @@ with open(str(folder / 'dice.txt'), 'w') as f:
     print(f'target region size: {mask.sum()}', file=f)
     print(f'detected region size: {mask_detected.sum()}', file=f)
     print(f'true detected region size: {(mask & mask_detected).sum()}', file=f)
-    print(f'false detected region size: {(~mask & mask_detected).sum()}', file=f)
+    print(f'false detected region size: {(~mask & mask_detected).sum()}',
+          file=f)
 
 print(folder)
