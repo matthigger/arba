@@ -163,8 +163,10 @@ class RegionRegress(Region):
         feat_img_line = self.project(feat_sbj_line, append_flag=True)
 
         plt.scatter(feat_sbj, self.feat_img)
-        plt.suptitle(
-            f'mse={self.mse:.2f}, r2={self.r2:.2f}, size={len(self)} vox')
+        plt.suptitle(', '.join([f'mse={self.mse:.2f}',
+                                f'r2_vox={self.r2:.2f}',
+                                f'r2_mean={self.r2_mean: .2f}',
+                                f'size={len(self)} vox']))
         plt.plot(feat_sbj_line, feat_img_line)
         plt.xlabel(sbj_feat_label)
         plt.ylabel(img_feat_label)
