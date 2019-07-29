@@ -86,8 +86,6 @@ class RegionRegress(Region):
 
         self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
 
-        self.pc_ijk = pc_ijk
-
         # fit beta
         self.beta = None
         self.fit(self.feat_img)
