@@ -26,6 +26,10 @@ class EffectRegress(Effect):
 
     @staticmethod
     def from_r2(r2, eps_img, cov_sbj, u=None, *args, **kwargs):
+        """
+        NOTE: the target r2 is approximate.  the offsets differ per sbj.  as a
+        result the cov_sbj observed will change under the effect
+        """
 
         assert 0 <= r2 <= 1, 'invalid r2'
         assert r2 != 1 or np.trace(eps_img) == 0, 'eps_img must be 0 if r2=1'
