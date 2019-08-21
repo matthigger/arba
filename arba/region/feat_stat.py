@@ -48,13 +48,21 @@ class FeatStat:
                 self.__cov_inv = np.linalg.pinv(self.cov)
         return self.__cov_inv
 
-    def __init__(self, n, mu, cov, _fast=False):
+    @property
+    def outer_mu(self):
+        if self._outer_mu is None:
+            self._outer_mu = np.outer(self.mu, self.mu)
+
+        return self._outer_mu
+
+    def __init__(self, n, mu, cov, _fast=False, outer_mu=None):
         # defaults to 'empty' set of features
         self.n = n
         self.mu = mu
         self.cov = cov
         self.__cov_det = None
         self.__cov_inv = None
+        self._outer_mu = outer_mu
 
         if _fast:
             return
@@ -122,7 +130,8 @@ class FeatStat:
             return FeatStatSingle(mu=np.mean(x, axis=1))
 
         cov = np.cov(x, ddof=0)
-        assert (np.diag(np.atleast_2d(cov)) >= 0).all(), 'non positive covariance'
+        assert (np.diag(
+            np.atleast_2d(cov)) >= 0).all(), 'non positive covariance'
         fs = FeatStat(n=n, mu=np.mean(x, axis=1), cov=cov, _fast=False)
         return fs
 
@@ -146,13 +155,14 @@ class FeatStat:
         # compute mu
         mu = self.mu * lambda_self + \
              othr.mu * lambda_othr
+        outer_mu = np.outer(mu, mu)
 
         # compute cov
-        cov = lambda_self * (self.cov + np.outer(self.mu, self.mu)) + \
-              lambda_othr * (othr.cov + np.outer(othr.mu, othr.mu))
-        cov -= np.outer(mu, mu)
+        cov = lambda_self * (self.cov + self.outer_mu) + \
+              lambda_othr * (othr.cov + othr.outer_mu)
+        cov -= outer_mu
 
-        return FeatStat(n, mu, cov, _fast=True)
+        return FeatStat(n, mu, cov, _fast=True, outer_mu=outer_mu)
 
     __radd__ = __add__
 
@@ -164,13 +174,14 @@ class FeatStat:
         assert n > 0, 'invalid subtraction: not enough observations in other'
 
         mu = (self.mu - (lambda_othr * othr.mu)) / lambda_out
+        outer_mu = np.outer(mu, mu)
 
-        cov = ((self.cov + np.outer(self.mu, self.mu)) -
-               (othr.cov + np.outer(othr.mu, othr.mu)) * lambda_othr)
+        cov = ((self.cov + self.outer_mu) -
+               (othr.cov + othr.outer_mu) * lambda_othr)
         cov *= 1 / lambda_out
-        cov -= np.outer(mu, mu)
+        cov -= outer_mu
 
-        return FeatStat(n, mu, cov, _fast=True)
+        return FeatStat(n, mu, cov, _fast=True, outer_mu=outer_mu)
 
     def __reduce_ex__(self, *args, **kwargs):
         self.reset()
@@ -219,10 +230,11 @@ class FeatStatSingle(FeatStat):
         d = self.d
         return np.zeros((d, d))
 
-    def __init__(self, mu, n=1, cov=None):
+    def __init__(self, mu, n=1, cov=None, _outer_mu=None):
         if n != 1 or cov is not None:
             raise AttributeError
         self.mu = np.atleast_1d(mu)
+        self._outer_mu = _outer_mu
 
 
 class FeatStatEmpty(FeatStat):
@@ -230,6 +242,7 @@ class FeatStatEmpty(FeatStat):
     d = np.nan
     mu = np.nan
     cov = np.nan
+    _outer_mu = None
 
     def __init__(self, *args, **kwargs):
         pass
