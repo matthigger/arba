@@ -20,7 +20,7 @@ sig_img = np.eye(dim_img)
 shape = 6, 6, 6
 
 # detection params
-num_perm = 3
+num_perm = 2
 
 # regression params
 r2 = .5
@@ -74,14 +74,18 @@ def weighted_r2(reg, **kwargs):
     return reg.r2 * len(reg)
 
 
+def maha_zero(reg, **kwargs):
+    return reg.maha[0]
+
+
 f_mask = folder / 'target_mask.nii.gz'
 mask.to_nii(f_mask)
 
-fnc_tuple = mse, weighted_r2
+fnc_tuple = mse, maha_zero
 with file_tree.loaded(effect_list=[eff]):
     sg_hist, reg_list, val_list = \
         arba.regress.run_permute(feat_sbj, file_tree,
-                                 fnc_target=weighted_r2,
+                                 fnc_target=maha_zero,
                                  save_folder=folder,
                                  max_flag=True,
                                  cutoff_perc=95,
@@ -90,9 +94,9 @@ with file_tree.loaded(effect_list=[eff]):
 
 node_mask, d_max = sg_hist.merge_record.get_node_max_dice(mask)
 
-sg_hist.merge_record.plot_size_v(weighted_r2, label='n * r2', mask=mask,
+sg_hist.merge_record.plot_size_v(maha_zero, label='maha(0)', mask=mask,
                                  log_y=True)
-arba.plot.save_fig(folder / 'size_v_nr2.pdf')
+arba.plot.save_fig(folder / 'size_v_maha0.pdf')
 
 sg_hist.merge_record.plot_size_v(mse, label='mse', mask=mask)
 arba.plot.save_fig(folder / 'size_v_mse.pdf')
