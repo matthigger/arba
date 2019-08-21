@@ -31,7 +31,8 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
         # get nodes in hierarchy which (greedily) maximize fnc_target
         merge_record = sg_hist.merge_record
         node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
-        node_list = sg_hist._cut_greedy(node_fnc_dict, max_flag=max_flag)
+        node_list = sg_hist.merge_record._cut_greedy(node_fnc_dict,
+                                                     max_flag=max_flag)
         reg_list = list()
         for n in node_list:
             if max_flag and node_fnc_dict[n] < cutoff:

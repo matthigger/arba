@@ -50,6 +50,43 @@ class MergeRecord(nx.DiGraph):
 
         self.add_nodes_from(self.leaf_ijk_dict.keys())
 
+    def _cut_greedy(self, node_val_dict, max_flag=True):
+        """ gets node of disjoint reg which minimize val
+
+        NOTE: the resultant node_list covers node_val_dict, ie each node in
+        node_val_dict has some ancestor, descendant or itself in node_list
+
+        Args:
+            node_val_dict (dict): keys are nodes, values are associated values
+                                  to be minimized
+            max_flag (bool): toggles max or min
+
+        Returns:
+             node_list (list): nodes have minimum val, are disjoint
+        """
+        # sort all nodes
+        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get,
+                                  reverse=max_flag)
+
+        # init
+        node_covered = set()
+        node_list = list()
+
+        while node_list_sorted:
+            n = node_list_sorted.pop(0)
+            if n in node_covered:
+                continue
+            else:
+                # add reg to significant regions
+                node_list.append(n)
+
+                # add all intersecting regions to reg_covered (no need to add
+                # n, its only in node_list_sorted once)
+                node_covered |= nx.descendants(self, n)
+                node_covered |= nx.ancestors(self, n)
+
+        return node_list
+
     def apply_fnc_leaf(self, sg):
         for reg in sg.nodes:
             ijk = next(iter(reg.pc_ijk))
