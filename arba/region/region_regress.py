@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 
 import arba.space
+from .feat_stat import FeatStatSingle
 from .reg import Region
 
 sns.set(font_scale=1.2)
@@ -20,15 +21,14 @@ class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
 
     Class Attributes:
-        feat_sbj (np.array): (num_sbj, dim_sbj + 1) subject features (ones col
-                             appended)
+        feat_sbj (np.array): (num_sbj, dim_sbj) subject features
         pseudo_inv (np.array): pseudo inverse (used to compute beta)
 
     Instance Attributes:
         feat_img (np.array): (num_sbj, dim_img) mean features observed (per
                               sbj) across the entire region
         pc_ijk (PointCloud): set of voxels (tuples of ijk)
-        beta (np.array): (dim_sbj + 1, dim_img) mapping from img to sbj space
+        beta (np.array): (dim_sbj, dim_img) mapping from img to sbj space
         err_cov (np.array): (dim_img, dim_img) error covariance observed
         err_cov_det (float): covariance of err_cov
     """
@@ -37,6 +37,10 @@ class RegionRegress(Region):
     pseudo_inv = None
     sbj_list = None
     num_sbj = None
+
+    @property
+    def dim_sbj(self):
+        return self.feat_sbj.shape[1]
 
     @classmethod
     def set_feat_sbj(cls, feat_sbj, sbj_list, append_ones=True):
@@ -47,7 +51,11 @@ class RegionRegress(Region):
             cls.feat_sbj = append_col_one(cls.feat_sbj)
 
         x = cls.feat_sbj
-        cls.pseudo_inv = np.linalg.inv(x.T @ x) @ x.T
+
+        # build pseudo inv (store intermediate states for later computing)
+        cls.x_trans_x = x.T @ x
+        cls.x_trans_x_inv = np.linalg.inv(cls.x_trans_x)
+        cls.pseudo_inv = cls.x_trans_x_inv @ x.T
 
     @classmethod
     def shuffle_feat_sbj(cls, seed=None):
@@ -68,11 +76,20 @@ class RegionRegress(Region):
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
         assert (ijk is None) != (pc_ijk is None), 'ijk or pc_ijk required'
-        if pc_ijk is None:
-            pc_ijk = arba.space.PointCloud({ijk}, ref=file_tree.ref)
+        assert RegionRegress.sbj_list == file_tree.sbj_list
 
-        fs_dict = {sbj: file_tree.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
-                   for sbj in RegionRegress.sbj_list}
+        if pc_ijk is None:
+            # slight computational speedup for a single voxel
+            pc_ijk = arba.space.PointCloud([ijk], ref=file_tree.ref)
+            i, j, k = ijk
+            fs_dict = dict()
+            for sbj_idx, sbj in enumerate(RegionRegress.sbj_list):
+                x = file_tree.data[i, j, k, sbj_idx, :]
+                fs_dict[sbj] = FeatStatSingle(x)
+        else:
+            # computationally slower
+            fs_dict = {sbj: file_tree.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
+                       for sbj in RegionRegress.sbj_list}
 
         return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
@@ -80,11 +97,11 @@ class RegionRegress(Region):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
         img_dim = next(iter(fs_dict.values())).d
-        self.feat_img = np.ones(shape=(len(fs_dict), img_dim))
+        self.feat_img = np.empty(shape=(len(fs_dict), img_dim))
         for idx, sbj in enumerate(self.sbj_list):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
-        self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
+        # self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
 
         # fit beta
         self.beta = None
@@ -107,6 +124,13 @@ class RegionRegress(Region):
 
         self.r2 = 1 - (np.trace(self.eps) / np.trace(self.cov))
         self.r2_mean = 1 - (np.trace(self.eps_mean) / np.trace(self.cov_mean))
+
+        # compute mahalanobis to each sbj fature
+        n = self.num_sbj * len(self)
+        self.maha = np.empty(self.dim_sbj)
+        for idx, eps in enumerate(np.diag(self.eps)):
+            s = eps * n / (n - 1) * self.x_trans_x_inv
+            self.maha[idx] = (self.beta.T @ s @ self.beta)[0, 0]
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
