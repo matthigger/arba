@@ -1,10 +1,15 @@
 import pathlib
+import random
 import shutil
 import tempfile
 
 import numpy as np
 
 import arba
+
+# fix random seed
+np.random.seed(1)
+random.seed(1)
 
 dim_sbj = 1
 dim_img = 1

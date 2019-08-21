@@ -7,6 +7,7 @@ import nibabel as nib
 import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
+from collections import defaultdict
 
 from .seg_graph import SegGraph
 from ..space import PointCloud
@@ -49,6 +50,53 @@ class MergeRecord(nx.DiGraph):
                               for ijk, idx in self.ijk_leaf_dict.items()}
 
         self.add_nodes_from(self.leaf_ijk_dict.keys())
+
+    def _cut_biggest_rep(self, node_val_dict, thresh=.9):
+        """ gets largest nodes whose val is >= thresh% of leaf ancestors mean
+
+        Args:
+            node_val_dict (dict): keys are nodes, values are floats
+            thresh (float): threshold of leaf ancestor mean needed for a node
+                            to be a valid representative
+
+        Returns:
+            node_list (list):
+        """
+
+        valid_node_set = set()
+        node_sum_dict = defaultdict(lambda: 0)
+        node_count_dict = defaultdict(lambda: 0)
+        for n in range(len(self)):
+            # the iterator above yields lexicographical sorted nodes
+
+            kids = list(self.neighbors(n))
+
+            if kids:
+                # non-leaf node
+
+                # update counts of node_sum and node_count
+                node_sum_dict[n] = sum(node_sum_dict[_n] for _n in kids)
+                node_count_dict[n] = sum(node_count_dict[_n] for _n in kids)
+
+                # if node's value exceeds threshold, add it to valid nodes
+                _thresh = thresh * node_sum_dict[n] / node_count_dict[n]
+                if node_val_dict[n] >= _thresh:
+                    valid_node_set.add(n)
+            else:
+                # leaf node, valid by default (has no constituents)
+                valid_node_set.add(n)
+                node_sum_dict[n] = node_val_dict[n]
+                node_count_dict[n] = 1
+
+        # get biggest valid nodes
+        node_list = list()
+        for n in reversed(range(len(self))):
+            # reverse lexicographical
+            if n in valid_node_set:
+                node_list.append(n)
+                valid_node_set -= set(nx.descendants(self, n))
+
+        return node_list
 
     def _cut_greedy(self, node_val_dict, max_flag=True):
         """ gets node of disjoint reg which minimize val
