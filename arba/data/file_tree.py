@@ -186,7 +186,7 @@ class FileTree:
 
         # build memmap file
         shape = (*self.ref.shape, self.num_sbj, self.d)
-        self.data = np.zeros(shape)
+        self.data = np.empty(shape)
 
         # load data
         for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
