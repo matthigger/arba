@@ -9,8 +9,7 @@ import arba
 
 
 def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
-                max_flag=True, cutoff_perc=95, fnc_tuple=None,
-                resolve_flag=False, **kwargs):
+                max_flag=True, cutoff_perc=95, fnc_tuple=None, n=0, **kwargs):
     # ensure that fnc_target in fnc_tuple
     if fnc_tuple is None:
         fnc_tuple = fnc_target,
@@ -26,10 +25,14 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
                              **kwargs)
 
         # identify cutoff for signifigance
-        val_list = permute(fnc_target, max_flag=max_flag,
-                           feat_sbj=feat_sbj, file_tree=file_tree,
-                           fnc_tuple=fnc_tuple, **kwargs)
-        cutoff = np.percentile(val_list, cutoff_perc)
+        if n == 0:
+            val_list = []
+            cutoff = np.inf
+        else:
+            val_list = permute(fnc_target, max_flag=max_flag,
+                               feat_sbj=feat_sbj, file_tree=file_tree,
+                               fnc_tuple=fnc_tuple, n=n, **kwargs)
+            cutoff = np.percentile(val_list, cutoff_perc)
 
         #
         merge_record = sg_hist.merge_record
@@ -74,7 +77,7 @@ def build_mask(node_list, merge_record):
 
 
 def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
-               **kwargs):
+               agg_flag=True, **kwargs):
     if fnc_tuple is None:
         fnc_tuple = tuple()
 
@@ -89,17 +92,18 @@ def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
                                              cls_reg=arba.region.RegionRegress,
                                              fnc_tuple=fnc_tuple)
 
-    sg_hist.reduce_to(1, verbose=True)
+    if agg_flag:
+        sg_hist.reduce_to(1, verbose=True)
 
     return sg_hist
 
 
 def permute(fnc_target, feat_sbj, file_tree, n=5000, max_flag=True,
-            **kwargs):
+            agg_perm_flag=True, **kwargs):
     val_list = list()
     for _n in tqdm(range(n), desc='permute'):
         sg_hist = run_single(feat_sbj, file_tree, permute_seed=_n + 1,
-                             **kwargs)
+                             agg_flag=agg_perm_flag, **kwargs)
         node_val_dict = sg_hist.merge_record.fnc_node_val_list[fnc_target]
         if max_flag:
             val = max(node_val_dict.values())
@@ -115,6 +119,8 @@ def permute(fnc_target, feat_sbj, file_tree, n=5000, max_flag=True,
 
 
 def compute_print_dice(mask_estimate, mask_target, save_folder):
+    mask_estimate = mask_estimate.astype(bool)
+    mask_target = mask_target.astype(bool)
     dice_score = 1 - dice(mask_estimate.flatten(), mask_target.flatten())
     with open(str(save_folder / 'dice.txt'), 'w') as f:
         print(f'dice is {dice_score:.3f}', file=f)
