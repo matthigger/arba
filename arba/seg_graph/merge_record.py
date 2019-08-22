@@ -8,6 +8,7 @@ import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
 from collections import defaultdict
+from sortedcontainers.sortedset import SortedSet
 
 from .seg_graph import SegGraph
 from ..space import PointCloud
@@ -143,31 +144,39 @@ class MergeRecord(nx.DiGraph):
                 val = fnc(reg)
                 self.fnc_node_val_list[fnc][node] = val
 
-    def leaf_iter(self, node):
-        """ returns an iterator over the leafs which make up node
+    def leaf_iter(self, node=None, node_list=None):
+        """ returns an iterator over the leafs which cover a node (or nodes)
 
         Args:
             node (int): node in self
+            node_list (list): nodes in self
+
+        Yields:
+            leaf (int): node in self which is a descendant leaf of node (or
+                        some node in node_list)
         """
+        assert (node is None) != (node_list is None), 'node xor node_list'
         assert node in self.nodes, 'node not found'
 
-        node_set = {node}
-        while node_set:
-            _n = node_set.pop()
-            node_list = list(self.neighbors(_n))
-            if not node_list:
+        if node_list is None:
+            node_list = [node]
+
+        node_list = SortedSet(node_list)
+        while node_list:
+            # get largest node
+            node = node_list.pop()
+            neighbor_list = list(self.neighbors(node))
+            if not neighbor_list:
                 # n is a leaf
-                yield _n
+                yield node
             else:
-                node_set |= set(node_list)
+                node_list |= set(neighbor_list)
 
-    def get_pc(self, node):
+    def get_pc(self, **kwargs):
         """ identifies point_cloud associated with a node in tree_hist
-
-        Args:
-            node (int): node in self
         """
-        ijk_iter = (self.leaf_ijk_dict[n] for n in self.leaf_iter(node))
+
+        ijk_iter = (self.leaf_ijk_dict[n] for n in self.leaf_iter(**kwargs))
         pc = PointCloud(ijk_iter, ref=self.ref)
         assert len(pc), 'empty space associated with node?'
         return pc
@@ -212,7 +221,7 @@ class MergeRecord(nx.DiGraph):
         d_max = 0
         for node in node_set:
             # compute dice of the node
-            node_mask = self.get_pc(node).to_mask(shape=self.ref.shape)
+            node_mask = self.get_pc(node=node).to_mask(shape=self.ref.shape)
             d = 1 - dice(mask.flatten(), node_mask.flatten())
 
             # store if max dice
@@ -270,7 +279,7 @@ class MergeRecord(nx.DiGraph):
             reg (RegionWardT2): region
         """
 
-        return reg_cls.from_file_tree(pc_ijk=self.get_pc(node),
+        return reg_cls.from_file_tree(pc_ijk=self.get_pc(node=node),
                                       file_tree=file_tree)
 
     def resolve_pc(self, pc):

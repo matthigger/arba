@@ -1,13 +1,16 @@
+import networkx as nx
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.spatial.distance import dice
+from sortedcontainers.sortedset import SortedSet
 from tqdm import tqdm
 
 import arba
 
 
 def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
-                max_flag=True, cutoff_perc=95, fnc_tuple=None, **kwargs):
+                max_flag=True, cutoff_perc=95, fnc_tuple=None,
+                resolve_flag=False, **kwargs):
     # ensure that fnc_target in fnc_tuple
     if fnc_tuple is None:
         fnc_tuple = fnc_target,
@@ -28,24 +31,14 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
                            fnc_tuple=fnc_tuple, **kwargs)
         cutoff = np.percentile(val_list, cutoff_perc)
 
-        # get nodes in hierarchy which (greedily) maximize fnc_target
+        #
         merge_record = sg_hist.merge_record
+        sig_node_list = list()
         node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
-        node_list = sg_hist.merge_record._cut_biggest_rep(node_fnc_dict)
-
-        reg_list = list()
-        for n in node_list:
-            if max_flag and node_fnc_dict[n] < cutoff:
-                # node is not significant
-                continue
-            elif not max_flag and node_fnc_dict[n] > cutoff:
-                # node is not significant
-                continue
-
-            reg = merge_record.resolve_node(node=n,
-                                            file_tree=file_tree,
-                                            reg_cls=arba.region.RegionRegress)
-            reg_list.append(reg)
+        for n in merge_record.nodes:
+            if (not max_flag and node_fnc_dict[n] <= cutoff) or \
+                    (max_flag and node_fnc_dict[n] >= cutoff):
+                sig_node_list.append(n)
 
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
@@ -56,15 +49,28 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
             plt.suptitle(f'{len(val_list)} permutations')
             arba.plot.save_fig(save_folder / 'permute_nr2.pdf')
 
-            for idx, r in enumerate(reg_list):
-                r.plot()
-                f_out = save_folder / f'reg_{idx}_scatter.pdf'
-                arba.plot.save_fig(f_out=f_out)
+    return sg_hist, sig_node_list, val_list
 
-                f_out = save_folder / f'reg_{idx}_mask.nii.gz'
-                r.pc_ijk.to_mask().to_nii(f_out=f_out)
 
-    return sg_hist, reg_list, val_list
+def build_mask(node_list, merge_record):
+    # init empty mask
+    ref = merge_record.ref
+    assert ref.shape is not None, 'merge_record ref must have shape'
+    mask = arba.space.Mask(np.zeros(ref.shape), ref=ref).astype(int)
+
+    # sort nodes from biggest (value + space) to smallest
+    node_set = SortedSet(node_list)
+    while node_set:
+        node = node_set.pop()
+
+        # remove all the nodes which would be covered by node
+        node_set -= set(nx.descendants(merge_record, node))
+
+        # record position of node
+        for ijk in merge_record.get_pc(node=node):
+            mask[ijk] = node
+
+    return mask
 
 
 def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
@@ -108,23 +114,15 @@ def permute(fnc_target, feat_sbj, file_tree, n=5000, max_flag=True,
     return val_list
 
 
-def compute_print_dice(reg_list, mask_target, save_folder):
-    # build mask of detected area
-    if reg_list:
-        mask_detected = sum(r.pc_ijk.to_mask() for r in reg_list).astype(bool)
-    else:
-        # no regions are sig
-        mask_detected = np.zeros(shape=mask_target.shape).astype(bool)
-
-    # compute / record dice
-    dice_score = 1 - dice(mask_detected.flatten(), mask_target.flatten())
+def compute_print_dice(mask_estimate, mask_target, save_folder):
+    dice_score = 1 - dice(mask_estimate.flatten(), mask_target.flatten())
     with open(str(save_folder / 'dice.txt'), 'w') as f:
         print(f'dice is {dice_score:.3f}', file=f)
         print(f'target vox: {mask_target.sum()}', file=f)
-        print(f'detected vox: {mask_detected.sum()}', file=f)
-        true_detect = (mask_target & mask_detected).sum()
+        print(f'detected vox: {mask_estimate.sum()}', file=f)
+        true_detect = (mask_target & mask_estimate).sum()
         print(f'true detected vox: {true_detect}', file=f)
-        false_detect = (~mask_target & mask_detected).sum()
+        false_detect = (~mask_target & mask_estimate).sum()
         print(f'false detected vox: {false_detect}', file=f)
 
     return dice_score

@@ -88,7 +88,7 @@ mask.to_nii(f_mask)
 
 fnc_tuple = mse, maha_zero
 with file_tree.loaded(effect_list=[eff]):
-    sg_hist, reg_list, val_list = \
+    sg_hist, sig_node_list, val_list = \
         arba.regress.run_permute(feat_sbj, file_tree,
                                  fnc_target=maha_zero,
                                  save_folder=folder,
@@ -106,5 +106,8 @@ arba.plot.save_fig(folder / 'size_v_maha0.pdf')
 sg_hist.merge_record.plot_size_v(mse, label='mse', mask=mask)
 arba.plot.save_fig(folder / 'size_v_mse.pdf')
 
-arba.regress.compute_print_dice(reg_list, mask_target=mask, save_folder=folder)
+mask_estimate = arba.regress.build_mask(sig_node_list, sg_hist.merge_record)
+mask_estimate.to_nii(folder / 'mask_estimate.nii.gz')
+arba.regress.compute_print_dice(mask_estimate=mask_estimate,
+                                mask_target=mask, save_folder=folder)
 print(folder)
