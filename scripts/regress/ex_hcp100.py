@@ -19,12 +19,12 @@ mu_sbj = np.zeros(dim_sbj)
 sig_sbj = np.eye(dim_sbj)
 
 # detection params
-num_perm = 0
+num_perm = 10
 
 file_tree = hcp_100.get_file_tree(low_res=True, feat_tuple=('fa',))
 
 # regression params
-r2 = .99
+r2 = .2
 effect_size = 100
 mask_rad = 3
 with file_tree.loaded():
@@ -76,12 +76,21 @@ fnc_tuple = mse, maha_zero, r2
 with file_tree.loaded(effect_list=[eff]):
     sg_hist, sig_node_list, val_list = \
         arba.regress.run_permute(feat_sbj, file_tree,
-                                 fnc_target=maha_zero,
+                                 fnc_target=r2,
                                  save_folder=folder,
                                  max_flag=True,
                                  cutoff_perc=95,
                                  n=num_perm,
-                                 fnc_tuple=fnc_tuple)
+                                 fnc_tuple=fnc_tuple,
+                                 agg_perm_flag=False)
+
+    for n in sig_node_list:
+        r = sg_hist.merge_record.resolve_node(n,
+                                              file_tree=file_tree,
+                                              reg_cls=arba.region.RegionRegress)
+        r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
+        r.plot(img_feat_label='fa')
+        arba.plot.save_fig(folder / f'node_{n}.pdf')
 
 node_mask, d_max = sg_hist.merge_record.get_node_max_dice(effect_mask)
 

@@ -28,7 +28,7 @@ shape = 6, 6, 6
 num_perm = 50
 
 # regression params
-r2 = .5
+r2 = .05
 effect_mask = np.zeros(shape)
 effect_mask[2:5, 2:5, 2:5] = True
 
@@ -97,6 +97,14 @@ with file_tree.loaded(effect_list=[eff]):
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
                                  agg_perm_flag=False)
+
+    for n in sig_node_list:
+        r = sg_hist.merge_record.resolve_node(n,
+                                              file_tree=file_tree,
+                                              reg_cls=arba.region.RegionRegress)
+        r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
+        r.plot(img_feat_label='fa')
+        arba.plot.save_fig(folder / f'node_{n}.pdf')
 
 node_mask, d_max = sg_hist.merge_record.get_node_max_dice(effect_mask)
 
