@@ -1,6 +1,5 @@
 import time
 
-import networkx as nx
 import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
@@ -37,7 +36,8 @@ class SegGraphHistory(SegGraph):
         return reg_sum
 
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=False,
-                  update_period=10, verbose_dbg=False, **kwargs):
+                  update_period=10, verbose_dbg=False, reg_size_thresh=None,
+                  **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
@@ -49,6 +49,8 @@ class SegGraphHistory(SegGraph):
             update_period (float): how often command line updates are given in
                                    verbose_dbg
             verbose_dbg (bool): toggles debug command line output (timing)
+            reg_size_thresh (int): if passed, stops merging regions whose size
+                                exceeds this threshold
 
         Returns:
             err_list (list): error associated with each step
@@ -66,7 +68,8 @@ class SegGraphHistory(SegGraph):
 
         # init edges if need be
         if not self._err_edge_list:
-            self._add_err_edge_list(verbose=verbose)
+            self._add_err_edge_list(verbose=verbose,
+                                    reg_size_thresh=reg_size_thresh)
 
         # init progress stats
         n_neigh_list = list()
@@ -106,7 +109,7 @@ class SegGraphHistory(SegGraph):
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_err_edge_list(edge_list)
+            self._add_err_edge_list(edge_list, reg_size_thresh=reg_size_thresh)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
@@ -169,12 +172,23 @@ class SegGraphHistory(SegGraph):
 
         return edge_list_disjoint, err_list
 
-    def _add_err_edge_list(self, edge_list=None, verbose=False):
+    def _add_err_edge_list(self, edge_list=None, verbose=False,
+                           reg_size_thresh=None):
 
         # get list of edges to add (default to
         if edge_list is None:
             self._err_edge_list = SortedList()
             edge_list = self.edges
+
+        if reg_size_thresh is not None:
+            # don't grow a region if it already meets the reg_size_thresh
+            if reg_size_thresh == 1:
+                return
+
+            def small_enough(reg_pair):
+                return max((len(r) for r in reg_pair)) < reg_size_thresh
+
+            edge_list = filter(small_enough, edge_list)
 
         # compute error per edge
         tqdm_dict = {'desc': 'compute error per edge',

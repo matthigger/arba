@@ -14,6 +14,8 @@ random.seed(1)
 dim_sbj = 1
 dim_img = 1
 
+reg_size_thresh = 5
+
 # subject params
 mu_sbj = np.zeros(dim_sbj)
 sig_sbj = np.eye(dim_sbj)
@@ -25,10 +27,10 @@ sig_img = np.eye(dim_img)
 shape = 6, 6, 6
 
 # detection params
-num_perm = 50
+num_perm = 5
 
 # regression params
-r2 = .05
+r2 = .15
 effect_mask = np.zeros(shape)
 effect_mask[2:5, 2:5, 2:5] = True
 
@@ -96,7 +98,7 @@ with file_tree.loaded(effect_list=[eff]):
                                  cutoff_perc=95,
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
-                                 agg_perm_flag=False)
+                                 reg_size_thresh=reg_size_thresh)
 
     for n in sig_node_list:
         r = sg_hist.merge_record.resolve_node(n,

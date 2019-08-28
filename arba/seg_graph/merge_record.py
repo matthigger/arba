@@ -29,6 +29,7 @@ class MergeRecord(nx.DiGraph):
         leaf_ijk_dict (dict): keys are leaf nodes, values are ijk
         fnc_node_val_list (dict): keys are functions, values are dicts (whose
                                   keys are nodes and values are fnc returns)
+        node_size_dict (dict): keys are nodes, values are size (in voxels)
     """
 
     def __init__(self, mask=None, pc=None, ref=None, fnc_tuple=(), **kwargs):
@@ -51,6 +52,8 @@ class MergeRecord(nx.DiGraph):
                               for ijk, idx in self.ijk_leaf_dict.items()}
 
         self.add_nodes_from(self.leaf_ijk_dict.keys())
+
+        self.node_size_dict = {n: 1 for n in self.leaf_ijk_dict.keys()}
 
     def _cut_biggest_rep(self, node_val_dict, thresh=.9):
         """ gets largest nodes whose val is >= thresh% of leaf ancestors mean
@@ -265,6 +268,10 @@ class MergeRecord(nx.DiGraph):
             assert reg_sum is not None, 'reg_sum required if fnc'
             val = fnc(reg_sum, reg_tuple=reg_tuple)
             self.fnc_node_val_list[fnc][node_sum] = val
+
+        # track size
+        self.node_size_dict[node_sum] = \
+            sum(self.node_size_dict[n] for n in node_tuple)
 
         return node_sum
 
