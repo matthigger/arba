@@ -36,26 +36,32 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
 
             #
             r2_null = np.vstack(val_list)
+            num_perm, num_vox = r2_null.shape
             r2_null = np.cumsum(r2_null, axis=1)
+            r2_null = r2_null / np.arange(1, num_vox + 1)
             r2_null = np.sort(r2_null, axis=0)
-
-        num_perm = r2_null.shape[0]
+            mu_null = np.mean(r2_null, axis=0)
+            std_null = np.std(r2_null, axis=0)
 
         #
         merge_record = sg_hist.merge_record
         node_pval_dict = dict()
+        node_z_dict = dict()
         node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
         for n in merge_record.nodes:
             node_size = merge_record.node_size_dict[n]
-            if node_size < reg_size_thresh:
-                continue
 
             # compute percentile
-            pval = bisect_right(r2_null[:, node_size - 1], node_fnc_dict[n])
-            pval /= num_perm
+            _r2_null = r2_null[:, node_size - 1]
+            pval = bisect_right(_r2_null, node_fnc_dict[n]) / num_perm
             if max_flag:
                 pval = 1 - pval
             node_pval_dict[n] = pval
+
+            # compute z score
+            mu = mu_null[node_size - 1]
+            std = std_null[node_size - 1]
+            node_z_dict[n] = (node_fnc_dict[n] - mu) / std
 
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
@@ -69,7 +75,7 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
             # plt.suptitle(f'{len(val_list)} permutations')
             # arba.plot.save_fig(save_folder / 'permute_r2.pdf')
 
-    return sg_hist, node_pval_dict, val_list, r2_null
+    return sg_hist, node_pval_dict, node_z_dict, r2_null
 
 
 def build_mask(node_list, merge_record):
