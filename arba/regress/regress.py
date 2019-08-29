@@ -1,26 +1,22 @@
 import networkx as nx
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.spatial.distance import dice
 from sortedcontainers.sortedset import SortedSet
 from tqdm import tqdm
 
 import arba
 from mh_pytools import parallel
+from bisect import bisect_right
 
 
 def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
-                max_flag=True, cutoff_perc=95, fnc_tuple=None, n=0,
+                max_flag=True, fnc_tuple=None, n=0,
                 reg_size_thresh=1, **kwargs):
     # ensure that fnc_target in fnc_tuple
     if fnc_tuple is None:
         fnc_tuple = fnc_target,
     elif fnc_target not in fnc_tuple:
         fnc_tuple = *fnc_tuple, fnc_target
-
-    if not max_flag:
-        # in min mode, we need 'inverse' of cutoff_perc
-        cutoff_perc = 100 - cutoff_perc
 
     with file_tree.loaded():
         sg_hist = run_single(feat_sbj, file_tree, fnc_tuple=fnc_tuple,
@@ -41,20 +37,25 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
             #
             r2_null = np.vstack(val_list)
             r2_null = np.cumsum(r2_null, axis=1)
-            cutoff = np.percentile(r2_null, cutoff_perc, axis=0)
-            cutoff = np.divide(cutoff, np.arange(1, cutoff.size + 1, 1))
+            r2_null = np.sort(r2_null, axis=0)
+
+        num_perm = r2_null.shape[0]
 
         #
         merge_record = sg_hist.merge_record
-        sig_node_list = list()
+        node_pval_dict = dict()
         node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
         for n in merge_record.nodes:
             node_size = merge_record.node_size_dict[n]
             if node_size < reg_size_thresh:
                 continue
-            if (not max_flag and node_fnc_dict[n] <= cutoff[node_size - 1]) or \
-                    (max_flag and node_fnc_dict[n] >= cutoff[node_size - 1]):
-                sig_node_list.append(n)
+
+            # compute percentile
+            pval = bisect_right(r2_null[:, node_size - 1], node_fnc_dict[n])
+            pval /= num_perm
+            if max_flag:
+                pval = 1 - pval
+            node_pval_dict[n] = pval
 
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
@@ -68,7 +69,7 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
             # plt.suptitle(f'{len(val_list)} permutations')
             # arba.plot.save_fig(save_folder / 'permute_r2.pdf')
 
-    return sg_hist, sig_node_list, val_list, cutoff
+    return sg_hist, node_pval_dict, val_list, r2_null
 
 
 def build_mask(node_list, merge_record):
