@@ -29,7 +29,7 @@ shape = 6, 6, 6
 # detection params
 par_flag = True
 num_perm = 24
-cutoff_perc = 95
+alpha = .05
 
 # regression params
 r2 = .5
@@ -88,27 +88,28 @@ effect_mask.to_nii(f_mask)
 
 fnc_tuple = mse, r2
 with file_tree.loaded(effect_list=[eff]):
-    sg_hist, node_pval_dict, val_list, r2_null = \
+    sg_hist, node_pval_dict, node_z_dict, r2_null = \
         arba.regress.run_permute(feat_sbj, file_tree,
                                  fnc_target=r2,
                                  save_folder=folder,
                                  max_flag=True,
-                                 cutoff_perc=cutoff_perc,
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
                                  reg_size_thresh=reg_size_thresh,
                                  par_flag=par_flag)
 
     merge_record = sg_hist.merge_record
-    sig_node_cover = merge_record._cut_greedy(node_pval_dict,
+    node_p_negz_dict = {n: (p, -node_z_dict[n])
+                        for n, p in node_pval_dict.items() if p <= alpha}
+    sig_node_cover = merge_record._cut_greedy(node_p_negz_dict,
                                               max_flag=False)
-    # for n in sig_node_cover:
-    #     r = sg_hist.merge_record.resolve_node(n,
-    #                                           file_tree=file_tree,
-    #                                           reg_cls=arba.region.RegionRegress)
-    #     r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
-    #     r.plot(img_feat_label='fa')
-    #     arba.plot.save_fig(folder / f'node_{n}.pdf')
+    for n in sig_node_cover:
+        r = sg_hist.merge_record.resolve_node(n,
+                                              file_tree=file_tree,
+                                              reg_cls=arba.region.RegionRegress)
+        r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
+        r.plot(img_feat_label='fa')
+        arba.plot.save_fig(folder / f'node_{n}.pdf')
 
 # node_mask, d_max = merge_record.get_node_max_dice(effect_mask)
 
@@ -117,8 +118,12 @@ merge_record.plot_size_v(r2, label='r2', mask=effect_mask,
 arba.plot.save_fig(folder / 'size_v_r2.pdf')
 
 merge_record.plot_size_v(node_pval_dict, label='pval', mask=effect_mask,
-                         log_y=True)
+                         log_y=False)
 arba.plot.save_fig(folder / 'size_v_pval.pdf')
+
+merge_record.plot_size_v(node_z_dict, label='r2z', mask=effect_mask,
+                         log_y=False)
+arba.plot.save_fig(folder / 'size_v_r2z_score.pdf')
 
 merge_record.plot_size_v(mse, label='mse', mask=effect_mask)
 arba.plot.save_fig(folder / 'size_v_mse.pdf')
