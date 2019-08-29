@@ -4,6 +4,7 @@ import shutil
 import tempfile
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 import arba
 
@@ -28,7 +29,8 @@ shape = 6, 6, 6
 
 # detection params
 par_flag = True
-num_perm = 320
+num_perm = 24
+cutoff_perc = 95
 
 # regression params
 r2 = .5
@@ -91,12 +93,12 @@ effect_mask.to_nii(f_mask)
 
 fnc_tuple = mse, maha_zero, r2
 with file_tree.loaded(effect_list=[eff]):
-    sg_hist, sig_node_list, val_list = \
+    sg_hist, sig_node_list, val_list, cutoff = \
         arba.regress.run_permute(feat_sbj, file_tree,
                                  fnc_target=r2,
                                  save_folder=folder,
                                  max_flag=True,
-                                 cutoff_perc=95,
+                                 cutoff_perc=cutoff_perc,
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
                                  reg_size_thresh=reg_size_thresh,
@@ -119,6 +121,9 @@ arba.plot.save_fig(folder / 'size_v_maha0.pdf')
 
 sg_hist.merge_record.plot_size_v(r2, label='r2', mask=effect_mask,
                                  log_y=False)
+plt.plot(np.arange(1, cutoff.size + 1, 1), cutoff,
+         label=f'{cutoff_perc}-perc cutoff', color='g')
+plt.legend()
 arba.plot.save_fig(folder / 'size_v_r2.pdf')
 
 sg_hist.merge_record.plot_size_v(mse, label='mse', mask=effect_mask)

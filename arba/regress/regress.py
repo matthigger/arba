@@ -35,31 +35,40 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
                                feat_sbj=feat_sbj, file_tree=file_tree,
                                fnc_tuple=fnc_tuple, n=n,
                                reg_size_thresh=reg_size_thresh, **kwargs)
-            cutoff = np.percentile(val_list, cutoff_perc)
+
+            # cutoff = np.percentile(val_list, cutoff_perc)
+
+            #
+            r2_null = np.vstack(val_list)
+            r2_null = np.cumsum(r2_null, axis=1)
+            cutoff = np.percentile(r2_null, cutoff_perc, axis=0)
+            cutoff = np.divide(cutoff, np.arange(1, cutoff.size + 1, 1))
 
         #
         merge_record = sg_hist.merge_record
         sig_node_list = list()
         node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
         for n in merge_record.nodes:
-            if merge_record.node_size_dict[n] < reg_size_thresh:
+            node_size = merge_record.node_size_dict[n]
+            if node_size < reg_size_thresh:
                 continue
-            if (not max_flag and node_fnc_dict[n] <= cutoff) or \
-                    (max_flag and node_fnc_dict[n] >= cutoff):
+            if (not max_flag and node_fnc_dict[n] <= cutoff[node_size - 1]) or \
+                    (max_flag and node_fnc_dict[n] >= cutoff[node_size - 1]):
                 sig_node_list.append(n)
 
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
 
-            # histogram of permutation testing
-            plt.hist(val_list, bins=30)
-            plt.axvline(cutoff, color='r', label=f'{cutoff_perc}th perc: {cutoff:.3f}')
-            plt.legend()
-            plt.xlabel(f'max {fnc_target.__name__} per permutations')
-            plt.suptitle(f'{len(val_list)} permutations')
-            arba.plot.save_fig(save_folder / 'permute_r2.pdf')
+            # # histogram of permutation testing
+            # plt.hist(val_list, bins=30)
+            # plt.axvline(cutoff, color='r',
+            #             label=f'{cutoff_perc}th perc')
+            # plt.legend()
+            # plt.xlabel(f'max {fnc_target.__name__} per permutations')
+            # plt.suptitle(f'{len(val_list)} permutations')
+            # arba.plot.save_fig(save_folder / 'permute_r2.pdf')
 
-    return sg_hist, sig_node_list, val_list
+    return sg_hist, sig_node_list, val_list, cutoff
 
 
 def build_mask(node_list, merge_record):
@@ -104,14 +113,18 @@ def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
     return sg_hist
 
 
-def _get_val(fnc_target=None, max_flag=True, reg_size_thresh=1, **kwargs):
+def _get_val(fnc_target=None, max_flag=True, all_flag=False, reg_size_thresh=1,
+             **kwargs):
     sg_hist = run_single(reg_size_thresh=reg_size_thresh, **kwargs)
 
     merge_record = sg_hist.merge_record
     node_val_dict = merge_record.fnc_node_val_list[fnc_target]
     val_list = [v for n, v in node_val_dict.items() if
                 merge_record.node_size_dict[n] >= reg_size_thresh]
-    if max_flag:
+
+    if all_flag:
+        val = sorted(val_list, reverse=True)
+    elif max_flag:
         val = max(val_list)
     else:
         val = min(val_list)
@@ -125,7 +138,8 @@ def permute(fnc_target, feat_sbj, file_tree, n=5000, par_flag=False, **kwargs):
         d = {'feat_sbj': feat_sbj,
              'file_tree': file_tree,
              'permute_seed': n + 1,
-             'fnc_target': fnc_target}
+             'fnc_target': fnc_target,
+             'all_flag': True}
         d.update(**kwargs)
         arg_list.append(d)
 
