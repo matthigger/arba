@@ -486,29 +486,28 @@ class MergeRecord(nx.DiGraph):
         num_nodes = len(self.nodes)
 
         sns.set(font_scale=1.2)
-        node_size_dict = dict()
         if mask is None:
             node_color = None
         else:
+            # compute node_color
             node_color = dict()
-
-        for node in range(num_nodes):
-            if node < len(self.leaf_ijk_dict.keys()):
-                node_size_dict[node] = 1
-                if mask is not None:
+            for node in range(num_nodes):
+                if node < len(self.leaf_ijk_dict.keys()):
                     ijk = self.leaf_ijk_dict[node]
                     node_color[node] = mask[ijk].astype(bool)
-            else:
-                n0, n1 = list(self.neighbors(node))
-                s0, s1 = node_size_dict[n0], node_size_dict[n1]
-                node_size_dict[node] = s0 + s1
-                if mask is not None:
+                else:
+                    n0, n1 = list(self.neighbors(node))
+                    s0, s1 = self.node_size_dict[n0], self.node_size_dict[n1]
                     c0, c1 = node_color[n0], node_color[n1]
                     lam0 = s0 / (s0 + s1)
                     node_color[node] = c0 * lam0 + c1 * (1 - lam0)
 
-        node_pos = {n: (size, self.fnc_node_val_list[fnc][n])
-                    for n, size in node_size_dict.items()}
+        node_pos = dict()
+        for n, size in self.node_size_dict.items():
+            if isinstance(fnc, dict):
+                node_pos[n] = size, fnc[n]
+            else:
+                node_pos[n] = size, self.fnc_node_val_list[fnc][n]
 
         nodelist = [n for n, c in node_color.items() if c > 0]
         node_color = {n: node_color[n] for n in nodelist}
