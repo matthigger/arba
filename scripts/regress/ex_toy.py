@@ -14,8 +14,6 @@ random.seed(1)
 dim_sbj = 1
 dim_img = 1
 
-reg_size_thresh = 1
-
 # subject params
 mu_sbj = np.zeros(dim_sbj)
 sig_sbj = np.eye(dim_sbj)
@@ -93,9 +91,8 @@ with file_tree.loaded(effect_list=[eff]):
                                  fnc_target=r2,
                                  save_folder=folder,
                                  max_flag=True,
-                                 n=num_perm,
+                                 num_perm=num_perm,
                                  fnc_tuple=fnc_tuple,
-                                 reg_size_thresh=reg_size_thresh,
                                  par_flag=par_flag)
 
     merge_record = sg_hist.merge_record
@@ -132,4 +129,5 @@ mask_estimate = arba.regress.build_mask(sig_node_cover, merge_record)
 mask_estimate.to_nii(folder / 'mask_estimate.nii.gz')
 arba.regress.compute_print_dice(mask_estimate=mask_estimate,
                                 mask_target=effect_mask, save_folder=folder)
+
 print(folder)

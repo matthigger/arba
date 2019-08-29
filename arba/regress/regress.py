@@ -1,17 +1,21 @@
+from bisect import bisect_right
+
+import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import seaborn as sns
 from scipy.spatial.distance import dice
 from sortedcontainers.sortedset import SortedSet
 from tqdm import tqdm
 
 import arba
 from mh_pytools import parallel
-from bisect import bisect_right
 
 
 def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
-                max_flag=True, fnc_tuple=None, n=0,
-                reg_size_thresh=1, **kwargs):
+                max_flag=True, fnc_tuple=None, num_perm=100, **kwargs):
+    assert num_perm > 0, 'num_perm must be positive'
+
     # ensure that fnc_target in fnc_tuple
     if fnc_tuple is None:
         fnc_tuple = fnc_target,
@@ -22,28 +26,27 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
         sg_hist = run_single(feat_sbj, file_tree, fnc_tuple=fnc_tuple,
                              **kwargs)
 
-        # identify cutoff for signifigance
-        if n == 0:
-            val_list = []
-            cutoff = np.inf
-        else:
-            val_list = permute(fnc_target, max_flag=max_flag,
-                               feat_sbj=feat_sbj, file_tree=file_tree,
-                               fnc_tuple=fnc_tuple, n=n,
-                               reg_size_thresh=reg_size_thresh, **kwargs)
+        val_list = permute(fnc_target, feat_sbj=feat_sbj,
+                           file_tree=file_tree, fnc_tuple=fnc_tuple,
+                           num_perm=num_perm, **kwargs)
 
-            # cutoff = np.percentile(val_list, cutoff_perc)
+        # build r2_null, has shape (num_perm, num_vox).  each column is a
+        # sorted list of upper bounds on r2 per permutation.
+        r2_null = np.vstack(val_list)
+        num_perm, num_vox = r2_null.shape
 
-            #
-            r2_null = np.vstack(val_list)
-            num_perm, num_vox = r2_null.shape
-            r2_null = np.cumsum(r2_null, axis=1)
-            r2_null = r2_null / np.arange(1, num_vox + 1)
-            r2_null = np.sort(r2_null, axis=0)
-            mu_null = np.mean(r2_null, axis=0)
-            std_null = np.std(r2_null, axis=0)
+        # sum and normalize
+        r2_null = np.cumsum(r2_null, axis=1)
+        r2_null = r2_null / np.arange(1, num_vox + 1)
 
-        #
+        # sort per region size
+        r2_null = np.sort(r2_null, axis=0)
+
+        # compute stats (for z)
+        mu_null = np.mean(r2_null, axis=0)
+        std_null = np.std(r2_null, axis=0)
+
+        # compute pval + z score per node
         merge_record = sg_hist.merge_record
         node_pval_dict = dict()
         node_z_dict = dict()
@@ -66,14 +69,20 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
 
-            # # histogram of permutation testing
-            # plt.hist(val_list, bins=30)
-            # plt.axvline(cutoff, color='r',
-            #             label=f'{cutoff_perc}th perc')
-            # plt.legend()
-            # plt.xlabel(f'max {fnc_target.__name__} per permutations')
-            # plt.suptitle(f'{len(val_list)} permutations')
-            # arba.plot.save_fig(save_folder / 'permute_r2.pdf')
+            # print percentiles of r2 per size
+            sns.set(font_scale=1.2)
+            cmap = plt.get_cmap('viridis')
+            size = np.arange(1, r2_null.shape[1] + 1)
+            p_list = [50, 75, 90, 95, 99]
+            for p_idx, p in enumerate(p_list):
+                perc_line = np.percentile(r2_null, p, axis=0)
+                plt.plot(size, perc_line, label=f'{p}-th percentile',
+                         color=cmap(p_idx / len(p_list)))
+            plt.ylabel('r2')
+            plt.xlabel('size')
+            plt.gca().set_xscale('log')
+            plt.legend()
+            arba.plot.save_fig(save_folder / 'size_v_r2_null.pdf')
 
     return sg_hist, node_pval_dict, node_z_dict, r2_null
 
@@ -120,33 +129,24 @@ def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
     return sg_hist
 
 
-def _get_val(fnc_target=None, max_flag=True, all_flag=False, reg_size_thresh=1,
-             **kwargs):
-    sg_hist = run_single(reg_size_thresh=reg_size_thresh, **kwargs)
+def _get_val(fnc_target=None, **kwargs):
+    sg_hist = run_single(**kwargs)
 
     merge_record = sg_hist.merge_record
-    node_val_dict = merge_record.fnc_node_val_list[fnc_target]
-    val_list = [v for n, v in node_val_dict.items() if
-                merge_record.node_size_dict[n] >= reg_size_thresh]
+    val_list = merge_record.fnc_node_val_list[fnc_target].values()
 
-    if all_flag:
-        val = sorted(val_list, reverse=True)
-    elif max_flag:
-        val = max(val_list)
-    else:
-        val = min(val_list)
-
-    return val
+    return sorted(val_list, reverse=True)
 
 
-def permute(fnc_target, feat_sbj, file_tree, n=5000, par_flag=False, **kwargs):
+def permute(fnc_target, feat_sbj, file_tree, num_perm=5000, par_flag=False,
+            **kwargs):
     arg_list = list()
-    for n in range(n):
+    for n in range(num_perm):
         d = {'feat_sbj': feat_sbj,
              'file_tree': file_tree,
              'permute_seed': n + 1,
              'fnc_target': fnc_target,
-             'all_flag': True}
+             'reg_size_thresh': 1}
         d.update(**kwargs)
         arg_list.append(d)
 
