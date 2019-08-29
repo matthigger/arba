@@ -1,5 +1,6 @@
 import pathlib
 import tempfile
+from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -7,7 +8,6 @@ import nibabel as nib
 import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
-from collections import defaultdict
 from sortedcontainers.sortedset import SortedSet
 
 from .seg_graph import SegGraph
@@ -102,6 +102,31 @@ class MergeRecord(nx.DiGraph):
 
         return node_list
 
+    def get_cover(self, node_list, sort_flag=True):
+
+        if sort_flag:
+            # sorts from biggest to smallest
+            node_list = sorted(node_list, reverse=True)
+
+        # init
+        node_covered = set()
+        cover = list()
+
+        while node_list:
+            n = node_list.pop(0)
+            if n in node_covered:
+                continue
+            else:
+                # add reg to significant regions
+                cover.append(n)
+
+                # add all intersecting regions to reg_covered (no need to add
+                # n, its only in node_list_sorted once)
+                node_covered |= nx.descendants(self, n)
+                node_covered |= nx.ancestors(self, n)
+
+        return cover
+
     def _cut_greedy(self, node_val_dict, max_flag=True):
         """ gets node of disjoint reg which minimize val
 
@@ -116,28 +141,10 @@ class MergeRecord(nx.DiGraph):
         Returns:
              node_list (list): nodes have minimum val, are disjoint
         """
-        # sort all nodes
-        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get,
-                                  reverse=max_flag)
+        node_list = sorted(node_val_dict.keys(), key=node_val_dict.get,
+                           reverse=max_flag)
 
-        # init
-        node_covered = set()
-        node_list = list()
-
-        while node_list_sorted:
-            n = node_list_sorted.pop(0)
-            if n in node_covered:
-                continue
-            else:
-                # add reg to significant regions
-                node_list.append(n)
-
-                # add all intersecting regions to reg_covered (no need to add
-                # n, its only in node_list_sorted once)
-                node_covered |= nx.descendants(self, n)
-                node_covered |= nx.ancestors(self, n)
-
-        return node_list
+        return self.get_cover(node_list=node_list, sort_flag=False)
 
     def apply_fnc_leaf(self, sg):
         for reg in sg.nodes:
