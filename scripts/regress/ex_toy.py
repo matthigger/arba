@@ -14,7 +14,7 @@ random.seed(1)
 dim_sbj = 1
 dim_img = 1
 
-reg_size_thresh = 5
+reg_size_thresh = 1
 
 # subject params
 mu_sbj = np.zeros(dim_sbj)
@@ -27,10 +27,11 @@ sig_img = np.eye(dim_img)
 shape = 6, 6, 6
 
 # detection params
-num_perm = 5
+par_flag = True
+num_perm = 320
 
 # regression params
-r2 = .15
+r2 = .5
 effect_mask = np.zeros(shape)
 effect_mask[2:5, 2:5, 2:5] = True
 
@@ -84,7 +85,7 @@ def r2(reg, **kwargs):
 def maha_zero(reg, **kwargs):
     return reg.maha[0]
 
-
+min
 f_mask = folder / 'target_mask.nii.gz'
 effect_mask.to_nii(f_mask)
 
@@ -98,9 +99,11 @@ with file_tree.loaded(effect_list=[eff]):
                                  cutoff_perc=95,
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
-                                 reg_size_thresh=reg_size_thresh)
+                                 reg_size_thresh=reg_size_thresh,
+                                 par_flag=par_flag)
 
-    for n in sig_node_list:
+    sig_node_cover = sg_hist.merge_record.get_cover(sig_node_list)
+    for n in sig_node_cover:
         r = sg_hist.merge_record.resolve_node(n,
                                               file_tree=file_tree,
                                               reg_cls=arba.region.RegionRegress)

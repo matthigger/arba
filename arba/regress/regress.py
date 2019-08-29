@@ -6,6 +6,7 @@ from sortedcontainers.sortedset import SortedSet
 from tqdm import tqdm
 
 import arba
+from mh_pytools import parallel
 
 
 def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
@@ -51,10 +52,12 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
 
             # histogram of permutation testing
-            plt.hist(val_list, bins=100)
+            plt.hist(val_list, bins=30)
+            plt.axvline(cutoff, color='r', label=f'{cutoff_perc}th perc: {cutoff:.3f}')
+            plt.legend()
             plt.xlabel(f'max {fnc_target.__name__} per permutations')
             plt.suptitle(f'{len(val_list)} permutations')
-            arba.plot.save_fig(save_folder / 'permute_nr2.pdf')
+            arba.plot.save_fig(save_folder / 'permute_r2.pdf')
 
     return sg_hist, sig_node_list, val_list
 
@@ -101,17 +104,38 @@ def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
     return sg_hist
 
 
-def permute(fnc_target, feat_sbj, file_tree, n=5000, max_flag=True, **kwargs):
-    val_list = list()
-    for _n in tqdm(range(n), desc='permute'):
-        sg_hist = run_single(feat_sbj, file_tree, permute_seed=_n + 1,
-                             **kwargs)
-        node_val_dict = sg_hist.merge_record.fnc_node_val_list[fnc_target]
-        if max_flag:
-            val = max(node_val_dict.values())
-        else:
-            val = min(node_val_dict.values())
-        val_list.append(val)
+def _get_val(fnc_target=None, max_flag=True, reg_size_thresh=1, **kwargs):
+    sg_hist = run_single(reg_size_thresh=reg_size_thresh, **kwargs)
+
+    merge_record = sg_hist.merge_record
+    node_val_dict = merge_record.fnc_node_val_list[fnc_target]
+    val_list = [v for n, v in node_val_dict.items() if
+                merge_record.node_size_dict[n] >= reg_size_thresh]
+    if max_flag:
+        val = max(val_list)
+    else:
+        val = min(val_list)
+
+    return val
+
+
+def permute(fnc_target, feat_sbj, file_tree, n=5000, par_flag=False, **kwargs):
+    arg_list = list()
+    for n in range(n):
+        d = {'feat_sbj': feat_sbj,
+             'file_tree': file_tree,
+             'permute_seed': n + 1,
+             'fnc_target': fnc_target}
+        d.update(**kwargs)
+        arg_list.append(d)
+
+    if par_flag:
+        val_list = parallel.run_par_fnc(fnc=_get_val, arg_list=arg_list,
+                                        verbose=True)
+    else:
+        val_list = list()
+        for d in tqdm(arg_list, desc='permute'):
+            val_list.append(_get_val(**d))
 
     # ensure that RegionRegress has appropriate feat_sbj ordering
     arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj,
