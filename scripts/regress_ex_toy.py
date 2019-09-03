@@ -32,12 +32,12 @@ f_mask = folder / 'target_mask.nii.gz'
 eff.mask.to_nii(f_mask)
 
 with file_tree.loaded(effect_list=[eff]):
-    sg_hist, node_pval_dict, node_z_dict, r2_null, sig_node_cover = \
-        arba.permute.run_permute(feat_sbj, file_tree,
-                                 save_folder=folder,
-                                 num_perm=num_perm,
-                                 par_flag=par_flag,
-                                 alpha=alpha,
-                                 target_mask=eff.mask)
+    perm_reg = arba.permute.PermuteRegress(feat_sbj, file_tree,
+                                           folder=folder,
+                                           num_perm=num_perm,
+                                           par_flag=False,
+                                           alpha=alpha,
+                                           target_mask=eff.mask,
+                                           verbose=True)
 
 print(folder)
