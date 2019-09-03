@@ -88,7 +88,7 @@ if __name__ == '__main__':
     folder = pathlib.Path(tempfile.TemporaryDirectory().name)
     folder.mkdir()
     print(folder)
-    shutil.copy(__file__, folder / 'ex_toy.py')
+    shutil.copy(__file__, folder / 'regress_ex_toy.py')
 
     eff = eff_list[0]
 

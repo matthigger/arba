@@ -1,6 +1,6 @@
 import numpy as np
 
-from arba.simulate.effect.effect import Effect
+from arba.effect import Effect
 
 
 class EffectRegress(Effect):

@@ -6,4 +6,4 @@
 *.pyc
 *.py.lprof
 /scripts/simulate_eff/run_multi.py
-tmp*.py
+scripts/tmp.py

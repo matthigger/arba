@@ -1,3 +1,2 @@
 from .file_tree import *
-from .split import *
-from .synth import *
+from .synth_file_tree import *

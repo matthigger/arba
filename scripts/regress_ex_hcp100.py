@@ -37,7 +37,7 @@ file_tree.mask = binary_dilation(effect_mask, iterations=mask_rad)
 folder = pathlib.Path(tempfile.TemporaryDirectory().name)
 folder.mkdir()
 print(folder)
-shutil.copy(__file__, folder / 'ex_toy.py')
+shutil.copy(__file__, folder / 'regress_ex_toy.py')
 
 # sample sbj features
 feat_sbj = np.random.multivariate_normal(mean=mu_sbj,

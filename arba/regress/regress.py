@@ -146,7 +146,7 @@ def permute(feat_sbj, file_tree, num_perm=5000, par_flag=False, **kwargs):
                                         verbose=True)
     else:
         val_list = list()
-        for d in tqdm(arg_list, desc='permute'):
+        for d in tqdm(arg_list, desc='tfce'):
             val_list.append(_get_r2(**d))
 
     # ensure that RegionRegress has appropriate feat_sbj ordering
