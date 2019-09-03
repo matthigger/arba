@@ -2,7 +2,6 @@ import os
 import pathlib
 import tempfile
 from contextlib import contextmanager
-from copy import deepcopy
 
 import nibabel as nib
 import numpy as np
@@ -41,8 +40,9 @@ class FileTree:
     Attributes available after load()
         mask (Mask): mask of active area
         fs (FeatStat): feature statistics across active area of all sbj
-        data (np.memmap): if data is loaded, a read only memmap of data
-        split_eff_grp_list = (list): pairs of (split, effect, grp)
+        data (np.memmap): (space0, space1, space2, sbj_idx, feat_idx)
+                          if data is loaded, a read only memmap of data
+        effect_list (list): list of effects applied
 
     Hidden Attributes:
         __mask (Mask): mask of intersection of all files (only available when
@@ -64,9 +64,15 @@ class FileTree:
     def __len__(self):
         return len(self.sbj_feat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, fnc_list=None, mask=None):
+    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None,
+                 mask=None):
         self.sbj_feat_file_tree = sbj_feat_file_tree
-        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        if sbj_list is None:
+            self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        else:
+            self.sbj_list = sbj_list
+            assert set(sbj_list) == set(sbj_feat_file_tree), 'sbj_list error'
+
         feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
         self.feat_list = sorted(feat_file_dict.keys())
         self.scale = np.eye(self.d)
@@ -83,7 +89,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.split_eff_grp_list = []
+        self.effect_list = list()
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only n_sbj remains (in place)
@@ -110,10 +116,12 @@ class FileTree:
         self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
 
     @check_loaded
-    def get_fs(self, ijk=None, mask=None, sbj_list=None, sbj_bool=None):
+    def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
+               sbj_bool=None):
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
-        assert (ijk is None) != (mask is None), 'ijk xor mask required'
+        assert 2 == ((ijk is None) + (mask is None) + (pc_ijk is None)), \
+            'xor(ijk, mask, pc_ijk) required'
 
         # get sbj_bool
         if sbj_bool is None:
@@ -127,28 +135,35 @@ class FileTree:
             i, j, k = ijk
             x = self.data[i, j, k, :, :]
             x = x[sbj_bool, :].reshape((-1, self.d), order='F')
-        else:
+        elif mask is not None:
             # mask
             x = self.data[mask, :, :]
             x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
+        else:
+            n = len(pc_ijk)
+            x = np.empty((n, self.d))
+            for idx, (i, j, k) in enumerate(pc_ijk):
+                _x = self.data[i, j, k, :, :]
+                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.d), order='F')
+
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, split_eff_grp_list=None, **kwargs):
+    def loaded(self, effect_list=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
-        loaded.  otherwise we're all set, no need to do it again.
+        loaded
         """
         was_loaded = self.is_loaded
 
         # load or check that previous load was equivilent
         if was_loaded:
-            if split_eff_grp_list is not None:
-                assert split_eff_grp_list == self.split_eff_grp_list, \
-                    'split_eff_grp_list mismatch between load()'
+            if effect_list is not None:
+                assert effect_list == self.effect_list, \
+                    'effect_list mismatch between load()'
         else:
-            self.load(split_eff_grp_list=split_eff_grp_list, **kwargs)
+            self.load(effect_list=effect_list, **kwargs)
 
         try:
             yield self
@@ -156,11 +171,11 @@ class FileTree:
             if not was_loaded:
                 self.unload()
 
-    def load(self, split_eff_grp_list=None, verbose=False, memmap=False):
+    def load(self, effect_list=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
-            split_eff_grp_list = (list): pairs of (split, effect, grp)
+            effect_list = (list): list of effects
             verbose (bool): toggles command line output
             memmap (bool): toggles memory map (self.data becomes read only, but
                            accesible from all threads to save on memory)
@@ -171,7 +186,7 @@ class FileTree:
 
         # build memmap file
         shape = (*self.ref.shape, self.num_sbj, self.d)
-        self.data = np.zeros(shape)
+        self.data = np.empty(shape)
 
         # load data
         for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
@@ -196,7 +211,12 @@ class FileTree:
             fnc(self)
 
         # apply effects
-        self.reset_effect(split_eff_grp_list)
+        if effect_list is None:
+            self.effect_list = list()
+        else:
+            self.effect_list = effect_list
+        for effect in self.effect_list:
+            self.data += effect.get_offset_array(sbj_list=self.sbj_list)
 
         # flush data to memmap, make read only copy
         if memmap:
@@ -209,30 +229,6 @@ class FileTree:
             self.data = np.memmap(self.f_data, dtype='float32', mode='r',
                                   shape=shape)
 
-    @check_loaded
-    def reset_effect(self, split_eff_grp_list=None):
-
-        def _apply(split_eff_grp_list, negate=False):
-            if split_eff_grp_list is None:
-                return
-
-            for split, effect, grp in split_eff_grp_list:
-                # note: group True has the effect applied
-                for sbj in split[grp]:
-                    sbj_idx = self.sbj_list.index(sbj)
-                    x = self.data[:, :, :, sbj_idx, :]
-                    x = effect.apply(x, negate=negate)
-                    self.data[:, :, :, sbj_idx, :] = x
-
-        # rm old effects
-        _apply(self.split_eff_grp_list, negate=True)
-
-        # add new effects
-        _apply(split_eff_grp_list, negate=False)
-
-        # record updates (changes may spoil our record of self.data)
-        self.split_eff_grp_list = deepcopy(split_eff_grp_list)
-
     def unload(self):
         # delete memory map file
         if self.f_data is not None and self.f_data.exists():
@@ -241,7 +237,7 @@ class FileTree:
 
         self.data = None
         self.__mask = None
-        self.split_eff_grp_list = list()
+        self.effect_list = list()
 
     @check_loaded
     def to_nii(self, folder=None):

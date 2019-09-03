@@ -1,19 +1,69 @@
+import pathlib
 import tempfile
 from collections import defaultdict
 from string import ascii_uppercase
 
 import nibabel as nib
 import numpy as np
-import pathlib
+
 from .file_tree import FileTree
 
 
 class SynthFileTree(FileTree):
     """ builds gaussian noise nii in temp location (for testing purposes)
 
-    features are labelled alphabetically ('feat_A', 'feat_B', ....)
+    features are labelled alphabetically ('img_feat_A', 'img_feat_B', ....)
     sbj are labelled numerically ('sbj_0', 'sbj_1', ...)
     """
+
+    @staticmethod
+    def get_sbj_list(n):
+        return [f'sbj_{idx}' for idx in range(n)]
+
+    @staticmethod
+    def get_feat_list(n):
+        return [f'img_feat_{x}' for x in ascii_uppercase[:n]]
+
+    @classmethod
+    def from_array(cls, data, folder=None):
+        """ given a data matrix, writes files to nii and returns FileTree
+
+        Args:
+            data (np.array): (shape0, shape1, shape2, num_sbj, num_feat)
+            folder: location to store output files
+
+        Returns:
+            file_tree (SynthFileTree)
+        """
+
+        if folder is None:
+            folder = pathlib.Path(tempfile.TemporaryDirectory().name)
+        else:
+            folder = pathlib.Path(folder)
+        if not folder.exists():
+            folder.mkdir(exist_ok=True, parents=True)
+
+        assert len(data.shape) == 5, 'data must be of dimension 5'
+
+        num_sbj, num_feat = data.shape[3:]
+
+        sbj_list = cls.get_sbj_list(num_sbj)
+
+        sbj_feat_file_tree = defaultdict(dict)
+        for sbj_idx, sbj in enumerate(sbj_list):
+            for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
+                # write img to file
+                f = folder / f'{sbj}_{feat}.nii.gz'
+                x = data[:, :, :, sbj_idx, feat_idx]
+                img = nib.Nifti1Image(x, affine=np.eye(4))
+                img.to_filename(str(f))
+
+                # store
+                sbj_feat_file_tree[sbj][feat] = f
+
+        # todo: type should be SynthFileTree ... but this is classmethod?
+        return FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
+                        sbj_list=sbj_list)
 
     def __init__(self, n_sbj, shape, mu=0, cov=1, folder=None):
         """
@@ -32,16 +82,14 @@ class SynthFileTree(FileTree):
         mu = np.atleast_1d(mu)
         cov = np.atleast_2d(cov)
 
-        n_feat = len(mu)
-        feat_list = [f'feat_{x}' for x in ascii_uppercase[:n_feat]]
+        feat_list = self.get_feat_list(len(mu))
 
         sbj_feat_file_tree = defaultdict(dict)
-        for sbj_idx in range(n_sbj):
+        for sbj in self.get_sbj_list(n_sbj):
             # sample img
             x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
 
             # store img (as nii, then in sbj_feat_file_tree)
-            sbj = f'sbj_{sbj_idx}'
             for feat_idx, feat in enumerate(feat_list):
                 f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
                                                 prefix=f'{sbj}_{feat}_').name

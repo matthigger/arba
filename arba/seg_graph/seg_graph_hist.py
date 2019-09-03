@@ -1,13 +1,11 @@
 import time
 
-import networkx as nx
 import numpy as np
 from sortedcontainers import SortedList
 from tqdm import tqdm
 
 from .merge_record import MergeRecord
 from .seg_graph import SegGraph
-from ..region import RegionWardGrp
 
 
 class SegGraphHistory(SegGraph):
@@ -21,62 +19,25 @@ class SegGraphHistory(SegGraph):
                                      with joining reg_a, reg_b
     """
 
-    def __init__(self, *args, obj_fnc=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.merge_record = MergeRecord(self.file_tree.mask,
-                                        ref=self.file_tree.ref)
-        self.obj_fnc = obj_fnc
+                                        ref=self.file_tree.ref,
+                                        **kwargs)
+        self.merge_record.apply_fnc_leaf(self)
         self._err_edge_list = None
-        if self.obj_fnc is None:
-            self.obj_fnc = RegionWardGrp.get_error_det
 
     def merge(self, reg_tuple):
         """ record combination in merge_record """
-        self.merge_record.merge(reg_tuple=reg_tuple)
-
         reg_sum = super().merge(reg_tuple)
+
+        self.merge_record.merge(reg_tuple=reg_tuple, reg_sum=reg_sum)
 
         return reg_sum
 
-    def _cut_greedy(self, node_val_dict, max_flag=True):
-        """ gets SegGraph of disjoint reg which minimize val
-
-        NOTE: the resultant node_list covers node_val_dict, ie each node in
-        node_val_dict has some ancestor, descendant or itself in node_list
-
-        Args:
-            node_val_dict (dict): keys are nodes, values are associated values
-                                  to be minimized
-            max_flag (bool): toggles max or min
-
-        Returns:
-             node_list (list): nodes have minimum val, are disjoint
-        """
-        # sort all nodes
-        node_list_sorted = sorted(node_val_dict.keys(), key=node_val_dict.get,
-                                  reverse=max_flag)
-
-        # init
-        node_covered = set()
-        node_list = list()
-
-        while node_list_sorted:
-            n = node_list_sorted.pop(0)
-            if n in node_covered:
-                continue
-            else:
-                # add reg to significant regions
-                node_list.append(n)
-
-                # add all intersecting regions to reg_covered (no need to add
-                # n, its only in node_list_sorted once)
-                node_covered |= nx.descendants(self.merge_record, n)
-                node_covered |= nx.ancestors(self.merge_record, n)
-
-        return node_list
-
     def reduce_to(self, num_reg_stop=1, edge_per_step=None, verbose=False,
-                  update_period=10, verbose_dbg=False, **kwargs):
+                  update_period=10, verbose_dbg=False, reg_size_thresh=None,
+                  **kwargs):
         """ combines neighbor nodes until only num_reg_stop remain
 
         Args:
@@ -88,6 +49,8 @@ class SegGraphHistory(SegGraph):
             update_period (float): how often command line updates are given in
                                    verbose_dbg
             verbose_dbg (bool): toggles debug command line output (timing)
+            reg_size_thresh (int): if passed, stops merging regions whose size
+                                exceeds this threshold
 
         Returns:
             err_list (list): error associated with each step
@@ -105,7 +68,8 @@ class SegGraphHistory(SegGraph):
 
         # init edges if need be
         if not self._err_edge_list:
-            self._add_err_edge_list(verbose=verbose)
+            self._add_err_edge_list(verbose=verbose,
+                                    reg_size_thresh=reg_size_thresh)
 
         # init progress stats
         n_neigh_list = list()
@@ -145,7 +109,7 @@ class SegGraphHistory(SegGraph):
                 n_neigh_list.append(len(neighbor_list))
                 for reg_neighbor in neighbor_list:
                     edge_list.append((reg, reg_neighbor))
-            self._add_err_edge_list(edge_list)
+            self._add_err_edge_list(edge_list, reg_size_thresh=reg_size_thresh)
 
             # command line update
             pbar.update((len_init - len(self)) - pbar.n)
@@ -169,6 +133,12 @@ class SegGraphHistory(SegGraph):
         edge_list = list()
         err_list = list()
         while len(edge_list) < n:
+            #
+            # x = [(err,
+            #       mask[next(iter(r0.pc_ijk))] &
+            #       mask[next(iter(r1.pc_ijk))])
+            #      for err, (r0, r1) in self._err_edge_list]
+
             if not self._err_edge_list:
                 # no more edges
                 break
@@ -202,16 +172,28 @@ class SegGraphHistory(SegGraph):
 
         return edge_list_disjoint, err_list
 
-    def _add_err_edge_list(self, edge_list=None, verbose=False):
+    def _add_err_edge_list(self, edge_list=None, verbose=False,
+                           reg_size_thresh=None):
 
         # get list of edges to add (default to
         if edge_list is None:
             self._err_edge_list = SortedList()
             edge_list = self.edges
 
+        if reg_size_thresh is not None:
+            # don't grow a region if it already meets the reg_size_thresh
+            if reg_size_thresh == 1:
+                return
+
+            def small_enough(reg_pair):
+                return max((len(r) for r in reg_pair)) < reg_size_thresh
+
+            edge_list = filter(small_enough, edge_list)
+
         # compute error per edge
         tqdm_dict = {'desc': 'compute error per edge',
                      'disable': not verbose}
         for reg_pair in tqdm(edge_list, **tqdm_dict):
-            error = self.obj_fnc(*reg_pair)
+            obj_fnc = reg_pair[0].get_error
+            error = obj_fnc(*reg_pair)
             self._err_edge_list.add((error, reg_pair))

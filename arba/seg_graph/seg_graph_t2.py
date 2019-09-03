@@ -60,7 +60,7 @@ class SegGraphHistT2(SegGraphHistory):
 
         max_t2 = np.zeros(self.file_tree.ref.shape)
         for n in node_list:
-            mask = self.merge_record.get_pc(n).to_mask()
+            mask = self.merge_record.get_pc(node=n).to_mask()
             max_t2[mask] = self.node_t2_dict[n]
 
         return max_t2
