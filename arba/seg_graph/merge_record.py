@@ -11,7 +11,7 @@ from scipy.spatial.distance import dice
 from sortedcontainers.sortedset import SortedSet
 
 from .seg_graph import SegGraph
-from ..space import PointCloud
+from ..space import PointCloud, Mask
 
 
 class MergeRecord(nx.DiGraph):
@@ -531,3 +531,22 @@ class MergeRecord(nx.DiGraph):
             ax.set_yscale('log')
         ax.set_xscale('log')
         ax.set_xlim(left=1, right=num_nodes)
+
+    def build_mask(self, node_list):
+        # init empty mask
+        assert self.ref.shape is not None, 'ref must have shape'
+        mask = Mask(np.zeros(self.ref.shape), ref=self.ref).astype(int)
+
+        # sort nodes from biggest (value + space) to smallest
+        node_set = SortedSet(node_list)
+        while node_set:
+            node = node_set.pop()
+
+            # remove all the nodes which would be covered by node
+            node_set -= set(nx.descendants(self, node))
+
+            # record position of node
+            for ijk in self.get_pc(node=node):
+                mask[ijk] = node
+
+        return mask

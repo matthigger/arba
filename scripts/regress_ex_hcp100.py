@@ -83,29 +83,28 @@ with file_tree.loaded(effect_list=[eff]):
                                  n=num_perm,
                                  fnc_tuple=fnc_tuple,
                                  agg_perm_flag=False)
-
+    merge_record = sg_hist.merge_record
     for n in sig_node_list:
-        r = sg_hist.merge_record.resolve_node(n,
-                                              file_tree=file_tree,
-                                              reg_cls=arba.region.RegionRegress)
+        r = merge_record.resolve_node(n,
+                                      file_tree=file_tree,
+                                      reg_cls=arba.region.RegionRegress)
         r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
         r.plot(img_feat_label='fa')
         arba.plot.save_fig(folder / f'node_{n}.pdf')
 
-node_mask, d_max = sg_hist.merge_record.get_node_max_dice(effect_mask)
-
-sg_hist.merge_record.plot_size_v(maha_zero, label='maha(0)', mask=effect_mask,
-                                 log_y=True)
+node_mask, d_max = merge_record.get_node_max_dice(effect_mask)
+merge_record.plot_size_v(maha_zero, label='maha(0)', mask=effect_mask,
+                         log_y=True)
 arba.plot.save_fig(folder / 'size_v_maha0.pdf')
 
-sg_hist.merge_record.plot_size_v(r2, label='r2', mask=effect_mask,
-                                 log_y=False)
+merge_record.plot_size_v(r2, label='r2', mask=effect_mask,
+                         log_y=False)
 arba.plot.save_fig(folder / 'size_v_r2.pdf')
 
-sg_hist.merge_record.plot_size_v(mse, label='mse', mask=effect_mask)
+merge_record.plot_size_v(mse, label='mse', mask=effect_mask)
 arba.plot.save_fig(folder / 'size_v_mse.pdf')
 
-mask_estimate = arba.regress.build_mask(sig_node_list, sg_hist.merge_record)
+mask_estimate = merge_record.build_mask(sig_node_list)
 mask_estimate.to_nii(folder / 'mask_estimate.nii.gz')
 arba.regress.compute_print_dice(mask_estimate=mask_estimate,
                                 mask_target=effect_mask, save_folder=folder)

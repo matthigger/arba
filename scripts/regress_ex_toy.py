@@ -64,7 +64,7 @@ merge_record.plot_size_v(node_z_dict, label='r2z', mask=eff.mask,
                          log_y=False)
 arba.plot.save_fig(folder / 'size_v_r2z_score.pdf')
 
-mask_estimate = arba.regress.build_mask(sig_node_cover, merge_record)
+mask_estimate = merge_record.build_mask(sig_node_cover)
 mask_estimate.to_nii(folder / 'mask_estimate.nii.gz')
 arba.regress.compute_print_dice(mask_estimate=mask_estimate,
                                 mask_target=eff.mask,

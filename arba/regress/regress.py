@@ -1,11 +1,9 @@
 from bisect import bisect_right
 
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
-from sortedcontainers.sortedset import SortedSet
 from tqdm import tqdm
 
 import arba
@@ -78,27 +76,6 @@ def run_permute(feat_sbj, file_tree, save_folder=None, num_perm=100, **kwargs):
             arba.plot.save_fig(save_folder / 'size_v_r2_null.pdf')
 
     return sg_hist, node_pval_dict, node_z_dict, r2_null
-
-
-def build_mask(node_list, merge_record):
-    # init empty mask
-    ref = merge_record.ref
-    assert ref.shape is not None, 'merge_record ref must have shape'
-    mask = arba.space.Mask(np.zeros(ref.shape), ref=ref).astype(int)
-
-    # sort nodes from biggest (value + space) to smallest
-    node_set = SortedSet(node_list)
-    while node_set:
-        node = node_set.pop()
-
-        # remove all the nodes which would be covered by node
-        node_set -= set(nx.descendants(merge_record, node))
-
-        # record position of node
-        for ijk in merge_record.get_pc(node=node):
-            mask[ijk] = node
-
-    return mask
 
 
 def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
