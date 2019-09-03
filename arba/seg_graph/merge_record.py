@@ -27,12 +27,15 @@ class MergeRecord(nx.DiGraph):
         ref: reference space
         ijk_leaf_dict (dict): keys are ijk, values are leaf nodes
         leaf_ijk_dict (dict): keys are leaf nodes, values are ijk
-        fnc_node_val_list (dict): keys are functions, values are dicts (whose
-                                  keys are nodes and values are fnc returns)
+        fnc_dict (dict): keys are function names (str), values are fnc applied
+                         to the region objects
+        fnc_node_val_list (dict): keys are function names (fnc_dict.keys()),
+                                  values are dicts (whose keys are nodes and
+                                  values are fnc returns)
         node_size_dict (dict): keys are nodes, values are size (in voxels)
     """
 
-    def __init__(self, mask=None, pc=None, ref=None, fnc_tuple=(), **kwargs):
+    def __init__(self, mask=None, pc=None, ref=None, fnc_dict=None, **kwargs):
         super().__init__()
 
         if pc is None:
@@ -41,7 +44,12 @@ class MergeRecord(nx.DiGraph):
             else:
                 pc = PointCloud.from_mask(mask)
 
-        self.fnc_node_val_list = {fnc: dict() for fnc in fnc_tuple}
+        self.fnc_dict = fnc_dict
+        if fnc_dict is None:
+            self.fnc_node_val_list = dict()
+        else:
+            self.fnc_node_val_list = {var_name: dict()
+                                      for var_name in fnc_dict.keys()}
 
         # define space
         self.ref = ref
@@ -150,9 +158,9 @@ class MergeRecord(nx.DiGraph):
         for reg in sg.nodes:
             ijk = next(iter(reg.pc_ijk))
             node = self.ijk_leaf_dict[ijk]
-            for fnc in self.fnc_node_val_list.keys():
+            for fnc_name, fnc in self.fnc_dict.items():
                 val = fnc(reg)
-                self.fnc_node_val_list[fnc][node] = val
+                self.fnc_node_val_list[fnc_name][node] = val
 
     def leaf_iter(self, node=None, node_list=None):
         """ returns an iterator over the leafs which cover a node (or nodes)
@@ -271,10 +279,10 @@ class MergeRecord(nx.DiGraph):
             self.add_edge(node_sum, node)
 
         # compute fnc on sum
-        for fnc in self.fnc_node_val_list.keys():
+        for fnc_name, fnc in self.fnc_dict.items():
             assert reg_sum is not None, 'reg_sum required if fnc'
             val = fnc(reg_sum, reg_tuple=reg_tuple)
-            self.fnc_node_val_list[fnc][node_sum] = val
+            self.fnc_node_val_list[fnc_name][node_sum] = val
 
         # track size
         self.node_size_dict[node_sum] = \

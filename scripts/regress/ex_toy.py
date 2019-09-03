@@ -71,28 +71,14 @@ eff = arba.simulate.EffectRegress.from_r2(r2=r2,
                                           cov_sbj=np.cov(feat_sbj.T, ddof=0),
                                           feat_mapper=feat_mapper)
 
-
-#
-def mse(reg, **kwargs):
-    return reg.mse
-
-
-def r2(reg, **kwargs):
-    return reg.r2
-
-
 f_mask = folder / 'target_mask.nii.gz'
 effect_mask.to_nii(f_mask)
 
-fnc_tuple = mse, r2
 with file_tree.loaded(effect_list=[eff]):
     sg_hist, node_pval_dict, node_z_dict, r2_null = \
         arba.regress.run_permute(feat_sbj, file_tree,
-                                 fnc_target=r2,
                                  save_folder=folder,
-                                 max_flag=True,
                                  num_perm=num_perm,
-                                 fnc_tuple=fnc_tuple,
                                  par_flag=par_flag)
 
     merge_record = sg_hist.merge_record
@@ -110,8 +96,7 @@ with file_tree.loaded(effect_list=[eff]):
 
 # node_mask, d_max = merge_record.get_node_max_dice(effect_mask)
 
-merge_record.plot_size_v(r2, label='r2', mask=effect_mask,
-                         log_y=False)
+merge_record.plot_size_v('r2', label='r2', mask=effect_mask, log_y=False)
 arba.plot.save_fig(folder / 'size_v_r2.pdf')
 
 merge_record.plot_size_v(node_pval_dict, label='pval', mask=effect_mask,
@@ -121,9 +106,6 @@ arba.plot.save_fig(folder / 'size_v_pval.pdf')
 merge_record.plot_size_v(node_z_dict, label='r2z', mask=effect_mask,
                          log_y=False)
 arba.plot.save_fig(folder / 'size_v_r2z_score.pdf')
-
-merge_record.plot_size_v(mse, label='mse', mask=effect_mask)
-arba.plot.save_fig(folder / 'size_v_mse.pdf')
 
 mask_estimate = arba.regress.build_mask(sig_node_cover, merge_record)
 mask_estimate.to_nii(folder / 'mask_estimate.nii.gz')

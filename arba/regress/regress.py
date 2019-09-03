@@ -12,22 +12,17 @@ import arba
 from mh_pytools import parallel
 
 
-def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
-                max_flag=True, fnc_tuple=None, num_perm=100, **kwargs):
+def get_r2(reg, **kwargs):
+    return reg.r2
+
+
+def run_permute(feat_sbj, file_tree, save_folder=None, num_perm=100, **kwargs):
     assert num_perm > 0, 'num_perm must be positive'
 
-    # ensure that fnc_target in fnc_tuple
-    if fnc_tuple is None:
-        fnc_tuple = fnc_target,
-    elif fnc_target not in fnc_tuple:
-        fnc_tuple = *fnc_tuple, fnc_target
-
     with file_tree.loaded():
-        sg_hist = run_single(feat_sbj, file_tree, fnc_tuple=fnc_tuple,
-                             **kwargs)
+        sg_hist = run_single(feat_sbj, file_tree, **kwargs)
 
-        val_list = permute(fnc_target, feat_sbj=feat_sbj,
-                           file_tree=file_tree, fnc_tuple=fnc_tuple,
+        val_list = permute(feat_sbj=feat_sbj, file_tree=file_tree,
                            num_perm=num_perm, **kwargs)
 
         # build r2_null, has shape (num_perm, num_vox).  each column is a
@@ -50,21 +45,19 @@ def run_permute(feat_sbj, file_tree, fnc_target, save_folder=None,
         merge_record = sg_hist.merge_record
         node_pval_dict = dict()
         node_z_dict = dict()
-        node_fnc_dict = merge_record.fnc_node_val_list[fnc_target]
+        node_r2_dict = merge_record.fnc_node_val_list['r2']
         for n in merge_record.nodes:
             node_size = merge_record.node_size_dict[n]
 
             # compute percentile
             _r2_null = r2_null[:, node_size - 1]
-            pval = bisect_right(_r2_null, node_fnc_dict[n]) / num_perm
-            if max_flag:
-                pval = 1 - pval
+            pval = 1 - bisect_right(_r2_null, node_r2_dict[n]) / num_perm
             node_pval_dict[n] = pval
 
             # compute z score
             mu = mu_null[node_size - 1]
             std = std_null[node_size - 1]
-            node_z_dict[n] = (node_fnc_dict[n] - mu) / std
+            node_z_dict[n] = (node_r2_dict[n] - mu) / std
 
         if save_folder:
             merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
@@ -122,41 +115,39 @@ def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
 
     sg_hist = arba.seg_graph.SegGraphHistory(file_tree=file_tree,
                                              cls_reg=arba.region.RegionRegress,
-                                             fnc_tuple=fnc_tuple)
+                                             fnc_dict={'r2': get_r2})
 
     sg_hist.reduce_to(1, verbose=True, **kwargs)
 
     return sg_hist
 
 
-def _get_val(fnc_target=None, **kwargs):
+def _get_r2(**kwargs):
     sg_hist = run_single(**kwargs)
 
     merge_record = sg_hist.merge_record
-    val_list = merge_record.fnc_node_val_list[fnc_target].values()
+    r2_list = merge_record.fnc_node_val_list['r2'].values()
 
-    return sorted(val_list, reverse=True)
+    return sorted(r2_list, reverse=True)
 
 
-def permute(fnc_target, feat_sbj, file_tree, num_perm=5000, par_flag=False,
-            **kwargs):
+def permute(feat_sbj, file_tree, num_perm=5000, par_flag=False, **kwargs):
     arg_list = list()
     for n in range(num_perm):
         d = {'feat_sbj': feat_sbj,
              'file_tree': file_tree,
              'permute_seed': n + 1,
-             'fnc_target': fnc_target,
              'reg_size_thresh': 1}
         d.update(**kwargs)
         arg_list.append(d)
 
     if par_flag:
-        val_list = parallel.run_par_fnc(fnc=_get_val, arg_list=arg_list,
+        val_list = parallel.run_par_fnc(fnc=_get_r2, arg_list=arg_list,
                                         verbose=True)
     else:
         val_list = list()
         for d in tqdm(arg_list, desc='permute'):
-            val_list.append(_get_val(**d))
+            val_list.append(_get_r2(**d))
 
     # ensure that RegionRegress has appropriate feat_sbj ordering
     arba.region.RegionRegress.set_feat_sbj(feat_sbj=feat_sbj,
