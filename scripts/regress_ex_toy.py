@@ -1,9 +1,7 @@
-import pathlib
 import shutil
-import tempfile
 
-import arba
 from arba.effect.effect_regress.sample import get_effect_list
+from arba.permute import PermuteRegress
 
 # detection params
 par_flag = True
@@ -20,24 +18,14 @@ feat_sbj, file_tree, eff_list = get_effect_list(
     shape=shape, r2=r2,
     rand_seed=1)
 
-# build output folder
-folder = pathlib.Path(tempfile.TemporaryDirectory().name)
-folder.mkdir()
-print(folder)
-shutil.copy(__file__, folder / 'regress_ex_toy.py')
-
 eff = eff_list[0]
 
-f_mask = folder / 'target_mask.nii.gz'
-eff.mask.to_nii(f_mask)
-
 with file_tree.loaded(effect_list=[eff]):
-    perm_reg = arba.permute.PermuteRegress(feat_sbj, file_tree,
-                                           folder=folder,
-                                           num_perm=num_perm,
-                                           par_flag=False,
-                                           alpha=alpha,
-                                           target_mask=eff.mask,
-                                           verbose=True)
-
-print(folder)
+    perm_reg = PermuteRegress(feat_sbj, file_tree,
+                              num_perm=num_perm,
+                              par_flag=par_flag,
+                              alpha=alpha,
+                              target_mask=eff.mask,
+                              verbose=True)
+shutil.copy(__file__, perm_reg.folder / 'regress_ex_toy.py')
+print(perm_reg.folder)

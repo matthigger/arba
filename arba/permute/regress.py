@@ -107,7 +107,7 @@ class PermuteRegress:
 
     def permute(self, par_flag=False):
         # if seed = 0, evaluates as false and doesn't do anything
-        seed_list = np.linspace(1, self.num_perm + 1).astype(np.int64)
+        seed_list = np.arange(1, self.num_perm + 1)
         arg_list = [{'_seed': x} for x in seed_list]
 
         if par_flag:
@@ -199,6 +199,9 @@ class PermuteRegress:
             compute_print_dice(mask_estimate=mask_estimate,
                                mask_target=self.target_mask,
                                save_folder=self.folder)
+
+            f_mask = self.folder / 'target_mask.nii.gz'
+            self.target_mask.to_nii(f_mask)
 
         if print_node:
             for n in self.sig_node_cover:
