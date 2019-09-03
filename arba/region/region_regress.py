@@ -93,7 +93,7 @@ class RegionRegress(Region):
 
         return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
-    def __init__(self, pc_ijk, fs_dict):
+    def __init__(self, pc_ijk, fs_dict, beta=None):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
         img_dim = next(iter(fs_dict.values())).d
@@ -101,11 +101,10 @@ class RegionRegress(Region):
         for idx, sbj in enumerate(self.sbj_list):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
-        # self.feat_img_cov = np.atleast_2d(np.cov(self.feat_img.T, ddof=0))
-
         # fit beta
-        self.beta = None
-        self.fit(self.feat_img)
+        self.beta = beta
+        if self.beta is None:
+            self.fit(self.feat_img)
 
         # covariance of imaging features around mean (per sbj)
         self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
@@ -140,8 +139,12 @@ class RegionRegress(Region):
         fs_dict = {sbj: self.fs_dict[sbj] + other.fs_dict[sbj]
                    for sbj in self.sbj_list}
 
+        lambda_self = len(self) / (len(self) + len(other))
+        beta = lambda_self * self.beta + (1 - lambda_self) * other.beta
+
         return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
-                          fs_dict=fs_dict)
+                          fs_dict=fs_dict,
+                          beta=beta)
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):
