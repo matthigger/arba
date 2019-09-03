@@ -1,3 +1,5 @@
+import pathlib
+import tempfile
 from bisect import bisect_right
 
 import matplotlib.pyplot as plt
@@ -14,7 +16,8 @@ def get_r2(reg, **kwargs):
     return reg.r2
 
 
-def run_permute(feat_sbj, file_tree, save_folder=None, num_perm=100, **kwargs):
+def run_permute(feat_sbj, file_tree, save_folder=None, num_perm=100, alpha=.05,
+                target_mask=None, **kwargs):
     assert num_perm > 0, 'num_perm must be positive'
 
     with file_tree.loaded():
@@ -57,25 +60,74 @@ def run_permute(feat_sbj, file_tree, save_folder=None, num_perm=100, **kwargs):
             std = std_null[node_size - 1]
             node_z_dict[n] = (node_r2_dict[n] - mu) / std
 
-        if save_folder:
-            merge_record.to_nii(save_folder / 'seg_hier.nii.gz', n=10)
+        node_p_negz_dict = {n: (p, -node_z_dict[n])
+                            for n, p in node_pval_dict.items() if p <= alpha}
+        sig_node_cover = merge_record._cut_greedy(node_p_negz_dict,
+                                                  max_flag=False)
 
-            # print percentiles of r2 per size
-            sns.set(font_scale=1.2)
-            cmap = plt.get_cmap('viridis')
-            size = np.arange(1, r2_null.shape[1] + 1)
-            p_list = [50, 75, 90, 95, 99]
-            for p_idx, p in enumerate(p_list):
-                perc_line = np.percentile(r2_null, p, axis=0)
-                plt.plot(size, perc_line, label=f'{p}-th percentile',
-                         color=cmap(p_idx / len(p_list)))
-            plt.ylabel('r2')
-            plt.xlabel('size')
-            plt.gca().set_xscale('log')
-            plt.legend()
-            arba.plot.save_fig(save_folder / 'size_v_r2_null.pdf')
+        save(sg_hist, sig_node_cover, node_pval_dict, node_z_dict, r2_null,
+             folder=save_folder, mask=target_mask)
+    return sg_hist, node_pval_dict, node_z_dict, r2_null, sig_node_cover
 
-    return sg_hist, node_pval_dict, node_z_dict, r2_null
+
+def save(sg_hist, sig_node_cover, node_pval_dict, node_z_dict, r2_null,
+         folder=None, mask=None, size_v_r2=True, size_v_r2_pval=True,
+         size_v_r2_z=True, size_v_r2_null=True, mask_detected=True,
+         print_node=True):
+    if folder is None:
+        folder = pathlib.Path(tempfile.mkdtemp().name)
+
+    merge_record = sg_hist.merge_record
+
+    if size_v_r2:
+        merge_record.plot_size_v('r2', label='r2', mask=mask, log_y=False)
+        arba.plot.save_fig(folder / 'size_v_r2.pdf')
+
+    if size_v_r2_pval:
+        merge_record.plot_size_v(node_pval_dict, label='pval', mask=mask,
+                                 log_y=False)
+        arba.plot.save_fig(folder / 'size_v_pval.pdf')
+
+    if size_v_r2_z:
+        merge_record.plot_size_v(node_z_dict, label='r2z', mask=mask,
+                                 log_y=False)
+        arba.plot.save_fig(folder / 'size_v_r2z_score.pdf')
+
+    if mask_detected:
+        mask_estimate = merge_record.build_mask(sig_node_cover)
+        mask_estimate.to_nii(folder / 'mask_detected.nii.gz')
+
+    if size_v_r2_null:
+        # print percentiles of r2 per size
+        sns.set(font_scale=1.2)
+        cmap = plt.get_cmap('viridis')
+        size = np.arange(1, r2_null.shape[1] + 1)
+        p_list = [50, 75, 90, 95, 99]
+        for p_idx, p in enumerate(p_list):
+            perc_line = np.percentile(r2_null, p, axis=0)
+            plt.plot(size, perc_line, label=f'{p}-th percentile',
+                     color=cmap(p_idx / len(p_list)))
+        plt.ylabel('r2')
+        plt.xlabel('size')
+        plt.gca().set_xscale('log')
+        plt.legend()
+        arba.plot.save_fig(folder / 'size_v_r2_null.pdf')
+
+    if mask is not None:
+        compute_print_dice(mask_estimate=mask_estimate,
+                           mask_target=mask,
+                           save_folder=folder)
+
+    if print_node:
+        for n in sig_node_cover:
+            r = merge_record.resolve_node(n,
+                                          file_tree=sg_hist.file_tree,
+                                          reg_cls=arba.region.RegionRegress)
+            r.pc_ijk.to_mask().to_nii(folder / f'node_{n}.nii.gz')
+            r.plot(img_feat_label='fa')
+            arba.plot.save_fig(folder / f'node_{n}.pdf')
+
+    return folder
 
 
 def run_single(feat_sbj, file_tree, fnc_tuple=None, permute_seed=None,
