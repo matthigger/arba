@@ -1,15 +1,15 @@
+import pathlib
 import shutil
-
-import numpy as np
-
-from arba.effect import get_effect_list, get_sens_spec, EffectRegress
-from arba.permute import PermuteRegressVBA
-from arba.plot import save_fig
 import tempfile
 from collections import defaultdict
+
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
-import pathlib
+
+from arba.effect import get_effect_list, get_sens_spec
+from arba.permute import PermuteRegressVBA
+from arba.plot import save_fig
 
 # detection params
 par_flag = True
@@ -30,28 +30,37 @@ feat_sbj, file_tree, eff_list = get_effect_list(effect_num_vox=effect_num_vox,
 
 folder = pathlib.Path(tempfile.mkdtemp())
 shutil.copy(__file__, folder / 'regress_ex_toy.py')
+
 method_r2ss_list_dict = defaultdict(list)
-for eff in eff_list:
+for eff_idx, eff in enumerate(eff_list):
     for r2 in r2_vec:
         eff = eff.scale_r2(r2)
 
         with file_tree.loaded(effect_list=[eff]):
+            _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
             perm_reg = PermuteRegressVBA(feat_sbj, file_tree,
                                          num_perm=num_perm,
                                          par_flag=par_flag,
                                          alpha=alpha,
                                          mask_target=eff.mask,
                                          verbose=True,
-                                         save_flag=False)
+                                         save_flag=False,
+                                         folder=_folder)
             estimate_dict = {'arba': perm_reg.mask_estimate}
             estimate_dict.update(perm_reg.vba_mask_estimate_dict)
 
-        for method, estimate in estimate_dict.items():
-            sens, spec = get_sens_spec(target=eff.mask, estimate=estimate,
-                                       mask=file_tree.mask)
-            print(f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}')
-            method_r2ss_list_dict[method].append((r2, sens, spec))
+            for method, estimate in estimate_dict.items():
+                sens, spec = get_sens_spec(target=eff.mask, estimate=estimate,
+                                           mask=file_tree.mask)
+                s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
+                print(s)
+                method_r2ss_list_dict[method].append((r2, sens, spec))
 
+            arba_spec = method_r2ss_list_dict['arba'][-1][-1]
+            if arba_spec < .9:
+                print('!' * 10)
+                print(_folder)
+                perm_reg.save()
 
 sns.set(font_scale=1)
 fig, ax = plt.subplots(1, 2)
