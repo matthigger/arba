@@ -21,8 +21,9 @@ class PermuteRegressVBA(PermuteRegress):
                                        masks of detected areas
     """
 
-    def __init__(self, *args, par_flag=False, **kwargs):
-        super().__init__(*args, par_flag=par_flag, **kwargs)
+    def __init__(self, *args, par_flag=False, save_flag=True, **kwargs):
+        super().__init__(*args, par_flag=par_flag, save_flag=save_flag,
+                         **kwargs)
 
         self.vba_r2_dict = dict()
         self.vba_r2_null_dict = dict()
@@ -36,7 +37,8 @@ class PermuteRegressVBA(PermuteRegress):
             mask_estimate = self.vba_r2_dict[vba] >= cutoff_r2
             self.vba_mask_estimate_dict[vba] = mask_estimate
 
-        self.save_vba()
+        if save_flag:
+            self.save_vba()
 
     def run_single_vba(self, _seed=None):
         if _seed is not None:

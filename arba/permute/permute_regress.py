@@ -31,7 +31,8 @@ class PermuteRegress:
     """
 
     def __init__(self, feat_sbj, file_tree, alpha=.05, num_perm=100,
-                 mask_target=None, verbose=True, folder=None, par_flag=False):
+                 mask_target=None, verbose=True, folder=None, par_flag=False,
+                 save_flag=True):
         self.alpha = alpha
         self.num_perm = num_perm
         self.feat_sbj = feat_sbj
@@ -72,7 +73,8 @@ class PermuteRegress:
             self.mask_estimate = \
                 self.merge_record.build_mask(self.sig_node_cover)
 
-            self.save()
+            if save_flag:
+                self.save()
 
     def run_single(self, _seed=None):
         """ runs a single Agglomerative Clustering run
