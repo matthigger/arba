@@ -4,6 +4,7 @@ from scipy.stats import mannwhitneyu
 
 from arba.region import FeatStat
 from arba.space import Mask
+from .get_sens_spec import get_sens_spec
 
 
 class Effect:
@@ -71,46 +72,5 @@ class Effect:
             # no area detected
             return 0
 
-    def get_sens_spec(self, estimate, mask):
-        """ returns sens + spec
-
-        Args:
-            estimate (np.array): boolean array, estimate of effect location
-            mask (np.array): boolean array, voxels outside of mask are not
-                             counted for or against accuracy
-
-        Returns:
-            sens (float): percentage of affected voxels detected
-            spec (float): percentage of unaffected voxels undetected
-
-        todo: error if estimate has 1's outside of mask
-        """
-        mask = mask.astype(bool)
-        signal = self.mask[mask].astype(bool)
-        estimate = estimate[mask].astype(bool)
-
-        if not estimate.sum():
-            return 0, 1
-
-        true_pos = np.count_nonzero(np.logical_and(signal,
-                                                   estimate))
-        true = np.count_nonzero(signal)
-
-        if true:
-            sens = true_pos / true
-        else:
-            # if nothing to detect, we default to sensitivity 0 (graphing)
-            sens = np.nan
-
-        signal_not = np.logical_not(signal)
-        neg = np.count_nonzero(signal_not)
-        true_neg = np.count_nonzero(np.logical_and(signal_not,
-                                                   np.logical_not(estimate)))
-
-        if neg:
-            spec = true_neg / neg
-        else:
-            # if no negative estimates, we default to specificity 0 (graphing)
-            spec = np.nan
-
-        return sens, spec
+    def get_sens_spec(self, estimate, mask=None):
+        get_sens_spec(target=self.mask, estimate=estimate, mask=mask)
