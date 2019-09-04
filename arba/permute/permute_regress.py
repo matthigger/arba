@@ -150,15 +150,15 @@ class PermuteRegress:
         num_perm, num_vox = self.r2_null.shape
 
         # sum and normalize
-        r2_null = np.cumsum(self.r2_null, axis=1)
-        r2_null = r2_null / np.arange(1, num_vox + 1)
+        self.r2_null = np.cumsum(self.r2_null, axis=1)
+        self.r2_null = self.r2_null / np.arange(1, num_vox + 1)
 
         # sort per region size
-        r2_null = np.sort(r2_null, axis=0)
+        self.r2_null = np.sort(self.r2_null, axis=0)
 
         # compute stats (for z)
-        self.mu_null = np.mean(r2_null, axis=0)
-        self.std_null = np.std(r2_null, axis=0)
+        self.mu_null = np.mean(self.r2_null, axis=0)
+        self.std_null = np.std(self.r2_null, axis=0)
 
     def save(self, size_v_r2=True, size_v_r2_pval=True, size_v_r2_z=True,
              size_v_r2_null=True, mask_detected=True, print_node=True):
