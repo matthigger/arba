@@ -163,6 +163,9 @@ class PermuteRegress:
     def save(self, size_v_r2=True, size_v_r2_pval=True, size_v_r2_z=True,
              size_v_r2_null=True, mask_detected=True, print_node=True):
 
+        self.folder = pathlib.Path(self.folder)
+        self.folder.mkdir(exist_ok=True, parents=True)
+
         if size_v_r2:
             self.merge_record.plot_size_v('r2', label='r2',
                                           mask=self.mask_target,
