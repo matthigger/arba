@@ -69,7 +69,7 @@ def maha_zero(reg, **kwargs):
     return reg.maha[0]
 
 
-f_mask = folder / 'target_mask.nii.gz'
+f_mask = folder / 'mask_target.nii.gz'
 effect_mask.to_nii(f_mask)
 
 fnc_tuple = mse, maha_zero, r2
