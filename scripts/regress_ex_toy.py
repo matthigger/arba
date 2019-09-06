@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+from arba.data import SynthFileTree
 from arba.effect import get_effect_list, get_sens_spec
 from arba.permute import PermuteRegressVBA
 from arba.plot import save_fig
@@ -18,23 +19,30 @@ alpha = .05
 
 # regression effect params
 shape = 6, 6, 6
-#r2_vec = np.logspace(-2, -.5, 9)
+# r2_vec = np.logspace(-2, -.5, 9)
 r2_vec = [.9]
 num_eff = 1
 dim_sbj = 1
 dim_img = 1
+num_sbj = 100
 
 effect_num_vox = 20
 
-feat_sbj, file_tree, eff_list = get_effect_list(effect_num_vox=effect_num_vox,
-                                                shape=shape, r2=r2_vec[0],
-                                                rand_seed=1, dim_sbj=dim_sbj,
-                                                dim_img=dim_img,
-                                                num_eff=num_eff,
-                                                no_edge=True)
-
+# build dummy folder
 folder = pathlib.Path(tempfile.mkdtemp())
 shutil.copy(__file__, folder / 'regress_ex_toy.py')
+
+# duild bummy images
+file_tree = SynthFileTree(num_sbj=num_sbj, shape=shape, mu=np.zeros(dim_img),
+                          cov=np.eye(dim_img), folder=folder / 'raw_data')
+
+feat_sbj, eff_list = get_effect_list(file_tree=file_tree,
+                                     effect_num_vox=effect_num_vox,
+                                     r2=r2_vec[0],
+                                     rand_seed=1,
+                                     dim_sbj=dim_sbj,
+                                     num_eff=num_eff,
+                                     no_edge=True)
 
 method_r2ss_list_dict = defaultdict(list)
 for eff_idx, eff in enumerate(eff_list):
