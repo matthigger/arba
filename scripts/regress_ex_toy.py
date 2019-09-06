@@ -18,8 +18,9 @@ alpha = .05
 
 # regression effect params
 shape = 6, 6, 6
-r2_vec = np.logspace(-2, -.5, 9)
-num_eff = 7
+#r2_vec = np.logspace(-2, -.5, 9)
+r2_vec = [.9]
+num_eff = 1
 dim_sbj = 1
 dim_img = 1
 
@@ -48,7 +49,7 @@ for eff_idx, eff in enumerate(eff_list):
                                          alpha=alpha,
                                          mask_target=eff.mask,
                                          verbose=True,
-                                         save_flag=False,
+                                         save_flag=True,
                                          folder=_folder)
             estimate_dict = {'arba': perm_reg.mask_estimate}
             estimate_dict.update(perm_reg.vba_mask_estimate_dict)

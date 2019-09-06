@@ -1,6 +1,5 @@
 import pathlib
 import tempfile
-from bisect import bisect_right
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,6 +8,7 @@ from scipy.spatial.distance import dice
 from tqdm import tqdm
 
 from mh_pytools import parallel
+from .get_pval import get_pval
 from ..plot import save_fig
 from ..region import RegionRegress
 from ..seg_graph import SegGraphHistory
@@ -60,7 +60,11 @@ class PermuteRegress:
                 reg_size = self.merge_record.node_size_dict[n]
                 r2 = self.node_r2_dict[n]
 
-                self.node_pval_dict[n] = self.get_pval(r2, reg_size)
+                self.node_pval_dict[n] = \
+                    get_pval(stat=r2,
+                             stat_null=self.r2_null[:, reg_size - 1],
+                             sort_flag=False,
+                             stat_include_flag=True)
                 self.node_z_dict[n] = self.get_r2_z_score(r2, reg_size)
 
             node_p_negz_dict = {n: (p, -self.node_z_dict[n])
@@ -132,10 +136,6 @@ class PermuteRegress:
                                    sbj_list=self.file_tree.sbj_list)
 
         return val_list
-
-    def get_pval(self, r2, reg_size):
-        _r2_null = self.r2_null[:, reg_size - 1]
-        return 1 - bisect_right(_r2_null, r2) / self.num_perm
 
     def get_r2_z_score(self, r2, reg_size):
         mu = self.mu_null[reg_size - 1]
