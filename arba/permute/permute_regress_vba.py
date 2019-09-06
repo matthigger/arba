@@ -57,10 +57,8 @@ class PermuteRegressVBA(PermuteRegress):
         r2_tfce = apply_tfce(r2)
 
         if _seed is not None:
-            # return max value
-            mask_valid = r2 > 0
-            return max(r2[mask_valid].flatten()), \
-                   max(r2_tfce[mask_valid].flatten())
+            return max(r2[self.file_tree.mask]), \
+                   max(r2_tfce[self.file_tree.mask])
 
         self.vba_r2_dict['vba'] = r2
         self.vba_r2_dict['tfce'] = r2_tfce
