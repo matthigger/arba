@@ -32,7 +32,7 @@ def get_effect_list(effect_num_vox, file_tree, num_eff=1, r2=.5, dim_sbj=1,
 
     # build regression, impose it
     eff_list = list()
-    prior_array = np.ones(file_tree.ref.shape)
+    prior_array = file_tree.mask
     if no_edge:
         prior_array = binary_erosion(prior_array)
     cov_sbj = np.cov(feat_sbj.T, ddof=0)
