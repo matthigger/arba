@@ -42,7 +42,8 @@ feat_sbj, eff_list = get_effect_list(file_tree=file_tree,
                                      rand_seed=1,
                                      dim_sbj=dim_sbj,
                                      num_eff=num_eff,
-                                     no_edge=True)
+                                     no_edge=True,
+                                     min_var_mask=True)
 
 method_r2ss_list_dict = defaultdict(list)
 for eff_idx, eff in enumerate(eff_list):

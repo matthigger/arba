@@ -4,11 +4,12 @@ import numpy as np
 from scipy.ndimage.morphology import binary_erosion
 
 import arba
+from arba.space import sample_mask_min_var, sample_mask
 from .effect_regress import EffectRegress
 
 
 def get_effect_list(effect_num_vox, file_tree, num_eff=1, r2=.5, dim_sbj=1,
-                    rand_seed=None, no_edge=False):
+                    rand_seed=None, no_edge=False, min_var_mask=False):
     if rand_seed is not None:
         np.random.seed(1)
         random.seed(1)
@@ -38,9 +39,14 @@ def get_effect_list(effect_num_vox, file_tree, num_eff=1, r2=.5, dim_sbj=1,
     with file_tree.loaded():
         for idx in range(num_eff):
             # sample effect extent
-            effect_mask = arba.space.sample_mask(prior_array=prior_array,
-                                                 num_vox=effect_num_vox,
-                                                 ref=ref)
+            if min_var_mask:
+                effect_mask = sample_mask_min_var(num_vox=effect_num_vox,
+                                                  file_tree=file_tree,
+                                                  prior_array=prior_array)
+            else:
+                effect_mask = sample_mask(prior_array=prior_array,
+                                          num_vox=effect_num_vox,
+                                          ref=ref)
 
             # get imaging feature stats in this mask
             fs = file_tree.get_fs(mask=effect_mask)
