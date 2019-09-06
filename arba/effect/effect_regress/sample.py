@@ -3,11 +3,12 @@ import random
 import numpy as np
 
 import arba
+from scipy.ndimage.morphology import binary_erosion
 from .effect_regress import EffectRegress
 
 
 def get_effect_list(effect_num_vox, shape, num_eff=1, r2=.5, dim_sbj=1,
-                    dim_img=1, num_sbj=100, rand_seed=None):
+                    dim_img=1, num_sbj=100, rand_seed=None, no_edge=False):
     if rand_seed is not None:
         np.random.seed(1)
         random.seed(1)
@@ -43,6 +44,8 @@ def get_effect_list(effect_num_vox, shape, num_eff=1, r2=.5, dim_sbj=1,
     # build regression, impose it
     eff_list = list()
     prior_array = np.ones(shape)
+    if no_edge:
+        prior_array = binary_erosion(prior_array)
     cov_sbj = np.cov(feat_sbj.T, ddof=0)
     with file_tree.loaded():
         for idx in range(num_eff):
