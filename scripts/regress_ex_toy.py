@@ -18,15 +18,19 @@ alpha = .05
 
 # regression effect params
 shape = 6, 6, 6
-r2_vec = np.logspace(-2, -.1, 7)
-num_eff = 5
+r2_vec = np.logspace(-2, -.5, 9)
+num_eff = 7
+dim_sbj = 1
+dim_img = 1
 
-effect_num_vox = 27
+effect_num_vox = 20
 
 feat_sbj, file_tree, eff_list = get_effect_list(effect_num_vox=effect_num_vox,
                                                 shape=shape, r2=r2_vec[0],
-                                                rand_seed=1,
-                                                num_eff=num_eff)
+                                                rand_seed=1, dim_sbj=dim_sbj,
+                                                dim_img=dim_img,
+                                                num_eff=num_eff,
+                                                no_edge=True)
 
 folder = pathlib.Path(tempfile.mkdtemp())
 shutil.copy(__file__, folder / 'regress_ex_toy.py')
@@ -69,7 +73,7 @@ for idx, feat in enumerate(('sensitivity', 'specificity')):
     for method, r2ss_list in method_r2ss_list_dict.items():
         r2 = [x[0] for x in r2ss_list]
         vals = [x[1 + idx] for x in r2ss_list]
-        plt.scatter(r2, vals, label=method, alpha=.5)
+        plt.scatter(r2, vals, label=method, alpha=.4)
 
         d = defaultdict(list)
         for _r2, val in zip(r2, vals):
