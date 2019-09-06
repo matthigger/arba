@@ -240,7 +240,7 @@ class FileTree:
         self.effect_list = list()
 
     @check_loaded
-    def to_nii(self, folder=None):
+    def to_nii(self, folder=None, mean_flag=True):
         """ writes each feature to a nii file
 
         Args:
@@ -256,6 +256,8 @@ class FileTree:
         # write to file
         for feat_idx, feat in enumerate(self.feat_list):
             x = self.data[:, :, :, :, feat_idx]
+            if mean_flag:
+                x = np.mean(x, axis=3)
             img = nib.Nifti1Image(x, affine=self.ref.affine)
             img.to_filename(str(folder / f'{feat}.nii.gz'))
 
