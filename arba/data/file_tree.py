@@ -92,11 +92,11 @@ class FileTree:
         self.effect_list = list()
 
     def discard_to(self, n_sbj, split=None):
-        """ discards sbj so only n_sbj remains (in place)
+        """ discards sbj so only num_sbj remains (in place)
 
         Args:
             n_sbj (int):
-            split (Split): if passed, ensures at most n_sbj per split grp
+            split (Split): if passed, ensures at most num_sbj per split grp
         """
         if self.is_loaded:
             raise AttributeError('may not be loaded during discard_to()')

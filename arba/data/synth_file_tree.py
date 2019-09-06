@@ -65,11 +65,11 @@ class SynthFileTree(FileTree):
         return FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
                         sbj_list=sbj_list)
 
-    def __init__(self, n_sbj, shape, mu=0, cov=1, folder=None):
+    def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
         """
 
         Args:
-            n_sbj (int): number of sbj
+            num_sbj (int): number of sbj
             shape (tuple): img shape
             mu (np.array): average feature
             cov (np.array): feature covar
@@ -78,6 +78,7 @@ class SynthFileTree(FileTree):
             folder = pathlib.Path(tempfile.TemporaryDirectory().name)
         else:
             folder = pathlib.Path(folder)
+            folder.mkdir(exist_ok=True, parents=True)
 
         mu = np.atleast_1d(mu)
         cov = np.atleast_2d(cov)
@@ -85,7 +86,7 @@ class SynthFileTree(FileTree):
         feat_list = self.get_feat_list(len(mu))
 
         sbj_feat_file_tree = defaultdict(dict)
-        for sbj in self.get_sbj_list(n_sbj):
+        for sbj in self.get_sbj_list(num_sbj):
             # sample img
             x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
 
