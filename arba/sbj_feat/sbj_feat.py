@@ -41,13 +41,22 @@ class SubjectFeatures:
     def is_permuted(self):
         return self.perm_seed is not None
 
-    @property
-    def x_target(self):
-        return self.x[:, self.contrast]
+    def get_x_target(self, bias=True):
+        if bias:
+            return self.x[:, self.contrast]
+        else:
+            c = np.array(self.contrast)
+            c[0] = False
+            return self.x[:, c]
 
-    @property
-    def x_nuisance(self):
-        return self.x[:, np.logical_not(self.contrast)]
+    x_target = property(get_x_target)
+
+    def get_x_nuisance(self, bias=True):
+        c = np.logical_not(self.contrast)
+        c[0] = bias
+        return self.x[:, c]
+
+    x_nuisance = property(get_x_nuisance)
 
     def __init__(self, x, sbj_list=None, feat_list=None, permute_seed=None,
                  contrast=None):
@@ -77,8 +86,13 @@ class SubjectFeatures:
             self.contrast = np.ones(self.num_feat).astype(bool)
         else:
             self.contrast = np.array(contrast).astype(bool)
-            assert self.contrast.shape == (self.num_feat, ), \
+            assert self.contrast.shape == (self.num_feat,), \
                 'contrast dimension error'
+
+        # add bias term (constant feature, serves as intercept)
+        self._x = np.hstack((np.ones((self.num_sbj, 1)), self._x))
+        self.feat_list.insert(0, '1')
+        self.contrast = np.insert(self.contrast, 0, True)
 
         # permute
         self.permute(permute_seed)
