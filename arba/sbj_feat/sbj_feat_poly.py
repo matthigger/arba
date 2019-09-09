@@ -40,4 +40,4 @@ class SubjectFeaturesPoly(SubjectFeatures):
         self._x = np.vstack((x_target, x_nuisance))
 
         # permute
-        self.permute(self.permute_seed)
+        self.permute(self.perm_seed)

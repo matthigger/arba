@@ -1,4 +1,5 @@
 import numpy as np
+from ..permute import get_perm_matrix
 
 
 class SubjectFeatures:
@@ -22,7 +23,7 @@ class SubjectFeatures:
         _x (np.array): (num_sbj, num_feat) features (never permuted)
         permute_seed: if None, features are unpermuted.  otherwise denotes the
                       seed which generated the permutation matrix applied
-        permute_matrix (np.array): (num_feat, num_feat) permutation matrix
+        perm_matrix (np.array): (num_feat, num_feat) permutation matrix
         contrast (np.array): (num_feat) boolean vector.  note that unlike
                              randomise, there are no negative values
     """
@@ -37,7 +38,7 @@ class SubjectFeatures:
 
     @property
     def is_permuted(self):
-        return self.permute_seed is not None
+        return self.perm_seed is not None
 
     @property
     def x_target(self):
@@ -51,10 +52,10 @@ class SubjectFeatures:
                  contrast=None):
         self.x = None
         self._x = x
-        self.permute_seed = None
-        self.permute_matrix = None
+        self.perm_seed = None
+        self.perm_matrix = None
 
-        num_sbj, num_feat_raw = x.shape
+        num_sbj, num_feat = x.shape
 
         # sbj_list
         if sbj_list is None:
@@ -67,7 +68,7 @@ class SubjectFeatures:
         if feat_list is None:
             self.feat_list = [f'sbj_feat{idx}' for idx in enumerate]
         else:
-            assert len(feat_list) == num_feat_raw, 'x & feat_list dimension'
+            assert len(feat_list) == num_feat, 'x & feat_list dimension'
             self.feat_list = feat_list
 
         # contrast
@@ -88,13 +89,14 @@ class SubjectFeatures:
             permute_seed: initialization of randomization, associated with a
                           permutation matrix
         """
-        self.permute_seed = permute_seed
-        if self.permute_seed is None:
-            self.permute_matrix = None
+        self.perm_seed = permute_seed
+        if self.perm_seed is None:
+            self.perm_matrix = None
             self.x = self._x
             return
 
-        raise NotImplementedError
+        self.perm_matrix = get_perm_matrix(self.num_sbj, seed=permute_seed)
+        self.x = self.perm_matrix @ self._x
 
     def freedman_lane(self, img_feat):
         """ shuffles the residuals of img_feat under a nuisance regression

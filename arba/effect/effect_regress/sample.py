@@ -26,9 +26,9 @@ def get_effect_list(effect_num_vox, file_tree, num_eff=1, r2=.5, dim_sbj=1,
                                              cov=sig_sbj,
                                              size=file_tree.num_sbj)
 
-    feat_mapper = arba.regress.FeatMapperStatic(n=dim_sbj,
-                                                sbj_list=file_tree.sbj_list,
-                                                feat_sbj=feat_sbj)
+    feat_mapper = arba.sbj_feat.FeatMapperStatic(n=dim_sbj,
+                                                 sbj_list=file_tree.sbj_list,
+                                                 feat_sbj=feat_sbj)
 
     # build regression, impose it
     eff_list = list()
