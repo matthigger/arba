@@ -68,8 +68,7 @@ class RegionRegress(Region):
                          append_ones=False)
 
     def fit(self, feat_img):
-        assert self.feat_sbj is not None, \
-            'call RegRegress.set_feat_sbj() needed'
+        assert self.feat_sbj is not None, 'call RegRegress.set_feat_sbj() 1st'
 
         self.beta = self.pseudo_inv @ feat_img
 
@@ -93,7 +92,7 @@ class RegionRegress(Region):
 
         return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
-    def __init__(self, pc_ijk, fs_dict, beta=None):
+    def __init__(self, pc_ijk, fs_dict, _beta=None):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
         img_dim = next(iter(fs_dict.values())).d
@@ -102,11 +101,11 @@ class RegionRegress(Region):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
         # fit beta
-        self.beta = beta
+        self.beta = _beta
         if self.beta is None:
             self.fit(self.feat_img)
 
-        # covariance of imaging features around mean (per sbj)
+        # covariance of imaging features around sbj mean
         self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
                               self.num_sbj
         delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
@@ -124,13 +123,6 @@ class RegionRegress(Region):
         self.r2 = 1 - (np.trace(self.eps) / np.trace(self.cov))
         self.r2_mean = 1 - (np.trace(self.eps_mean) / np.trace(self.cov_mean))
 
-        # compute mahalanobis to each sbj fature
-        n = self.num_sbj * len(self)
-        self.maha = np.empty(self.dim_sbj)
-        for idx, eps in enumerate(np.diag(self.eps)):
-            s = eps * n / (n - 1) * self.x_trans_x_inv
-            self.maha[idx] = (self.beta.T @ s @ self.beta)[0, 0]
-
     def __add__(self, other):
         # allows use of sum(reg_iter)
         if isinstance(other, type(0)) and other == 0:
@@ -144,7 +136,7 @@ class RegionRegress(Region):
 
         return type(self)(pc_ijk=self.pc_ijk | other.pc_ijk,
                           fs_dict=fs_dict,
-                          beta=beta)
+                          _beta=beta)
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):
@@ -166,12 +158,6 @@ class RegionRegress(Region):
         return err
 
     __radd__ = __add__
-
-    def __len__(self):
-        return len(self.pc_ijk)
-
-    def __lt__(self, other):
-        return len(self) < len(other)
 
     def project(self, feat_sbj, append_flag=True):
         if append_flag:
