@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
 
 
 class SubjectFeatures:
@@ -10,6 +11,11 @@ class SubjectFeatures:
         (those we're clinically interested in) from 'nuisance' variables (those
         whose effects we wish to control for while examining 'target' vars)
         -permutation testing via Freedman Lane
+
+    Note: we preclude the inclusion of polynomial features which draw from both
+    target and nuisance params (e.g. if one is interested in the effects of age
+    while controlling for sex, a model with an age * sex term makes Freedman
+    Lane difficult, maybe impossible)
 
     Attributes:
         sbj_list (list): list of subjects, fixes their ordering in matrices
@@ -68,12 +74,6 @@ class SubjectFeatures:
             assert len(feat_list) == num_feat_raw, 'x & feat_list dimension'
             self.feat_list_raw = feat_list
 
-        # project features
-        self.poly_order = poly_order
-        raise NotImplementedError
-        # feat_list = 'combined feats'
-        # x = project(x)
-
         # contrast
         if contrast is None:
             self.contrast = np.ones(self.num_feat)
@@ -81,6 +81,21 @@ class SubjectFeatures:
             self.contrast = np.array(contrast).astype(bool)
             assert np.array_equal(self.contrast.shape, self.num_feat), \
                 'contrast dimension error'
+
+        # project features
+        self.poly_order = poly_order
+
+        poly = PolynomialFeatures(degree=poly_order, include_bias=True)
+        x_target = poly.fit_transform(x[:, self.contrast])
+        feat_target = [f for (f, c) in zip(self.feat_list, self.contrast) if c]
+        self.feat_list = poly.get_feature_names(feat_target)
+
+        poly = PolynomialFeatures(degree=poly_order, include_bias=False)
+        x_nuisance = poly.fit_transform(x[:, self.contrast])
+        feat_nuis = [f for (f, c) in zip(self.feat_list, self.contrast) if ~c]
+        self.feat_list += poly.get_feature_names(feat_nuis)
+
+        self.x = np.vstack((x_target, x_nuisance))
 
         # permute
         self.permute(permute_seed)
