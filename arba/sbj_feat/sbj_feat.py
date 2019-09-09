@@ -77,7 +77,7 @@ class SubjectFeatures:
             self.contrast = np.ones(self.num_feat).astype(bool)
         else:
             self.contrast = np.array(contrast).astype(bool)
-            assert np.array_equal(self.contrast.shape, self.num_feat), \
+            assert self.contrast.shape == (self.num_feat, ), \
                 'contrast dimension error'
 
         # permute
