@@ -49,6 +49,14 @@ class EffectRegress(Effect):
         return EffectRegress(beta=beta, cov_sbj=cov_sbj, eps_img=eps_img,
                              *args, **kwargs)
 
+    def scale_r2(self, r2):
+        """ returns a new effect with scaled beta to achieve some r2
+        """
+        return EffectRegress.from_r2(r2, eps_img=self.eps_img,
+                                     cov_sbj=self.cov_sbj, u=self.beta,
+                                     mask=self.mask, scale=self.scale,
+                                     fs=self.fs, feat_mapper=self.feat_mapper)
+
     def __init__(self, beta, cov_sbj=None, eps_img=None, feat_mapper=None,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)

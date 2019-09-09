@@ -92,11 +92,11 @@ class FileTree:
         self.effect_list = list()
 
     def discard_to(self, n_sbj, split=None):
-        """ discards sbj so only n_sbj remains (in place)
+        """ discards sbj so only num_sbj remains (in place)
 
         Args:
             n_sbj (int):
-            split (Split): if passed, ensures at most n_sbj per split grp
+            split (Split): if passed, ensures at most num_sbj per split grp
         """
         if self.is_loaded:
             raise AttributeError('may not be loaded during discard_to()')
@@ -240,7 +240,7 @@ class FileTree:
         self.effect_list = list()
 
     @check_loaded
-    def to_nii(self, folder=None):
+    def to_nii(self, folder=None, mean_flag=True):
         """ writes each feature to a nii file
 
         Args:
@@ -256,6 +256,8 @@ class FileTree:
         # write to file
         for feat_idx, feat in enumerate(self.feat_list):
             x = self.data[:, :, :, :, feat_idx]
+            if mean_flag:
+                x = np.mean(x, axis=3)
             img = nib.Nifti1Image(x, affine=self.ref.affine)
             img.to_filename(str(folder / f'{feat}.nii.gz'))
 
