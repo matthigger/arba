@@ -1,4 +1,5 @@
 import numpy as np
+
 from ..permute import get_perm_matrix
 
 
@@ -46,7 +47,7 @@ class SubjectFeatures:
 
     @property
     def x_nuisance(self):
-        return self.x[:, ~self.contrast]
+        return self.x[:, np.logical_not(self.contrast)]
 
     def __init__(self, x, sbj_list=None, feat_list=None, permute_seed=None,
                  contrast=None):
@@ -59,21 +60,21 @@ class SubjectFeatures:
 
         # sbj_list
         if sbj_list is None:
-            self.sbj_list = [f'sbj{idx}' for idx in enumerate(num_sbj)]
+            self.sbj_list = [f'sbj{idx}' for idx in range(num_sbj)]
         else:
             assert len(sbj_list) == num_sbj, 'x & sbj_list dimension'
             self.sbj_list = sbj_list
 
         # feat_list
         if feat_list is None:
-            self.feat_list = [f'sbj_feat{idx}' for idx in enumerate]
+            self.feat_list = [f'sbj_feat{idx}' for idx in range(num_feat)]
         else:
             assert len(feat_list) == num_feat, 'x & feat_list dimension'
             self.feat_list = feat_list
 
         # contrast
         if contrast is None:
-            self.contrast = np.ones(self.num_feat)
+            self.contrast = np.ones(self.num_feat).astype(bool)
         else:
             self.contrast = np.array(contrast).astype(bool)
             assert np.array_equal(self.contrast.shape, self.num_feat), \
