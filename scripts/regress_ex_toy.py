@@ -6,7 +6,6 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from scipy.ndimage.morphology import binary_dilation
 
 from arba.data import SynthFileTree
 from arba.effect import get_effect_list, get_sens_spec
@@ -16,21 +15,21 @@ from pnl_data.set import hcp_100
 
 # detection params
 par_flag = True
-num_perm = 24
+num_perm = 96
 alpha = .05
 
 # regression effect params
-# r2_vec = np.logspace(-2, -.5, 9)
-r2_vec = [.9]
-num_eff = 1
+r2_vec = np.logspace(-2, -.5, 21)
+# r2_vec = [.9]
+num_eff = 10
 dim_sbj = 1
 num_sbj = 100
 
 str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
-mask_radius = 5
+mask_radius = 6
 
-effect_num_vox = 20
+effect_num_vox = 50
 
 # build dummy folder
 folder = pathlib.Path(tempfile.mkdtemp())
@@ -68,7 +67,6 @@ for eff_idx, eff in enumerate(eff_list):
         eff = eff.scale_r2(r2)
         file_tree.mask = eff.mask.dilate(mask_radius)
         with file_tree.loaded(effect_list=[eff]):
-            _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
             perm_reg = PermuteRegressVBA(feat_sbj, file_tree,
                                          num_perm=num_perm,
                                          par_flag=par_flag,
@@ -77,6 +75,7 @@ for eff_idx, eff in enumerate(eff_list):
                                          verbose=True,
                                          save_flag=True,
                                          folder=_folder)
+            _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
             estimate_dict = {'arba': perm_reg.mask_estimate}
             estimate_dict.update(perm_reg.vba_mask_estimate_dict)
 
@@ -86,12 +85,6 @@ for eff_idx, eff in enumerate(eff_list):
                 s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
                 print(s)
                 method_r2ss_list_dict[method].append((r2, sens, spec))
-
-            arba_spec = method_r2ss_list_dict['arba'][-1][-1]
-            if arba_spec < .9:
-                print('!' * 10)
-                print(_folder)
-                perm_reg.save()
 
 sns.set(font_scale=1)
 fig, ax = plt.subplots(1, 2)
