@@ -33,7 +33,7 @@ effect_num_vox = 50
 
 # build dummy folder
 folder = pathlib.Path(tempfile.mkdtemp())
-shutil.copy(__file__, folder / 'regress_ex_toy.py')
+shutil.copy(__file__, folder / 'regress_ex.py')
 print(folder)
 
 # duild bummy images
