@@ -1,12 +1,10 @@
 import numpy as np
-from sklearn.preprocessing import PolynomialFeatures
 
 
 class SubjectFeatures:
     """ contains features which are constant across image (age, sex, ...)
 
-    serves three main functions:
-        -polynomial projections of subject features
+    serves two main functions:
         -encapsulate contrast matrix, which distinguishes 'target' variables
         (those we're clinically interested in) from 'nuisance' variables (those
         whose effects we wish to control for while examining 'target' vars)
@@ -19,14 +17,12 @@ class SubjectFeatures:
 
     Attributes:
         sbj_list (list): list of subjects, fixes their ordering in matrices
-        poly_order (int): order of polynomial projection
-        feat_list_raw (list): names of raw features (pre projection)
-        feat_list (list): names of features (after projection)
-        x (np.array): (num_sbj, num_feat) projected features (after projection)
+        feat_list (list): names of features
+        x (np.array): (num_sbj, num_feat) features (possibly permuted)
+        _x (np.array): (num_sbj, num_feat) features (never permuted)
         permute_seed: if None, features are unpermuted.  otherwise denotes the
                       seed which generated the permutation matrix applied
         permute_matrix (np.array): (num_feat, num_feat) permutation matrix
-        _x (np.array): (num_sbj, num_feat) project features (unpermuted)
         contrast (np.array): (num_feat) boolean vector.  note that unlike
                              randomise, there are no negative values
     """
@@ -51,14 +47,14 @@ class SubjectFeatures:
     def x_nuisance(self):
         return self.x[:, ~self.contrast]
 
-    def __init__(self, x, poly_order=1, sbj_list=None, feat_list=None,
-                 permute_seed=None, contrast=None):
-        num_sbj, num_feat_raw = x.shape
-
-        # placeholder to init these in constructor
+    def __init__(self, x, sbj_list=None, feat_list=None, permute_seed=None,
+                 contrast=None):
         self.x = None
+        self._x = x
         self.permute_seed = None
         self.permute_matrix = None
+
+        num_sbj, num_feat_raw = x.shape
 
         # sbj_list
         if sbj_list is None:
@@ -67,12 +63,12 @@ class SubjectFeatures:
             assert len(sbj_list) == num_sbj, 'x & sbj_list dimension'
             self.sbj_list = sbj_list
 
-        # feat_list_raw
+        # feat_list
         if feat_list is None:
-            self.feat_list_raw = [f'sbj_feat{idx}' for idx in enumerate]
+            self.feat_list = [f'sbj_feat{idx}' for idx in enumerate]
         else:
             assert len(feat_list) == num_feat_raw, 'x & feat_list dimension'
-            self.feat_list_raw = feat_list
+            self.feat_list = feat_list
 
         # contrast
         if contrast is None:
@@ -81,21 +77,6 @@ class SubjectFeatures:
             self.contrast = np.array(contrast).astype(bool)
             assert np.array_equal(self.contrast.shape, self.num_feat), \
                 'contrast dimension error'
-
-        # project features
-        self.poly_order = poly_order
-
-        poly = PolynomialFeatures(degree=poly_order, include_bias=True)
-        x_target = poly.fit_transform(x[:, self.contrast])
-        feat_target = [f for (f, c) in zip(self.feat_list, self.contrast) if c]
-        self.feat_list = poly.get_feature_names(feat_target)
-
-        poly = PolynomialFeatures(degree=poly_order, include_bias=False)
-        x_nuisance = poly.fit_transform(x[:, self.contrast])
-        feat_nuis = [f for (f, c) in zip(self.feat_list, self.contrast) if ~c]
-        self.feat_list += poly.get_feature_names(feat_nuis)
-
-        self.x = np.vstack((x_target, x_nuisance))
 
         # permute
         self.permute(permute_seed)
