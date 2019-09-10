@@ -124,10 +124,18 @@ class SubjectFeatures:
                                  permuted nuisance residuals
         """
 
+        assert self.is_permuted, 'must be permuted to run freedman_lane()'
+        assert img_feat.shape[0] == self.num_sbj, 'num_sbj mismatch'
+
         # compute nuisance regression
+        beta = np.linalg.pinv(self.x_nuisance) @ img_feat
 
         # compute residuals
+        resid = img_feat - beta @ self.x_nuisance
 
         # subtract residuals, add permuted residuals
+        img_feat = img_feat + (self.perm_matrix - np.eye(self.num_sbj)) @ resid
 
-        pass
+        raise NotImplementedError('not tested')
+
+        return img_feat
