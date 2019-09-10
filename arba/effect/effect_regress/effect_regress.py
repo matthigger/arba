@@ -1,134 +1,122 @@
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 from arba.effect import Effect
 
 
+def compute_r2(beta, img_feat, sbj_feat, img_pool_cov=None):
+    """ computes r2
+
+    Args:
+        beta (np.array):
+        img_feat (np.array): (num_sbj, dim_img) imaging features
+        sbj_feat (np.array): (num_sbj, dim_sbj) subject features
+        img_pool_cov (np.array): pooled (across sbj) of imaging feature cov
+                                 across region
+
+    Returns:
+        r2 (float): coefficient of determination
+    """
+    # get tr_pool_cov
+    if img_pool_cov is None:
+        tr_pool_cov = 0
+    else:
+        tr_pool_cov = np.trace(img_pool_cov)
+
+    # compute error
+    delta = img_feat - sbj_feat @ beta
+
+    # compute eps, covariance of error
+    eps = np.atleast_2d((delta.T @ delta) / delta.shape[0])
+
+    # compute covariance of imaging features
+    cov = np.atleast_2d(np.cov(img_feat.T, ddof=0))
+
+    # comptue r2
+    r2 = 1 - (np.trace(eps) + tr_pool_cov) / (np.trace(cov) + tr_pool_cov)
+
+    return r2
+
+
 class EffectRegress(Effect):
-    """ a consant offset, depending on linear fnc of 'subject' features
+    """ a consant offset depending on linear fnc of subject features
 
     img_feat_offset = sbj_feat @ beta
 
-    we distinguish between 'subject' features, those associated with a whole
-    image (e.g. age, sex) and 'image' features, those associated with a
-    specific voxel in a specific image (e.g. FA, MD).
-
-    'cov' refers to the total feature covariance.  'eps' specifically refers to
-    the covariance of the 'error' (covariance unrelated to the regression)
-
     Attributes:
         beta (np.array): (dim_sbj x dim_img) mapping from sbj to img feat
-        cov_sbj (np.array): covariance of sbj features
-        cov_img (np.array): covariance of img features (after effect applied)
-        eps_img (np.array): covariance of img features error
-        r2 (float): the r squared value
-        feat_mapper (fnc): maps sbj to features
     """
 
-    @staticmethod
-    def from_r2(r2, eps_img, cov_sbj, u=None, *args, **kwargs):
-        """
-        NOTE: the target r2 is approximate.  the offsets differ per sbj.  as a
-        result the cov_sbj observed will change under the effect
-        """
-
-        assert 0 <= r2 <= 1, 'invalid r2'
-        assert r2 != 1 or np.trace(eps_img) == 0, 'eps_img must be 0 if r2=1'
-
-        cov_sbj = np.atleast_2d(cov_sbj)
-        eps_img = np.atleast_2d(eps_img)
-
-        if u is None:
-            u = np.ones(shape=(cov_sbj.shape[0], eps_img.shape[0]))
-
-        tr_cov_img = np.trace(eps_img) / (1 - r2)
-        tr_cov_img_regress = tr_cov_img - np.trace(eps_img)
-        _tr_cov_img_regress = np.trace(u.T @ cov_sbj @ u)
-        scale = (tr_cov_img_regress / _tr_cov_img_regress) ** .5
-        beta = u * scale
-
-        return EffectRegress(beta=beta, cov_sbj=cov_sbj, eps_img=eps_img,
-                             *args, **kwargs)
-
-    def scale_r2(self, r2):
-        """ returns a new effect with scaled beta to achieve some r2
-        """
-        return EffectRegress.from_r2(r2, eps_img=self.eps_img,
-                                     cov_sbj=self.cov_sbj, u=self.beta,
-                                     mask=self.mask, scale=self.scale,
-                                     fs=self.fs, feat_mapper=self.feat_mapper)
-
-    def __init__(self, beta, cov_sbj=None, eps_img=None, feat_mapper=None,
-                 *args, **kwargs):
+    def __init__(self, beta, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.beta = beta
-        self.feat_mapper = feat_mapper
 
-        self.cov_sbj = np.atleast_2d(cov_sbj)
-        self.eps_img = np.atleast_2d(eps_img)
-        if self.fs is not None:
-            if self.eps_img is None:
-                self.eps_img = self.fs.cov
-            else:
-                assert np.isclose(self.fs.cov, eps_img), \
-                    'eps_img double specified'
+    def compute_r2(self, *args, **kwargs):
+        return compute_r2(*args, beta=self.beta, **kwargs)
 
-        # compute r2 and cov_img
-        self.cov_sbj = cov_sbj
-        self.r2 = None
-        if (self.cov_sbj is not None) and (self.eps_img is not None):
-            self.cov_img = self.eps_img + \
-                           self.beta.T @ self.cov_sbj @ self.beta
+    @staticmethod
+    def from_r2(r2, img_feat, sbj_feat, img_pool_cov=None, *args, **kwargs):
+        """ yields an effect which achieve r2
 
-            self.r2 = 1 - np.trace(self.eps_img) / np.trace(self.cov_img)
+        NOTE: the direction of the effect (beta) is chosen as the min MSE
+        direction already in img_feat & sbj_feat
 
-    def project(self, sbj=None, feat_sbj=None):
-        assert (sbj is None) != (feat_sbj is None), \
-            'either sbj xor feat_sbj required'
+        Args:
+            r2 (float): target r2
+            img_feat (np.array): (num_sbj, dim_img) image features
+            sbj_feat (np.array): (num_sbj, dim_sbj) subject features
+            img_pool_cov (np.array): the pooled (across sbj) covariance of
+                                     imaging features.  if not passed then it
+                                     is assumed 0
 
-        if sbj is not None:
-            assert self.feat_mapper is not None, \
-                'feat_mapper required in __init__'
-            feat_sbj = self.feat_mapper(sbj)
+        Returns:
+            eff (EffectRegress)
+        """
 
-        return feat_sbj @ self.beta
+        assert 0 <= r2 < 1, 'invalid r2'
 
-    def get_offset_array(self, sbj_list):
+        if img_pool_cov is None:
+            dim_img = img_feat.shape[1]
+            img_pool_cov = np.zeros((dim_img, dim_img))
+
+        beta = np.linalg.pinv(sbj_feat) @ img_feat
+
+        def fnc(scale):
+            """ computes r2 under scale factor, returns error to target r2
+            """
+            _beta = beta*scale
+            _r2 = compute_r2(_beta,
+                             img_feat=img_feat + sbj_feat @ _beta,
+                             sbj_feat=sbj_feat,
+                             img_pool_cov=img_pool_cov)
+            return (_r2 - r2) ** 2
+
+        res = minimize_scalar(fnc)
+        assert res.success, 'optimization error'
+
+        beta *= res.x
+
+        return EffectRegress(*args, beta=beta, **kwargs)
+
+    def get_offset_array(self, sbj_feat):
         """ gets array, in shape of self.mask.ref, of effect
 
         Args:
-            sbj_list (list): list of subjects
+            sbj_feat (np.array): (num_sbj, dim_sbj) subject features
 
         Returns:
-            eff_delta (np.array): (space0, space1, space2, sbj_idx, feat_idx)
+            eff_delta (np.array): (space0, space1, space2, num_sbj, dim_img)
                                   offset (zero outside mask)
         """
-
-        shape = self.mask.shape + (len(sbj_list), self.eps_img.shape[0])
+        num_sbj = sbj_feat.shape[0]
+        dim_img = self.beta.shape[1]
+        shape = self.mask.shape + (num_sbj, dim_img)
         eff_delta = np.zeros(shape)
 
-        for sbj_idx, sbj in enumerate(sbj_list):
-            sbj_delta = self.project(sbj=sbj)
-            eff_delta[self.mask, sbj_idx, ...] += sbj_delta
+        for sbj_idx, delta in enumerate(self.beta @ sbj_feat):
+            eff_delta[self.mask, sbj_idx, ...] += delta
+
+        raise NotImplementedError('check')
 
         return eff_delta
-
-
-if __name__ == '__main__':
-    dim_sbj = 2
-    dim_img = 3
-
-    beta = np.ones(shape=(dim_sbj, dim_img))
-    mask = np.ones(shape=(4, 4, 4))
-    cov_sbj = np.eye(dim_sbj)
-    eps_img = np.eye(dim_img)
-
-    r0 = EffectRegress(beta=np.ones(shape=(dim_sbj, dim_img)),
-                       mask=mask,
-                       cov_sbj=cov_sbj,
-                       eps_img=eps_img)
-
-    r1 = EffectRegress.from_r2(r2=.9,
-                               mask=mask,
-                               eps_img=eps_img,
-                               cov_sbj=cov_sbj)
