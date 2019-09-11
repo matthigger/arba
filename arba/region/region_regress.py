@@ -74,23 +74,29 @@ class RegionRegress(Region):
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
+        fs_dict = RegionRegress.get_fs_dict(file_tree, ijk=ijk, pc_ijk=pc_ijk)
+        if pc_ijk is None:
+            pc_ijk = arba.space.PointCloud([ijk], ref=file_tree.ref)
+        return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
+
+    @staticmethod
+    def get_fs_dict(file_tree, ijk=None, pc_ijk=None):
+        assert file_tree.is_loaded, 'file tree must be loaded'
         assert (ijk is None) != (pc_ijk is None), 'ijk or pc_ijk required'
-        assert RegionRegress.sbj_list == file_tree.sbj_list
 
         if pc_ijk is None:
             # slight computational speedup for a single voxel
-            pc_ijk = arba.space.PointCloud([ijk], ref=file_tree.ref)
             i, j, k = ijk
             fs_dict = dict()
-            for sbj_idx, sbj in enumerate(RegionRegress.sbj_list):
+            for sbj_idx, sbj in enumerate(file_tree.sbj_list):
                 x = file_tree.data[i, j, k, sbj_idx, :]
                 fs_dict[sbj] = FeatStatSingle(x)
         else:
             # computationally slower
             fs_dict = {sbj: file_tree.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
-                       for sbj in RegionRegress.sbj_list}
+                       for sbj in file_tree.sbj_list}
 
-        return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
+        return fs_dict
 
     def __init__(self, pc_ijk, fs_dict, _beta=None):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
