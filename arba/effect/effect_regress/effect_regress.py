@@ -85,7 +85,7 @@ class EffectRegress(Effect):
         def fnc(scale):
             """ computes r2 under scale factor, returns error to target r2
             """
-            _beta = beta*scale
+            _beta = beta * scale
             _r2 = compute_r2(_beta,
                              img_feat=img_feat + sbj_feat @ _beta,
                              sbj_feat=sbj_feat,
@@ -114,9 +114,7 @@ class EffectRegress(Effect):
         shape = self.mask.shape + (num_sbj, dim_img)
         eff_delta = np.zeros(shape)
 
-        for sbj_idx, delta in enumerate(self.beta @ sbj_feat):
+        for sbj_idx, delta in enumerate(sbj_feat @ self.beta):
             eff_delta[self.mask, sbj_idx, ...] += delta
-
-        raise NotImplementedError('check')
 
         return eff_delta
