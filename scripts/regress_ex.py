@@ -18,9 +18,11 @@ from arba.space import sample_mask_min_var, sample_mask, PointCloud
 from pnl_data.set import hcp_100
 
 
-def get_effect_list(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
+def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
+    """ gets list of masks (extent of effects) """
     np.random.seed(1)
     random.seed(1)
+
     assert file_tree.is_loaded, 'file tree must be loaded'
     prior_array = file_tree.mask
 
@@ -28,7 +30,7 @@ def get_effect_list(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
     prior_array = binary_erosion(prior_array)
 
     # sample effect extent
-    eff_mask_list = list()
+    mask_list = list()
     for idx in range(num_eff):
         if min_var_mask:
             mask = sample_mask_min_var(num_vox=effect_num_vox,
@@ -38,36 +40,82 @@ def get_effect_list(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
             mask = sample_mask(prior_array=prior_array,
                                num_vox=effect_num_vox,
                                ref=file_tree.ref)
-        eff_mask_list.append(mask)
-    return eff_mask_list
+        mask_list.append(mask)
+    return mask_list
 
 
-def plot(folder, method_r2ss_list_dict):
-    sns.set(font_scale=1)
-    fig, ax = plt.subplots(1, 2)
-    for idx, feat in enumerate(('sensitivity', 'specificity')):
-        plt.sca(ax[idx])
-        for method, r2ss_list in method_r2ss_list_dict.items():
-            r2 = [x[0] for x in r2ss_list]
-            vals = [x[1 + idx] for x in r2ss_list]
-            plt.scatter(r2, vals, label=method, alpha=.4)
+def sample_effects(r2_vec, **kwargs):
+    idx_r2_eff_dict = dict()
+    for eff_idx, eff_mask in enumerate(sample_masks(**kwargs)):
+        # get feat_img_init, the img_feat before effect is applied
+        pc_eff = PointCloud.from_mask(eff_mask)
+        fs_dict = RegionRegress.get_fs_dict(file_tree, pc_ijk=pc_eff)
+        img_dim = next(iter(fs_dict.values())).d
 
-            d = defaultdict(list)
-            for _r2, val in zip(r2, vals):
-                d[_r2].append(val)
+        feat_img_init = np.empty(shape=(len(fs_dict), img_dim))
+        for idx, sbj in enumerate(file_tree.sbj_list):
+            feat_img_init[idx, :] = fs_dict[sbj].mu
+        img_pool_cov = sum(fs.cov for fs in fs_dict.values()) / len(fs_dict)
 
-            x = []
-            y = []
-            for _r2, val_list in sorted(d.items()):
-                x.append(_r2)
-                y.append(np.mean(val_list))
-            plt.plot(x, y)
+        for r2 in r2_vec:
+            eff = EffectRegress.from_r2(r2=r2,
+                                        img_feat=feat_img_init,
+                                        sbj_feat=sbj_feat,
+                                        img_pool_cov=img_pool_cov,
+                                        mask=eff_mask)
 
-        plt.ylabel(feat)
-        plt.xlabel(r'$r^2$')
-        plt.legend()
-        plt.gca().set_xscale('log')
-    save_fig(folder / 'r2_vs_sens_spec.pdf', size_inches=(10, 4))
+            idx_r2_eff_dict[eff_idx, r2] = eff
+
+    return idx_r2_eff_dict
+
+
+class Performance:
+    """ throwaway: tracks sensitivity and specificty per method """
+
+    def __init__(self):
+        self.method_r2ss_list_dict = defaultdict(list)
+
+    def check_in(self, perm_reg):
+        # compute spec / sens
+        estimate_dict = {'arba': perm_reg.mask_estimate}
+        estimate_dict.update(perm_reg.vba_mask_estimate_dict)
+
+        for method, estimate in estimate_dict.items():
+            sens, spec = get_sens_spec(target=eff.mask,
+                                       estimate=estimate,
+                                       mask=file_tree.mask)
+            s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
+            print(s)
+            self.method_r2ss_list_dict[method].append((r2, sens, spec))
+
+    def plot(self, folder):
+        sns.set(font_scale=1)
+        fig, ax = plt.subplots(1, 2)
+        for idx, feat in enumerate(('sensitivity', 'specificity')):
+            plt.sca(ax[idx])
+            for method, r2ss_list in self.method_r2ss_list_dict.items():
+                r2 = [x[0] for x in r2ss_list]
+                vals = [x[1 + idx] for x in r2ss_list]
+                plt.scatter(r2, vals, label=method, alpha=.4)
+
+                d = defaultdict(list)
+                for _r2, val in zip(r2, vals):
+                    d[_r2].append(val)
+
+                x = []
+                y = []
+                for _r2, val_list in sorted(d.items()):
+                    x.append(_r2)
+                    y.append(np.mean(val_list))
+                plt.plot(x, y)
+
+            plt.ylabel(feat)
+            plt.xlabel(r'$r^2$')
+            plt.legend()
+            plt.gca().set_xscale('log')
+        save_fig(folder / 'r2_vs_sens_spec.pdf', size_inches=(10, 4))
+
+        print(folder)
 
 
 if __name__ == '__main__':
@@ -114,69 +162,36 @@ if __name__ == '__main__':
     RegionRegress.set_feat_sbj(feat_sbj=sbj_feat, sbj_list=file_tree.sbj_list,
                                append_ones=True)
 
-    eff_list = list()
+    perf = Performance()
     with file_tree.loaded():
-        # sample effect locations
-        eff_mask_list = get_effect_list(effect_num_vox, file_tree,
-                                        num_eff=num_eff,
-                                        min_var_mask=min_var_effect_locations)
-
-        for eff_mask in eff_mask_list:
-            # get img_feat_init, the img_feat before effect is applied
-            pc_eff = PointCloud.from_mask(eff_mask)
-            fs_dict = RegionRegress.get_fs_dict(file_tree, pc_ijk=pc_eff)
-            img_dim = next(iter(fs_dict.values())).d
-            feat_img_init = np.empty(shape=(len(fs_dict), img_dim))
-            for idx, sbj in enumerate(file_tree.sbj_list):
-                feat_img_init[idx, :] = fs_dict[sbj].mu
-            img_pool_cov = sum(fs.cov for fs in fs_dict.values()) / len(
-                fs_dict)
-
-            # store
-            eff_list.append((eff_mask, feat_img_init, img_pool_cov))
-
-        # print
         file_tree.to_nii(folder, mean_flag=True)
 
-        method_r2ss_list_dict = defaultdict(list)
-        for eff_idx, (eff_mask, feat_img_init, img_pool_cov) in enumerate(
-                eff_list):
+        # sample effects
+        idx_r2_eff_dict = sample_effects(r2_vec=r2_vec,
+                                         effect_num_vox=effect_num_vox,
+                                         file_tree=file_tree,
+                                         num_eff=num_eff,
+                                         min_var_mask=min_var_effect_locations)
 
-            for r2 in r2_vec:
-                # build effect
-                eff = EffectRegress.from_r2(r2=r2,
-                                            img_feat=feat_img_init,
-                                            sbj_feat=sbj_feat,
-                                            img_pool_cov=img_pool_cov,
-                                            mask=eff_mask)
-                file_tree.mask = eff.mask.dilate(mask_radius)
+        # run each effect
+        for (eff_idx, r2), eff in idx_r2_eff_dict.items():
+            file_tree.mask = eff.mask.dilate(mask_radius)
 
-                # impose effect on data
-                offset = eff.get_offset_array(sbj_feat)
-                file_tree.reset_offset(offset)
+            # impose effect on data
+            offset = eff.get_offset_array(sbj_feat)
+            file_tree.reset_offset(offset)
 
-                # find effects
-                _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
-                perm_reg = PermuteRegressVBA(sbj_feat, file_tree,
-                                             num_perm=num_perm,
-                                             par_flag=par_flag,
-                                             alpha=alpha,
-                                             mask_target=eff.mask,
-                                             verbose=True,
-                                             save_flag=True,
-                                             folder=_folder)
+            # find extent
+            _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
+            perm_reg = PermuteRegressVBA(sbj_feat, file_tree,
+                                         num_perm=num_perm,
+                                         par_flag=par_flag,
+                                         alpha=alpha,
+                                         mask_target=eff.mask,
+                                         verbose=True,
+                                         save_flag=True,
+                                         folder=_folder)
 
-                # compute spec / sens
-                estimate_dict = {'arba': perm_reg.mask_estimate}
-                estimate_dict.update(perm_reg.vba_mask_estimate_dict)
-
-                for method, estimate in estimate_dict.items():
-                    sens, spec = get_sens_spec(target=eff.mask,
-                                               estimate=estimate,
-                                               mask=file_tree.mask)
-                    s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
-                    print(s)
-                    method_r2ss_list_dict[method].append((r2, sens, spec))
-
-    plot(folder, method_r2ss_list_dict)
-    print(folder)
+            # record performance
+            perf.check_in(perm_reg)
+        perf.plot(folder)
