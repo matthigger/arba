@@ -9,12 +9,7 @@ import numpy as np
 import seaborn as sns
 from scipy.ndimage.morphology import binary_erosion
 
-from arba.data import SynthFileTree
-from arba.effect import get_sens_spec, EffectRegress
-from arba.permute import PermuteRegressVBA
-from arba.plot import save_fig
-from arba.region import RegionRegress
-from arba.space import sample_mask_min_var, sample_mask, PointCloud
+import arba
 from pnl_data.set import hcp_100
 
 
@@ -33,13 +28,13 @@ def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
     mask_list = list()
     for idx in range(num_eff):
         if min_var_mask:
-            mask = sample_mask_min_var(num_vox=effect_num_vox,
-                                       file_tree=file_tree,
-                                       prior_array=prior_array)
+            mask = arba.space.sample_mask_min_var(num_vox=effect_num_vox,
+                                                  file_tree=file_tree,
+                                                  prior_array=prior_array)
         else:
-            mask = sample_mask(prior_array=prior_array,
-                               num_vox=effect_num_vox,
-                               ref=file_tree.ref)
+            mask = arba.space.sample_mask(prior_array=prior_array,
+                                          num_vox=effect_num_vox,
+                                          ref=file_tree.ref)
         mask_list.append(mask)
     return mask_list
 
@@ -48,8 +43,9 @@ def sample_effects(r2_vec, **kwargs):
     idx_r2_eff_dict = dict()
     for eff_idx, eff_mask in enumerate(sample_masks(**kwargs)):
         # get feat_img_init, the img_feat before effect is applied
-        pc_eff = PointCloud.from_mask(eff_mask)
-        fs_dict = RegionRegress.get_fs_dict(file_tree, pc_ijk=pc_eff)
+        pc_eff = arba.space.PointCloud.from_mask(eff_mask)
+        fs_dict = arba.region.RegionRegress.get_fs_dict(file_tree,
+                                                        pc_ijk=pc_eff)
         img_dim = next(iter(fs_dict.values())).d
 
         feat_img_init = np.empty(shape=(len(fs_dict), img_dim))
@@ -58,11 +54,11 @@ def sample_effects(r2_vec, **kwargs):
         img_pool_cov = sum(fs.cov for fs in fs_dict.values()) / len(fs_dict)
 
         for r2 in r2_vec:
-            eff = EffectRegress.from_r2(r2=r2,
-                                        img_feat=feat_img_init,
-                                        sbj_feat=sbj_feat,
-                                        img_pool_cov=img_pool_cov,
-                                        mask=eff_mask)
+            eff = arba.effect.EffectRegress.from_r2(r2=r2,
+                                                    img_feat=feat_img_init,
+                                                    sbj_feat=sbj_feat,
+                                                    img_pool_cov=img_pool_cov,
+                                                    mask=eff_mask)
 
             idx_r2_eff_dict[eff_idx, r2] = eff
 
@@ -81,9 +77,9 @@ class Performance:
         estimate_dict.update(perm_reg.vba_mask_estimate_dict)
 
         for method, estimate in estimate_dict.items():
-            sens, spec = get_sens_spec(target=eff.mask,
-                                       estimate=estimate,
-                                       mask=file_tree.mask)
+            sens, spec = arba.effect.get_sens_spec(target=eff.mask,
+                                                   estimate=estimate,
+                                                   mask=file_tree.mask)
             s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
             print(s)
             self.method_r2ss_list_dict[method].append((r2, sens, spec))
@@ -113,7 +109,7 @@ class Performance:
             plt.xlabel(r'$r^2$')
             plt.legend()
             plt.gca().set_xscale('log')
-        save_fig(folder / 'r2_vs_sens_spec.pdf', size_inches=(10, 4))
+        arba.plot.save_fig(folder / 'r2_vs_sens_spec.pdf', size_inches=(10, 4))
 
         print(folder)
 
@@ -147,10 +143,10 @@ if __name__ == '__main__':
     if str_img_data == 'synth':
         dim_img = 1
         shape = 6, 6, 6
-        file_tree = SynthFileTree(num_sbj=num_sbj, shape=shape,
-                                  mu=np.zeros(dim_img),
-                                  cov=np.eye(dim_img),
-                                  folder=folder / 'raw_data')
+        file_tree = arba.data.SynthFileTree(num_sbj=num_sbj, shape=shape,
+                                            mu=np.zeros(dim_img),
+                                            cov=np.eye(dim_img),
+                                            folder=folder / 'raw_data')
     elif str_img_data == 'hcp100':
         low_res = True,
         feat_tuple = 'fa',
@@ -159,8 +155,9 @@ if __name__ == '__main__':
                                           feat_tuple=feat_tuple)
 
     sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
-    RegionRegress.set_feat_sbj(feat_sbj=sbj_feat, sbj_list=file_tree.sbj_list,
-                               append_ones=True)
+    arba.region.RegionRegress.set_feat_sbj(feat_sbj=sbj_feat,
+                                           sbj_list=file_tree.sbj_list,
+                                           append_ones=True)
 
     perf = Performance()
     with file_tree.loaded():
@@ -183,14 +180,14 @@ if __name__ == '__main__':
 
             # find extent
             _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
-            perm_reg = PermuteRegressVBA(sbj_feat, file_tree,
-                                         num_perm=num_perm,
-                                         par_flag=par_flag,
-                                         alpha=alpha,
-                                         mask_target=eff.mask,
-                                         verbose=True,
-                                         save_flag=True,
-                                         folder=_folder)
+            perm_reg = arba.permute.PermuteRegressVBA(sbj_feat, file_tree,
+                                                      num_perm=num_perm,
+                                                      par_flag=par_flag,
+                                                      alpha=alpha,
+                                                      mask_target=eff.mask,
+                                                      verbose=True,
+                                                      save_flag=True,
+                                                      folder=_folder)
 
             # record performance
             perf.check_in(perm_reg)
