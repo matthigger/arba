@@ -42,7 +42,7 @@ class FileTree:
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): (space0, space1, space2, sbj_idx, feat_idx)
                           if data is loaded, a read only memmap of data
-        effect_list (list): list of effects applied
+        offset (np.array): an offset which has been added to data
 
     Hidden Attributes:
         __mask (Mask): mask of intersection of all files (only available when
@@ -89,7 +89,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.effect_list = list()
+        self.offset = None
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only num_sbj remains (in place)
@@ -149,7 +149,7 @@ class FileTree:
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, effect_list=None, **kwargs):
+    def loaded(self, offset=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
@@ -159,23 +159,57 @@ class FileTree:
 
         # load or check that previous load was equivilent
         if was_loaded:
-            if effect_list is not None:
-                assert effect_list == self.effect_list, \
-                    'effect_list mismatch between load()'
+            if offset is None:
+                # NOTE: if a file_tree is loaded with an offset, future calls
+                # to loaded() need not request this offset
+                pass
+            else:
+                assert self.offset is not None, 'load() w/ offset after load()'
+                assert np.isclose(offset, self.offset), 'offsets not equal'
+
         else:
-            self.load(effect_list=effect_list, **kwargs)
+            self.load(offset=offset, **kwargs)
 
         try:
             yield self
         finally:
             if not was_loaded:
+                # return to original state
                 self.unload()
 
-    def load(self, effect_list=None, verbose=False, memmap=False):
+    def reset_offset(self, offset=None):
+        """ discards old offset, adds a new one.
+
+        (faster than reloadeding for each new offset)
+
+        Args:
+            offset (np.array):
+        """
+        if isinstance(self.data, np.memmap):
+            # make writable
+            self.data = np.memmap(self.f_data, dtype='float32', mode='w+',
+                                  shape=self.data.shape)
+
+        # subtract old
+        if self.offset is not None:
+            self.data -= self.offset
+
+        # add new, record it
+        if offset is not None:
+            self.data += offset
+        self.offset = offset
+
+        if isinstance(self.data, np.memmap):
+            # make read only again
+            self.data.flush()
+            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                                  shape=self.data.shape)
+
+    def load(self, offset=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
-            effect_list = (list): list of effects
+            offset (np.array): image offset
             verbose (bool): toggles command line output
             memmap (bool): toggles memory map (self.data becomes read only, but
                            accesible from all threads to save on memory)
@@ -210,13 +244,10 @@ class FileTree:
         for fnc in self.fnc_list:
             fnc(self)
 
-        # apply effects
-        if effect_list is None:
-            self.effect_list = list()
-        else:
-            self.effect_list = effect_list
-        for effect in self.effect_list:
-            self.data += effect.get_offset_array(sbj_list=self.sbj_list)
+        # apply offset
+        if offset is not None:
+            self.data += offset
+        self.offset = offset
 
         # flush data to memmap, make read only copy
         if memmap:
@@ -237,7 +268,7 @@ class FileTree:
 
         self.data = None
         self.__mask = None
-        self.effect_list = list()
+        self.offset = None
 
     @check_loaded
     def to_nii(self, folder=None, mean_flag=True):
