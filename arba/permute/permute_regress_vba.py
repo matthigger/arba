@@ -41,11 +41,7 @@ class PermuteRegressVBA(PermuteRegress):
             self.save_vba()
 
     def run_single_vba(self, _seed=None):
-        if _seed is not None:
-            RegionRegress.shuffle_feat_sbj(seed=_seed)
-        else:
-            RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                       sbj_list=self.file_tree.sbj_list)
+        self.feat_sbj.permute(_seed)
 
         sg = SegGraph(file_tree=self.file_tree,
                       cls_reg=RegionRegress)
@@ -79,12 +75,12 @@ class PermuteRegressVBA(PermuteRegress):
                           disable=not self.verbose):
                 val_list.append(self.run_single_permute(**d))
 
+        # add in the unpermuted data
+        val_list.append((self.vba_r2_dict['vba'].max(),
+                         self.vba_r2_dict['tfce'].max()))
+
         self.vba_r2_null_dict['vba'] = sorted(x[0] for x in val_list)
         self.vba_r2_null_dict['tfce'] = sorted(x[1] for x in val_list)
-
-        # ensure that RegionRegress has appropriate feat_sbj ordering
-        RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                   sbj_list=self.file_tree.sbj_list)
 
         return val_list
 

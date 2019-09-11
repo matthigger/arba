@@ -9,20 +9,11 @@ from .reg import Region
 sns.set(font_scale=1.2)
 
 
-def append_col_one(x):
-    if len(x.shape) == 1:
-        x = np.atleast_2d(x).T
-    num_sbj = x.shape[0]
-    ones = np.atleast_2d(np.ones(num_sbj)).T
-    return np.hstack((x, ones))
-
-
 class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
 
     Class Attributes:
-        feat_sbj (np.array): (num_sbj, dim_sbj) subject features
-        pseudo_inv (np.array): pseudo inverse (used to compute beta)
+        sbj_feat (SubjectFeatures):
 
     Instance Attributes:
         feat_img (np.array): (num_sbj, dim_img) mean features observed (per
@@ -32,45 +23,15 @@ class RegionRegress(Region):
         err_cov (np.array): (dim_img, dim_img) error covariance observed
         err_cov_det (float): covariance of err_cov
     """
-
-    feat_sbj = None
-    pseudo_inv = None
-    sbj_list = None
-    num_sbj = None
-
-    @property
-    def dim_sbj(self):
-        return self.feat_sbj.shape[1]
+    sbj_feat = None
 
     @classmethod
-    def set_feat_sbj(cls, feat_sbj, sbj_list, append_ones=True):
-        cls.sbj_list = sbj_list
-        cls.num_sbj = len(sbj_list)
-        cls.feat_sbj = np.atleast_2d(feat_sbj)
-        if append_ones:
-            cls.feat_sbj = append_col_one(cls.feat_sbj)
-
-        x = cls.feat_sbj
-
-        # build pseudo inv (store intermediate states for later computing)
-        cls.x_trans_x = x.T @ x
-        cls.x_trans_x_inv = np.linalg.inv(cls.x_trans_x)
-        cls.pseudo_inv = cls.x_trans_x_inv @ x.T
-
-    @classmethod
-    def shuffle_feat_sbj(cls, seed=None):
-        if seed is not None:
-            np.random.seed(seed)
-        idx = np.array(range(cls.feat_sbj.shape[0]))
-        np.random.shuffle(idx)
-        cls.set_feat_sbj(feat_sbj=cls.feat_sbj[idx, :],
-                         sbj_list=cls.sbj_list,
-                         append_ones=False)
+    def set_sbj_feat(cls, sbj_feat):
+        cls.sbj_feat = sbj_feat
+        assert np.all(sbj_feat.contrast), 'nuisance params not supported'
 
     def fit(self, feat_img):
-        assert self.feat_sbj is not None, 'call RegRegress.set_feat_sbj() 1st'
-
-        self.beta = self.pseudo_inv @ feat_img
+        self.beta = self.sbj_feat.pseudo_inv @ feat_img
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
@@ -100,10 +61,11 @@ class RegionRegress(Region):
 
     def __init__(self, pc_ijk, fs_dict, _beta=None):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
+        assert self.sbj_feat is not None, 'set_sbj_feat() not called'
 
         img_dim = next(iter(fs_dict.values())).d
         self.feat_img = np.empty(shape=(len(fs_dict), img_dim))
-        for idx, sbj in enumerate(self.sbj_list):
+        for idx, sbj in enumerate(self.sbj_feat.sbj_list):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
         # fit beta
@@ -113,9 +75,9 @@ class RegionRegress(Region):
 
         # covariance of imaging features around sbj mean
         self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
-                              self.num_sbj
-        delta = self.feat_img - self.project(self.feat_sbj, append_flag=False)
-        self.eps_mean = delta.T @ delta / self.num_sbj
+                              self.sbj_feat.num_sbj
+        delta = self.feat_img - self.sbj_feat.x @ self.beta
+        self.eps_mean = delta.T @ delta / self.sbj_feat.num_sbj
 
         self.eps = self.space_cov_pool + self.eps_mean
 
@@ -135,7 +97,7 @@ class RegionRegress(Region):
             return type(self)(self.feat_img, self.pc_ijk)
 
         fs_dict = {sbj: self.fs_dict[sbj] + other.fs_dict[sbj]
-                   for sbj in self.sbj_list}
+                   for sbj in self.sbj_feat.sbj_list}
 
         lambda_self = len(self) / (len(self) + len(other))
         beta = lambda_self * self.beta + (1 - lambda_self) * other.beta
@@ -165,19 +127,14 @@ class RegionRegress(Region):
 
     __radd__ = __add__
 
-    def project(self, feat_sbj, append_flag=True):
-        if append_flag:
-            feat_sbj = append_col_one(feat_sbj)
-        return feat_sbj @ self.beta
-
     def plot(self, sbj_feat_label='sbj_feat', img_feat_label='img_feat'):
-        # line below note: we append column of 1's ...
-        assert self.feat_sbj.shape[1] == 2, 'only valid for scalar feat_sbj'
+        raise NotImplementedError
+        # todo: assert self.feat_sbj.shape[1] == 1, 'only valid for scalar feat_sbj'
         assert self.feat_img.shape[1] == 1, 'only valid for scalar feat_img'
 
-        feat_sbj = self.feat_sbj[:, 0]
+        # todo: feat_sbj = self.feat_sbj[:, 0]
         feat_sbj_line = np.array((min(feat_sbj), max(feat_sbj)))
-        feat_img_line = self.project(feat_sbj_line, append_flag=True)
+        feat_img_line = feat_sbj_line @ self.beta
 
         plt.scatter(feat_sbj, self.feat_img)
         plt.suptitle(', '.join([f'mse={self.mse:.2f}',

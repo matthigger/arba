@@ -33,6 +33,9 @@ class PermuteRegress:
     def __init__(self, feat_sbj, file_tree, alpha=.05, num_perm=100,
                  mask_target=None, verbose=True, folder=None, par_flag=False,
                  save_flag=True):
+        assert alpha >= 1 / (num_perm + 1), \
+            'not enough perm for alpha, never sig'
+
         self.alpha = alpha
         self.num_perm = num_perm
         self.feat_sbj = feat_sbj
@@ -89,11 +92,7 @@ class PermuteRegress:
                          features and returns sg_hist without running
                          agglomerative clustering
         """
-        if _seed is not None:
-            RegionRegress.shuffle_feat_sbj(seed=_seed)
-        else:
-            RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                       sbj_list=self.file_tree.sbj_list)
+        self.feat_sbj.permute(_seed)
 
         sg_hist = SegGraphHistory(file_tree=self.file_tree,
                                   cls_reg=RegionRegress,
@@ -130,10 +129,6 @@ class PermuteRegress:
                 val_list.append(self.run_single_permute(**d))
 
         self._compute_r2_bounds(val_list)
-
-        # ensure that RegionRegress has appropriate feat_sbj ordering
-        RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                   sbj_list=self.file_tree.sbj_list)
 
         return val_list
 
