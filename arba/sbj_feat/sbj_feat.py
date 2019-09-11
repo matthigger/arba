@@ -41,6 +41,13 @@ class SubjectFeatures:
     def is_permuted(self):
         return self.perm_seed is not None
 
+    @property
+    def pseudo_inv(self):
+        # memoize
+        if self._pseudo_inv is None:
+            self._pseudo_inv = np.linalg.pinv(self.x)
+        return self._pseudo_inv
+
     def get_x_target(self, bias=True):
         if bias:
             return self.x[:, self.contrast]
@@ -62,6 +69,7 @@ class SubjectFeatures:
                  contrast=None):
         self.x = None
         self._x = x
+        self._pseudo_inv = None
         self.perm_seed = None
         self.perm_matrix = None
 
@@ -97,20 +105,35 @@ class SubjectFeatures:
         # permute
         self.permute(permute_seed)
 
-    def permute(self, permute_seed=None):
+    def rm_nuisance(self, beta):
+        """ returns a matrix of sbj_feat which adjust for nuisance in beta
+
+        Args:
+            beta (np.array): mapping
+
+        Returns:
+            x (np.array): (num_sbj, num_feat) features
+        """
+        raise NotImplementedError
+
+    def permute(self, seed=None):
         """ permutes data according to a random seed
 
         Args:
-            permute_seed: initialization of randomization, associated with a
+            seed: initialization of randomization, associated with a
                           permutation matrix
         """
-        self.perm_seed = permute_seed
+        # reset pseudo inv if new seed is given
+        if seed != self.perm_seed:
+            self._pseudo_inv = None
+
+        self.perm_seed = seed
         if self.perm_seed is None:
             self.perm_matrix = None
             self.x = self._x
             return
 
-        self.perm_matrix = get_perm_matrix(self.num_sbj, seed=permute_seed)
+        self.perm_matrix = get_perm_matrix(self.num_sbj, seed=seed)
         self.x = self.perm_matrix @ self._x
 
     def freedman_lane(self, img_feat):
