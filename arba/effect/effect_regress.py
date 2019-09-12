@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-from arba.effect import Effect, get_r2
+from .effect import Effect
+from .get_r2 import get_r2
 
 
 class EffectRegress(Effect):
@@ -22,7 +23,8 @@ class EffectRegress(Effect):
         return get_r2(*args, beta=self.beta, **kwargs)
 
     @staticmethod
-    def from_r2(r2, feat_img, feat_sbj, img_pool_cov=None, *args, **kwargs):
+    def from_r2(r2, feat_img, feat_sbj, img_pool_cov=None, contrast=None,
+                *args, **kwargs):
         """ yields an effect which achieve r2
 
         NOTE: the direction of the effect (beta) is chosen as the min MSE
@@ -35,6 +37,8 @@ class EffectRegress(Effect):
             img_pool_cov (np.array): the pooled (across sbj) covariance of
                                      imaging features.  if not passed then it
                                      is assumed 0
+            contrast (np.array): (dim_sbj) contrast[i] = 1 => sbj feat i is not
+                                 a nuisance feature
 
         Returns:
             eff (EffectRegress)
@@ -55,7 +59,8 @@ class EffectRegress(Effect):
             _r2 = get_r2(_beta,
                          x=feat_sbj,
                          y=feat_img + feat_sbj @ _beta,
-                         y_pool_cov=img_pool_cov)
+                         y_pool_cov=img_pool_cov,
+                         contrast=contrast)
             return (_r2 - r2) ** 2
 
         res = minimize_scalar(fnc)
