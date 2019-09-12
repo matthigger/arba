@@ -3,7 +3,7 @@ import numpy as np
 from ..permute import get_perm_matrix
 
 
-class SubjectFeatures:
+class DataSubject:
     """ contains features which are constant across image (age, sex, ...)
 
     serves two main functions:

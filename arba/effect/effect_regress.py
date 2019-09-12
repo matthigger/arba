@@ -69,7 +69,7 @@ class EffectRegress(Effect):
         """ gets array, in shape of self.mask.ref, of effect
 
         Args:
-            sbj_feat (SubjectFeatures):
+            sbj_feat (DataSubject):
 
         Returns:
             eff_delta (np.array): (space0, space1, space2, num_sbj, dim_img)

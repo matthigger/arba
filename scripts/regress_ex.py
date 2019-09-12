@@ -117,7 +117,7 @@ if __name__ == '__main__':
     random.seed(1)
 
     # detection params
-    par_flag = False
+    par_flag = True
     num_perm = 24
     alpha = .05
 
@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
     # build + set  sbj_feat
     x = np.random.normal(size=(num_sbj, dim_sbj))
-    sbj_feat = arba.sbj_feat.SubjectFeatures(x=x, sbj_list=file_tree.sbj_list)
+    sbj_feat = arba.sbj_feat.DataSubject(x=x, sbj_list=file_tree.sbj_list)
 
     perf = Performance()
     with file_tree.loaded():

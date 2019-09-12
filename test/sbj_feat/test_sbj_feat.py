@@ -9,8 +9,8 @@ def test_sbj_feat():
 
     x = np.random.normal(size=(num_sbj, num_feat))
 
-    sbj_feat = SubjectFeatures(x)
-    sbj_feat_w_nuis = SubjectFeatures(x, contrast=contrast)
-    sbj_feat_p = SubjectFeaturesPoly(x, poly_order=poly_order)
-    sbj_feat_p_w_nuis = SubjectFeaturesPoly(x, contrast=contrast,
-                                            poly_order=poly_order)
+    sbj_feat = DataSubject(x)
+    sbj_feat_w_nuis = DataSubject(x, contrast=contrast)
+    sbj_feat_p = DataSubjectPoly(x, poly_order=poly_order)
+    sbj_feat_p_w_nuis = DataSubjectPoly(x, contrast=contrast,
+                                        poly_order=poly_order)

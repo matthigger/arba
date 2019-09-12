@@ -1,10 +1,10 @@
 import numpy as np
 from sklearn.preprocessing import PolynomialFeatures
 
-from .sbj_feat import SubjectFeatures
+from .data_sbj import DataSubject
 
 
-class SubjectFeaturesPoly(SubjectFeatures):
+class DataSubjectPoly(DataSubject):
     """ polynomial projection of subject features for non-linear regression
 
     Note: we preclude the inclusion of polynomial features which draw from both
