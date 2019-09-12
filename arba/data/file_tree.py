@@ -28,7 +28,8 @@ class FileTree:
     allowing for parallel processes to operate on shared memory.
 
     Attributes:
-        sbj_feat_file_tree (tree): key0 are sbj, key2 are feat, values are file
+        sbj_ifeat_file_tree (tree): key0 is sbj, key2 is imaging feat, vals are
+                                    files which contain imaging feat of sbj
         sbj_list (list): list of sbj (defines indexing)
         feat_list (list): list of features (defines indexing)
         scale (np.array): defines scaling of data
@@ -55,25 +56,25 @@ class FileTree:
 
     @property
     def num_sbj(self):
-        return len(self.sbj_feat_file_tree)
+        return len(self.sbj_ifeat_file_tree)
 
     @property
     def d(self):
         return len(self.feat_list)
 
     def __len__(self):
-        return len(self.sbj_feat_file_tree.keys())
+        return len(self.sbj_ifeat_file_tree.keys())
 
-    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None,
+    def __init__(self, sbj_ifeat_file_tree, sbj_list=None, fnc_list=None,
                  mask=None):
-        self.sbj_feat_file_tree = sbj_feat_file_tree
+        self.sbj_ifeat_file_tree = sbj_ifeat_file_tree
         if sbj_list is None:
-            self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+            self.sbj_list = sorted(self.sbj_ifeat_file_tree.keys())
         else:
             self.sbj_list = sbj_list
-            assert set(sbj_list) == set(sbj_feat_file_tree), 'sbj_list error'
+            assert set(sbj_list) == set(sbj_ifeat_file_tree), 'sbj_list error'
 
-        feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
+        feat_file_dict = next(iter(self.sbj_ifeat_file_tree.values()))
         self.feat_list = sorted(feat_file_dict.keys())
         self.scale = np.eye(self.d)
         self.ref = get_ref(next(iter(feat_file_dict.values())))
@@ -110,10 +111,10 @@ class FileTree:
         # prune tree to approrpiate sbj
         for _, sbj_list in grp_list_iter:
             for sbj in sbj_list[n_sbj:]:
-                del self.sbj_feat_file_tree[sbj]
+                del self.sbj_ifeat_file_tree[sbj]
 
         # update sbj_list
-        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        self.sbj_list = sorted(self.sbj_ifeat_file_tree.keys())
 
     @check_loaded
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
@@ -227,7 +228,7 @@ class FileTree:
                                  desc='load per sbj',
                                  disable=not verbose):
             for feat_idx, feat in enumerate(self.feat_list):
-                f = self.sbj_feat_file_tree[sbj][feat]
+                f = self.sbj_ifeat_file_tree[sbj][feat]
                 img = nib.load(str(f))
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
@@ -302,7 +303,7 @@ class FileTree:
         return np.array([sbj in sbj_set for sbj in self.sbj_list])
 
     def __eq__(self, other):
-        if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
+        if self.sbj_ifeat_file_tree != other.sbj_ifeat_file_tree:
             return False
 
         if self.ref != other.ref:

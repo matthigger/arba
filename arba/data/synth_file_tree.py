@@ -49,7 +49,7 @@ class SynthFileTree(FileTree):
 
         sbj_list = cls.get_sbj_list(num_sbj)
 
-        sbj_feat_file_tree = defaultdict(dict)
+        sbj_ifeat_file_tree = defaultdict(dict)
         for sbj_idx, sbj in enumerate(sbj_list):
             for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
                 # write img to file
@@ -59,10 +59,10 @@ class SynthFileTree(FileTree):
                 img.to_filename(str(f))
 
                 # store
-                sbj_feat_file_tree[sbj][feat] = f
+                sbj_ifeat_file_tree[sbj][feat] = f
 
         # todo: type should be SynthFileTree ... but this is classmethod?
-        return FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
+        return FileTree(sbj_ifeat_file_tree=sbj_ifeat_file_tree,
                         sbj_list=sbj_list)
 
     def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
@@ -85,12 +85,12 @@ class SynthFileTree(FileTree):
 
         feat_list = self.get_feat_list(len(mu))
 
-        sbj_feat_file_tree = defaultdict(dict)
+        sbj_ifeat_file_tree = defaultdict(dict)
         for sbj in self.get_sbj_list(num_sbj):
             # sample img
             x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
 
-            # store img (as nii, then in sbj_feat_file_tree)
+            # store img (as nii, then in sbj_ifeat_file_tree)
             for feat_idx, feat in enumerate(feat_list):
                 f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
                                                 prefix=f'{sbj}_{feat}_').name
@@ -99,6 +99,6 @@ class SynthFileTree(FileTree):
                 img.to_filename(str(f))
 
                 # store
-                sbj_feat_file_tree[sbj][feat] = f
+                sbj_ifeat_file_tree[sbj][feat] = f
 
-        super().__init__(sbj_feat_file_tree=sbj_feat_file_tree)
+        super().__init__(sbj_ifeat_file_tree=sbj_ifeat_file_tree)
