@@ -213,7 +213,7 @@ class PermuteRegress:
                                                    file_tree=self.sg_hist.file_tree,
                                                    reg_cls=RegionRegress)
                 r.pc_ijk.to_mask().to_nii(self.folder / f'node_{n}.nii.gz')
-                r.plot(img_feat_label='fa')
+                # todo: r.plot(img_feat='fa', sbj_feat=self.feat_sbj.feat_list[1])
                 save_fig(self.folder / f'node_{n}.pdf')
 
 
