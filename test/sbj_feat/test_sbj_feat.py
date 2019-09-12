@@ -1,7 +1,7 @@
-from arba.sbj_feat import *
+from arba.data import *
 
 
-def test_sbj_feat():
+def test_data_sbj():
     np.random.seed(1)
     num_sbj, num_feat = 10, 4
     poly_order = 2

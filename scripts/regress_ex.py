@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
     # build + set feat
     sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
-    data_sbj = arba.sbj_feat.DataSubject(feat=sbj_feat,
+    data_sbj = arba.data.DataSubject(feat=sbj_feat,
                                          sbj_list=file_tree.sbj_list)
 
     perf = Performance()

@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..permute import get_perm_matrix
+from arba.permute import get_perm_matrix
 
 
 class DataSubject:
