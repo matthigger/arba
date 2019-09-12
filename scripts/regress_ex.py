@@ -40,7 +40,7 @@ def sample_masks(effect_num_vox, data_img, num_eff=1, min_var_mask=False):
 def sample_effects(r2_vec, data_sbj, **kwargs):
     idx_r2_eff_dict = dict()
     for eff_idx, eff_mask in enumerate(sample_masks(**kwargs)):
-        # get feat_img_init, the img_feat before effect is applied
+        # get feat_img_init, the feat_img before effect is applied
         pc_eff = arba.space.PointCloud.from_mask(eff_mask)
         fs_dict = arba.region.RegionRegress.get_fs_dict(data_img,
                                                         pc_ijk=pc_eff)
@@ -53,7 +53,7 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
 
         for r2 in r2_vec:
             eff = arba.effect.EffectRegress.from_r2(r2=r2,
-                                                    img_feat=feat_img_init,
+                                                    feat_img=feat_img_init,
                                                     feat_sbj=data_sbj.feat,
                                                     img_pool_cov=img_pool_cov,
                                                     mask=eff_mask)

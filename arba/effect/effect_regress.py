@@ -7,7 +7,7 @@ from arba.effect import Effect, compute_r2
 class EffectRegress(Effect):
     """ a consant offset depending on linear fnc of subject features:
 
-    img_feat_offset = feat @ beta
+    feat_img_offset = feat @ beta
 
     Attributes:
         beta (np.array): (dim_sbj feat dim_img) mapping from sbj to img feat
@@ -22,15 +22,15 @@ class EffectRegress(Effect):
         return compute_r2(*args, beta=self.beta, **kwargs)
 
     @staticmethod
-    def from_r2(r2, img_feat, feat_sbj, img_pool_cov=None, *args, **kwargs):
+    def from_r2(r2, feat_img, feat_sbj, img_pool_cov=None, *args, **kwargs):
         """ yields an effect which achieve r2
 
         NOTE: the direction of the effect (beta) is chosen as the min MSE
-        direction already in img_feat & data_sbj
+        direction already in feat_img & data_sbj
 
         Args:
             r2 (float): target r2
-            img_feat (np.array): (num_sbj, dim_img) image features
+            feat_img (np.array): (num_sbj, dim_img) image features
             feat_sbj (np.array): (num_sbj, dim_sbj) subject features
             img_pool_cov (np.array): the pooled (across sbj) covariance of
                                      imaging features.  if not passed then it
@@ -43,10 +43,10 @@ class EffectRegress(Effect):
         assert 0 <= r2 < 1, 'invalid r2'
 
         if img_pool_cov is None:
-            dim_img = img_feat.shape[1]
+            dim_img = feat_img.shape[1]
             img_pool_cov = np.zeros((dim_img, dim_img))
 
-        beta = np.linalg.pinv(feat_sbj) @ img_feat
+        beta = np.linalg.pinv(feat_sbj) @ feat_img
 
         def fnc(scale):
             """ computes r2 under scale factor, returns error to target r2
@@ -54,7 +54,7 @@ class EffectRegress(Effect):
             _beta = beta * scale
             _r2 = compute_r2(_beta,
                              x=feat_sbj,
-                             y=img_feat + feat_sbj @ _beta,
+                             y=feat_img + feat_sbj @ _beta,
                              y_pool_cov=img_pool_cov)
             return (_r2 - r2) ** 2
 

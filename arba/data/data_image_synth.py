@@ -12,7 +12,7 @@ from .data_image import DataImage
 class DataImageSynth(DataImage):
     """ builds gaussian noise nii in temp location (for testing purposes)
 
-    features are labelled alphabetically ('img_featA', 'img_featB', ....)
+    features are labelled alphabetically ('feat_imgA', 'feat_imgB', ....)
     sbj are labelled numerically ('sbj0', 'sbj1', ...)
     """
 
@@ -22,7 +22,7 @@ class DataImageSynth(DataImage):
 
     @staticmethod
     def get_feat_list(n):
-        return [f'img_feat{x}' for x in ascii_uppercase[:n]]
+        return [f'feat_img{x}' for x in ascii_uppercase[:n]]
 
     @classmethod
     def from_array(cls, data, folder=None):

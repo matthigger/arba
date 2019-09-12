@@ -1,3 +1,5 @@
+from string import ascii_uppercase
+
 import numpy as np
 
 from arba.permute import get_perm_matrix
@@ -84,7 +86,7 @@ class DataSubject:
 
         # feat_list
         if feat_list is None:
-            self.feat_list = [f'feat{idx}' for idx in range(num_feat)]
+            self.feat_list = [f'feat_sbj{c}' for c in ascii_uppercase]
         else:
             assert len(feat_list) == num_feat, 'feat & feat_list dimension'
             self.feat_list = feat_list
@@ -134,29 +136,29 @@ class DataSubject:
         self.perm_matrix = get_perm_matrix(self.num_sbj, seed=seed)
         self.feat = self.perm_matrix @ self._feat
 
-    def freedman_lane(self, img_feat):
-        """ shuffles the residuals of img_feat under a nuisance regression
+    def freedman_lane(self, feat_img):
+        """ shuffles the residuals of feat_img under a nuisance regression
 
         Args:
-            img_feat (np.array): (num_sbj, num_img_feat) imaging features
+            feat_img (np.array): (num_sbj, num_feat_img) imaging features
 
         Returns:
-            img_feat (np.array): (num_sbj, num_img_feat) imaging features with
+            feat_img (np.array): (num_sbj, num_feat_img) imaging features with
                                  permuted nuisance residuals
         """
 
         assert self.is_permuted, 'must be permuted to run freedman_lane()'
-        assert img_feat.shape[0] == self.num_sbj, 'num_sbj mismatch'
+        assert feat_img.shape[0] == self.num_sbj, 'num_sbj mismatch'
 
         # compute nuisance regression
-        beta = np.linalg.pinv(self.x_nuisance) @ img_feat
+        beta = np.linalg.pinv(self.x_nuisance) @ feat_img
 
         # compute residuals
-        resid = img_feat - beta @ self.x_nuisance
+        resid = feat_img - beta @ self.x_nuisance
 
         # subtract residuals, add permuted residuals
-        img_feat = img_feat + (self.perm_matrix - np.eye(self.num_sbj)) @ resid
+        feat_img = feat_img + (self.perm_matrix - np.eye(self.num_sbj)) @ resid
 
         raise NotImplementedError('not tested')
 
-        return img_feat
+        return feat_img

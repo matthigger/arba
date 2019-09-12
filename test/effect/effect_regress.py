@@ -27,7 +27,7 @@ def test_effect_regress():
     eff = EffectRegress(mask=mask, beta=beta)
 
     for r2 in [.1, .5, .9]:
-        eff = EffectRegress.from_r2(r2=r2, img_feat=img_feat,
+        eff = EffectRegress.from_r2(r2=r2, feat_img=img_feat,
                                     feat_sbj=feat_sbj, mask=mask)
         img_feat_adjust = img_feat + feat_sbj @ eff.beta
         r2_observed = compute_r2(beta=eff.beta, y=img_feat_adjust, x=feat_sbj)
