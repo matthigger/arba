@@ -15,8 +15,6 @@ from pnl_data.set import hcp_100
 
 def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
     """ gets list of masks (extent of effects) """
-    np.random.seed(1)
-    random.seed(1)
 
     assert file_tree.is_loaded, 'file tree must be loaded'
     prior_array = file_tree.mask
@@ -115,15 +113,18 @@ class Performance:
 
 
 if __name__ == '__main__':
+    np.random.seed(1)
+    random.seed(1)
+
     # detection params
-    par_flag = True
+    par_flag = False
     num_perm = 24
     alpha = .05
 
     # regression effect params
-    r2_vec = np.logspace(-2, -.5, 2)
-    # r2_vec = [.9]
-    num_eff = 2
+    #r2_vec =np.logspace(-2, -.5, 2)
+    r2_vec = [.9]
+    num_eff = 1
     dim_sbj = 1
     num_sbj = 100
     min_var_effect_locations = True
@@ -154,10 +155,10 @@ if __name__ == '__main__':
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
 
-    sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
-    arba.region.RegionRegress.set_feat_sbj(feat_sbj=sbj_feat,
-                                           sbj_list=file_tree.sbj_list,
-                                           append_ones=True)
+    # build + set  sbj_feat
+    x = np.random.normal(size=(num_sbj, dim_sbj))
+    sbj_feat = arba.sbj_feat.SubjectFeatures(x=x, sbj_list=file_tree.sbj_list)
+    arba.region.RegionRegress.set_sbj_feat(sbj_feat)
 
     perf = Performance()
     with file_tree.loaded():
