@@ -123,9 +123,8 @@ class SubjectFeatures:
             seed: initialization of randomization, associated with a
                           permutation matrix
         """
-        # reset pseudo inv if new seed is given
-        if seed != self.perm_seed:
-            self._pseudo_inv = None
+        if seed == self.perm_seed:
+            return
 
         self.perm_seed = seed
         if self.perm_seed is None:
