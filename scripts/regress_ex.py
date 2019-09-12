@@ -54,7 +54,7 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
         for r2 in r2_vec:
             eff = arba.effect.EffectRegress.from_r2(r2=r2,
                                                     img_feat=feat_img_init,
-                                                    sbj_feat=data_sbj.feat,
+                                                    feat_sbj=data_sbj.feat,
                                                     img_pool_cov=img_pool_cov,
                                                     mask=eff_mask)
 

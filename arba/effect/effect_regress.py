@@ -22,7 +22,7 @@ class EffectRegress(Effect):
         return compute_r2(*args, beta=self.beta, **kwargs)
 
     @staticmethod
-    def from_r2(r2, img_feat, sbj_feat, img_pool_cov=None, *args, **kwargs):
+    def from_r2(r2, img_feat, feat_sbj, img_pool_cov=None, *args, **kwargs):
         """ yields an effect which achieve r2
 
         NOTE: the direction of the effect (beta) is chosen as the min MSE
@@ -31,7 +31,7 @@ class EffectRegress(Effect):
         Args:
             r2 (float): target r2
             img_feat (np.array): (num_sbj, dim_img) image features
-            sbj_feat (np.array): (num_sbj, dim_sbj) subject features
+            feat_sbj (np.array): (num_sbj, dim_sbj) subject features
             img_pool_cov (np.array): the pooled (across sbj) covariance of
                                      imaging features.  if not passed then it
                                      is assumed 0
@@ -46,15 +46,15 @@ class EffectRegress(Effect):
             dim_img = img_feat.shape[1]
             img_pool_cov = np.zeros((dim_img, dim_img))
 
-        beta = np.linalg.pinv(sbj_feat) @ img_feat
+        beta = np.linalg.pinv(feat_sbj) @ img_feat
 
         def fnc(scale):
             """ computes r2 under scale factor, returns error to target r2
             """
             _beta = beta * scale
             _r2 = compute_r2(_beta,
-                             x=sbj_feat,
-                             y=img_feat + sbj_feat @ _beta,
+                             x=feat_sbj,
+                             y=img_feat + feat_sbj @ _beta,
                              y_pool_cov=img_pool_cov)
             return (_r2 - r2) ** 2
 
@@ -65,21 +65,21 @@ class EffectRegress(Effect):
 
         return EffectRegress(*args, beta=beta, **kwargs)
 
-    def get_offset_array(self, sbj_feat):
+    def get_offset_array(self, feat_sbj):
         """ gets array, in shape of self.mask.ref, of effect
 
         Args:
-            sbj_feat (np.array): (num_sbj, num_sfeat) subject features
+            feat_sbj (np.array): (num_sbj, num_sfeat) subject features
 
         Returns:
             eff_delta (np.array): (space0, space1, space2, num_sbj, dim_img)
                                   offset (zero outside mask)
         """
         dim_img = self.beta.shape[1]
-        shape = self.mask.shape + (sbj_feat.shape[0], dim_img)
+        shape = self.mask.shape + (feat_sbj.shape[0], dim_img)
         eff_delta = np.zeros(shape)
 
-        for sbj_idx, delta in enumerate(sbj_feat @ self.beta):
+        for sbj_idx, delta in enumerate(feat_sbj @ self.beta):
             eff_delta[self.mask, sbj_idx, ...] += delta
 
         return eff_delta

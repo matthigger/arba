@@ -9,8 +9,8 @@ def test_data_sbj():
 
     x = np.random.normal(size=(num_sbj, num_feat))
 
-    sbj_feat = DataSubject(x)
-    sbj_feat_w_nuis = DataSubject(x, contrast=contrast)
-    sbj_feat_p = DataSubjectPoly(x, poly_order=poly_order)
-    sbj_feat_p_w_nuis = DataSubjectPoly(x, contrast=contrast,
+    data_sbj = DataSubject(x)
+    data_sbj_w_nuis = DataSubject(x, contrast=contrast)
+    data_sbj_p = DataSubjectPoly(x, poly_order=poly_order)
+    data_sbj_p_w_nuis = DataSubjectPoly(x, contrast=contrast,
                                         poly_order=poly_order)
