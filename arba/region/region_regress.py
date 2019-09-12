@@ -5,6 +5,7 @@ import seaborn as sns
 import arba.space
 from .feat_stat import FeatStatSingle
 from .reg import Region
+from ..effect import compute_r2
 
 sns.set(font_scale=1.2)
 
@@ -29,9 +30,6 @@ class RegionRegress(Region):
     def set_sbj_feat(cls, sbj_feat):
         cls.sbj_feat = sbj_feat
         assert np.all(sbj_feat.contrast), 'nuisance params not supported'
-
-    def fit(self, feat_img):
-        self.beta = self.sbj_feat.pseudo_inv @ feat_img
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
@@ -71,25 +69,17 @@ class RegionRegress(Region):
         # fit beta
         self.beta = _beta
         if self.beta is None:
-            self.fit(self.feat_img)
+            self.beta = self.sbj_feat.pseudo_inv @ self.feat_img
 
         # covariance of imaging features around sbj mean
         self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
                               self.sbj_feat.num_sbj
-        delta = self.feat_img - self.sbj_feat.x @ self.beta
-        self.eps_mean = delta.T @ delta / self.sbj_feat.num_sbj
 
-        self.eps = self.space_cov_pool + self.eps_mean
-
-        # compute derivative stats
-        self.mse = np.trace(self.eps)
-        self.mse_mean = np.trace(self.eps_mean)
-
-        self.cov = sum(self.fs_dict.values()).cov
-        self.cov_mean = self.cov - self.space_cov_pool
-
-        self.r2 = 1 - (np.trace(self.eps) / np.trace(self.cov))
-        self.r2_mean = 1 - (np.trace(self.eps_mean) / np.trace(self.cov_mean))
+        # r2
+        self.r2 = compute_r2(x=self.sbj_feat.x,
+                             y=self.feat_img,
+                             beta=self.beta,
+                             y_pool_cov=self.space_cov_pool)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
