@@ -7,7 +7,7 @@ from arba.effect import Effect, compute_r2
 class EffectRegress(Effect):
     """ a consant offset depending on linear fnc of subject features:
 
-    img_feat_offset = sbj_feat.x @ beta
+    img_feat_offset = sbj_feat @ beta
 
     Attributes:
         beta (np.array): (dim_sbj x dim_img) mapping from sbj to img feat
@@ -69,17 +69,17 @@ class EffectRegress(Effect):
         """ gets array, in shape of self.mask.ref, of effect
 
         Args:
-            sbj_feat (DataSubject):
+            sbj_feat (np.array): (num_sbj, num_sfeat) subject features
 
         Returns:
             eff_delta (np.array): (space0, space1, space2, num_sbj, dim_img)
                                   offset (zero outside mask)
         """
         dim_img = self.beta.shape[1]
-        shape = self.mask.shape + (sbj_feat.num_sbj, dim_img)
+        shape = self.mask.shape + (sbj_feat.shape[0], dim_img)
         eff_delta = np.zeros(shape)
 
-        for sbj_idx, delta in enumerate(sbj_feat.x @ self.beta):
+        for sbj_idx, delta in enumerate(sbj_feat @ self.beta):
             eff_delta[self.mask, sbj_idx, ...] += delta
 
         return eff_delta

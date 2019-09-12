@@ -177,7 +177,7 @@ if __name__ == '__main__':
             file_tree.mask = eff.mask.dilate(mask_radius)
 
             # impose effect on data
-            offset = eff.get_offset_array(data_sbj)
+            offset = eff.get_offset_array(data_sbj.x)
             file_tree.reset_offset(offset)
 
             # find extent
