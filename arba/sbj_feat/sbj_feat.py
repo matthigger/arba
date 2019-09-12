@@ -123,6 +123,8 @@ class SubjectFeatures:
             seed: initialization of randomization, associated with a
                           permutation matrix
         """
+        self._pseudo_inv = None
+
         self.perm_seed = seed
         if self.perm_seed is None:
             self.perm_matrix = None
