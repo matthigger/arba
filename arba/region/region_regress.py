@@ -12,7 +12,7 @@ class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
 
     Class Attributes:
-        data_sbj (DataSubject):
+        sbj_feat (DataSubject):
 
     Instance Attributes:
         feat_img (np.array): (num_sbj, dim_img) mean features observed (per

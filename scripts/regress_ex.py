@@ -37,7 +37,7 @@ def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
     return mask_list
 
 
-def sample_effects(r2_vec, **kwargs):
+def sample_effects(r2_vec, data_sbj, **kwargs):
     idx_r2_eff_dict = dict()
     for eff_idx, eff_mask in enumerate(sample_masks(**kwargs)):
         # get feat_img_init, the img_feat before effect is applied
@@ -54,7 +54,7 @@ def sample_effects(r2_vec, **kwargs):
         for r2 in r2_vec:
             eff = arba.effect.EffectRegress.from_r2(r2=r2,
                                                     img_feat=feat_img_init,
-                                                    sbj_feat=sbj_feat,
+                                                    sbj_feat=data_sbj.x,
                                                     img_pool_cov=img_pool_cov,
                                                     mask=eff_mask)
 
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     alpha = .05
 
     # regression effect params
-    #r2_vec =np.logspace(-2, -.5, 2)
+    # r2_vec =np.logspace(-2, -.5, 2)
     r2_vec = [.9]
     num_eff = 1
     dim_sbj = 1
@@ -155,9 +155,10 @@ if __name__ == '__main__':
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
 
-    # build + set data_sbj
-    x = np.random.normal(size=(num_sbj, dim_sbj))
-    sbj_feat = arba.sbj_feat.DataSubject(x=x, sbj_list=file_tree.sbj_list)
+    # build + set sbj_feat
+    sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
+    data_sbj = arba.sbj_feat.DataSubject(x=sbj_feat,
+                                         sbj_list=file_tree.sbj_list)
 
     perf = Performance()
     with file_tree.loaded():
@@ -165,6 +166,7 @@ if __name__ == '__main__':
 
         # sample effects
         idx_r2_eff_dict = sample_effects(r2_vec=r2_vec,
+                                         data_sbj=data_sbj,
                                          effect_num_vox=effect_num_vox,
                                          file_tree=file_tree,
                                          num_eff=num_eff,
@@ -175,12 +177,12 @@ if __name__ == '__main__':
             file_tree.mask = eff.mask.dilate(mask_radius)
 
             # impose effect on data
-            offset = eff.get_offset_array(sbj_feat)
+            offset = eff.get_offset_array(data_sbj)
             file_tree.reset_offset(offset)
 
             # find extent
             _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
-            perm_reg = arba.permute.PermuteRegressVBA(sbj_feat, file_tree,
+            perm_reg = arba.permute.PermuteRegressVBA(data_sbj, file_tree,
                                                       num_perm=num_perm,
                                                       par_flag=par_flag,
                                                       alpha=alpha,
