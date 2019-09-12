@@ -19,9 +19,6 @@ class EffectRegress(Effect):
 
         self.beta = beta
 
-    def get_r2(self, *args, **kwargs):
-        return get_r2(*args, beta=self.beta, **kwargs)
-
     @staticmethod
     def from_r2(r2, feat_img, feat_sbj, img_pool_cov=None, contrast=None,
                 *args, **kwargs):

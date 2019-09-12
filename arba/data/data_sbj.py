@@ -107,17 +107,6 @@ class DataSubject:
         # permute
         self.permute(permute_seed)
 
-    def rm_nuisance(self, beta):
-        """ returns a matrix of feat which adjust for nuisance in beta
-
-        Args:
-            beta (np.array): mapping
-
-        Returns:
-            feat (np.array): (num_sbj, num_feat) features
-        """
-        raise NotImplementedError
-
     def permute(self, seed=None):
         """ permutes data according to a random seed
 

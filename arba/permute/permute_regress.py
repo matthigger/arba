@@ -135,7 +135,6 @@ class PermuteRegress:
         self.data_sbj.permute(None)
         RegionRegress.set_data_sbj(self.data_sbj)
 
-
         return val_list
 
     def get_r2_z_score(self, r2, reg_size):
