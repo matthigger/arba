@@ -1,4 +1,4 @@
-from string import ascii_uppercase
+from string import ascii_uppercase as uppercase
 
 import numpy as np
 
@@ -86,7 +86,7 @@ class DataSubject:
 
         # feat_list
         if feat_list is None:
-            self.feat_list = [f'feat_sbj{c}' for c in ascii_uppercase]
+            self.feat_list = [f'feat_sbj{c}' for c in uppercase[:num_feat]]
         else:
             assert len(feat_list) == num_feat, 'feat & feat_list dimension'
             self.feat_list = feat_list
