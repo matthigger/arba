@@ -12,7 +12,7 @@ class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
 
     Class Attributes:
-        sbj_feat (DataSubject):
+        data_sbj (DataSubject):
 
     Instance Attributes:
         feat_img (np.array): (num_sbj, dim_img) mean features observed (per
@@ -22,12 +22,12 @@ class RegionRegress(Region):
         err_cov (np.array): (dim_img, dim_img) error covariance observed
         err_cov_det (float): covariance of err_cov
     """
-    sbj_feat = None
+    data_sbj = None
 
     @classmethod
-    def set_sbj_feat(cls, sbj_feat):
-        cls.sbj_feat = sbj_feat
-        assert np.all(sbj_feat.contrast), 'nuisance params not supported'
+    def set_data_sbj(cls, data_sbj):
+        cls.data_sbj = data_sbj
+        assert np.all(data_sbj.contrast), 'nuisance params not supported'
 
     @staticmethod
     def from_file_tree(file_tree, ijk=None, pc_ijk=None):
@@ -57,24 +57,24 @@ class RegionRegress(Region):
 
     def __init__(self, pc_ijk, fs_dict, _beta=None):
         super().__init__(pc_ijk=pc_ijk, fs_dict=fs_dict)
-        assert self.sbj_feat is not None, 'set_sbj_feat() not called'
+        assert self.data_sbj is not None, 'set_data_sbj() not called'
 
         img_dim = next(iter(fs_dict.values())).d
         self.feat_img = np.empty(shape=(len(fs_dict), img_dim))
-        for idx, sbj in enumerate(self.sbj_feat.sbj_list):
+        for idx, sbj in enumerate(self.data_sbj.sbj_list):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
         # fit beta
         self.beta = _beta
         if self.beta is None:
-            self.beta = self.sbj_feat.pseudo_inv @ self.feat_img
+            self.beta = self.data_sbj.pseudo_inv @ self.feat_img
 
         # covariance of imaging features around sbj mean
         self.space_cov_pool = sum(fs.cov for fs in self.fs_dict.values()) / \
-                              self.sbj_feat.num_sbj
+                              self.data_sbj.num_sbj
 
         # r2
-        self.r2 = compute_r2(x=self.sbj_feat.x,
+        self.r2 = compute_r2(x=self.data_sbj.x,
                              y=self.feat_img,
                              beta=self.beta,
                              y_pool_cov=self.space_cov_pool)
@@ -85,7 +85,7 @@ class RegionRegress(Region):
             return type(self)(self.feat_img, self.pc_ijk)
 
         fs_dict = {sbj: self.fs_dict[sbj] + other.fs_dict[sbj]
-                   for sbj in self.sbj_feat.sbj_list}
+                   for sbj in self.data_sbj.sbj_list}
 
         lambda_self = len(self) / (len(self) + len(other))
         beta = lambda_self * self.beta + (1 - lambda_self) * other.beta
@@ -118,10 +118,10 @@ class RegionRegress(Region):
     def plot(self, img_idx, sbj_idx, img_label='image feat',
              sbj_label='sbj feat'):
         sns.set()
-        x = self.sbj_feat.x[:, sbj_idx]
+        x = self.data_sbj.x[:, sbj_idx]
         y = self.feat_img[:, img_idx]
 
-        feat_sbj_line = self.sbj_feat.x.mean(axis=0)
+        feat_sbj_line = self.data_sbj.x.mean(axis=0)
         feat_sbj_line = np.repeat(np.atleast_2d(feat_sbj_line), repeats=2,
                                   axis=0)
         feat_sbj_line[:, sbj_idx] = min(x), max(x)

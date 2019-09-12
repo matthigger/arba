@@ -5,9 +5,9 @@ from arba.effect import Effect, compute_r2
 
 
 class EffectRegress(Effect):
-    """ a consant offset depending on linear fnc of subject features
+    """ a consant offset depending on linear fnc of subject features:
 
-    img_feat_offset = sbj_feat @ beta
+    img_feat_offset = data_sbj.x @ beta
 
     Attributes:
         beta (np.array): (dim_sbj x dim_img) mapping from sbj to img feat
@@ -26,7 +26,7 @@ class EffectRegress(Effect):
         """ yields an effect which achieve r2
 
         NOTE: the direction of the effect (beta) is chosen as the min MSE
-        direction already in img_feat & sbj_feat
+        direction already in img_feat & data_sbj
 
         Args:
             r2 (float): target r2

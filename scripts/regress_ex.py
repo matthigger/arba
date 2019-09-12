@@ -155,7 +155,7 @@ if __name__ == '__main__':
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
 
-    # build + set  sbj_feat
+    # build + set data_sbj
     x = np.random.normal(size=(num_sbj, dim_sbj))
     sbj_feat = arba.sbj_feat.DataSubject(x=x, sbj_list=file_tree.sbj_list)
 
