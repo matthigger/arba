@@ -131,6 +131,11 @@ class PermuteRegress:
 
         self._compute_r2_bounds(val_list)
 
+        # reset feat_sbj permutation
+        self.feat_sbj.permute(None)
+        RegionRegress.set_sbj_feat(self.feat_sbj)
+
+
         return val_list
 
     def get_r2_z_score(self, r2, reg_size):
@@ -214,7 +219,10 @@ class PermuteRegress:
                                                    file_tree=self.sg_hist.file_tree,
                                                    reg_cls=RegionRegress)
                 r.pc_ijk.to_mask().to_nii(self.folder / f'node_{n}.nii.gz')
-                # todo: r.plot(img_feat='fa', sbj_feat=self.feat_sbj.feat_list[1])
+                r.plot(img_idx=0,
+                       img_label=f'mean {self.file_tree.feat_list[0]}',
+                       sbj_idx=1,
+                       sbj_label=self.feat_sbj.feat_list[1])
                 save_fig(self.folder / f'node_{n}.pdf')
 
 

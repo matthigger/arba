@@ -83,6 +83,10 @@ class PermuteRegressVBA(PermuteRegress):
         self.vba_r2_null_dict['vba'] = sorted(x[0] for x in val_list)
         self.vba_r2_null_dict['tfce'] = sorted(x[1] for x in val_list)
 
+        # reset feat_sbj permutation
+        self.feat_sbj.permute(None)
+        RegionRegress.set_sbj_feat(self.feat_sbj)
+
         return val_list
 
     def save_vba(self, *args, **kwargs):
