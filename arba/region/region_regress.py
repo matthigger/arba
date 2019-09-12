@@ -7,8 +7,6 @@ from .feat_stat import FeatStatSingle
 from .reg import Region
 from ..effect import compute_r2
 
-sns.set(font_scale=1.2)
-
 
 class RegionRegress(Region):
     """ regression, from sbj features to img features, on some volume
@@ -117,20 +115,22 @@ class RegionRegress(Region):
 
     __radd__ = __add__
 
-    def plot(self, sbj_feat_label='sbj_feat', img_feat_label='img_feat'):
-        raise NotImplementedError
-        # todo: assert self.feat_sbj.shape[1] == 1, 'only valid for scalar feat_sbj'
-        assert self.feat_img.shape[1] == 1, 'only valid for scalar feat_img'
+    def plot(self, img_idx, sbj_idx, img_label='image feat',
+             sbj_label='sbj feat'):
+        sns.set()
+        x = self.sbj_feat.x[:, sbj_idx]
+        y = self.feat_img[:, img_idx]
 
-        # todo: feat_sbj = self.feat_sbj[:, 0]
-        feat_sbj_line = np.array((min(feat_sbj), max(feat_sbj)))
+        feat_sbj_line = self.sbj_feat.x.mean(axis=0)
+        feat_sbj_line = np.repeat(np.atleast_2d(feat_sbj_line), repeats=2,
+                                  axis=0)
+        feat_sbj_line[:, sbj_idx] = min(x), max(x)
         feat_img_line = feat_sbj_line @ self.beta
 
-        plt.scatter(feat_sbj, self.feat_img)
-        plt.suptitle(', '.join([f'mse={self.mse:.2f}',
-                                f'r2_vox={self.r2:.2f}',
-                                f'r2_mean={self.r2_mean: .2f}',
+        plt.scatter(x, y, label='single sbj (region mean)')
+        plt.suptitle(', '.join([f'r2_vox={self.r2:.2f}',
                                 f'size={len(self)} vox']))
-        plt.plot(feat_sbj_line, feat_img_line)
-        plt.xlabel(sbj_feat_label)
-        plt.ylabel(img_feat_label)
+        plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line, label='beta')
+        plt.xlabel(sbj_label)
+        plt.ylabel(img_label)
+        plt.legend()
