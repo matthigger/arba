@@ -134,7 +134,7 @@ class SegGraphHistory(SegGraph):
         err_list = list()
         while len(edge_list) < n:
             #
-            # x = [(err,
+            # feat = [(err,
             #       mask[next(iter(r0.pc_ijk))] &
             #       mask[next(iter(r1.pc_ijk))])
             #      for err, (r0, r1) in self._err_edge_list]

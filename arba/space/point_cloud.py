@@ -10,7 +10,7 @@ class PointCloud(set):
 
     terminology note:
     'mask_array' is a typical mask image, points are the ijk of non zero voxels
-    'array' is a (n x dim) array of points (either ijk of xyz)
+    'array' is a (n feat dim) array of points (either ijk of xyz)
     """
 
     @staticmethod

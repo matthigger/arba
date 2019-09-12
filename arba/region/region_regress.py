@@ -74,7 +74,7 @@ class RegionRegress(Region):
                               self.data_sbj.num_sbj
 
         # r2
-        self.r2 = compute_r2(x=self.data_sbj.x,
+        self.r2 = compute_r2(x=self.data_sbj.feat,
                              y=self.feat_img,
                              beta=self.beta,
                              y_pool_cov=self.space_cov_pool)
@@ -118,10 +118,10 @@ class RegionRegress(Region):
     def plot(self, img_idx, sbj_idx, img_label='image feat',
              sbj_label='sbj feat'):
         sns.set()
-        x = self.data_sbj.x[:, sbj_idx]
+        x = self.data_sbj.feat[:, sbj_idx]
         y = self.feat_img[:, img_idx]
 
-        sbj_feat_line = self.data_sbj.x.mean(axis=0)
+        sbj_feat_line = self.data_sbj.feat.mean(axis=0)
         sbj_feat_line = np.repeat(np.atleast_2d(sbj_feat_line), repeats=2,
                                   axis=0)
         sbj_feat_line[:, sbj_idx] = min(x), max(x)

@@ -215,7 +215,7 @@ class FeatStatSingle(FeatStat):
     >>> a_set = range(10)
     >>> FeatStat.from_iter(a_set)
     FeatStat(n=10, mu=[[4.5]], cov=[[8.25]])
-    >>> fs_single_list = [FeatStatSingle(x) for x in a_set]
+    >>> fs_single_list = [FeatStatSingle(feat) for feat in a_set]
     >>> fs_single_list[3]
     FeatStatSingle(n=1, mu=[[3]], cov=[[0.]])
     >>> sum(fs_single_list)

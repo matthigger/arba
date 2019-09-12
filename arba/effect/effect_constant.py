@@ -42,7 +42,7 @@ class EffectConstant(Effect):
         self._eff_img = None
 
     def apply(self, x, negate=False):
-        """ given an image, x, applies the effect
+        """ given an image, feat, applies the effect
         """
         if negate:
             return x - self.eff_img

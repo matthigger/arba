@@ -54,7 +54,7 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
         for r2 in r2_vec:
             eff = arba.effect.EffectRegress.from_r2(r2=r2,
                                                     img_feat=feat_img_init,
-                                                    sbj_feat=data_sbj.x,
+                                                    sbj_feat=data_sbj.feat,
                                                     img_pool_cov=img_pool_cov,
                                                     mask=eff_mask)
 
@@ -155,9 +155,9 @@ if __name__ == '__main__':
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
 
-    # build + set sbj_feat
+    # build + set feat
     sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
-    data_sbj = arba.sbj_feat.DataSubject(x=sbj_feat,
+    data_sbj = arba.sbj_feat.DataSubject(feat=sbj_feat,
                                          sbj_list=file_tree.sbj_list)
 
     perf = Performance()
@@ -177,7 +177,7 @@ if __name__ == '__main__':
             file_tree.mask = eff.mask.dilate(mask_radius)
 
             # impose effect on data
-            offset = eff.get_offset_array(data_sbj.x)
+            offset = eff.get_offset_array(data_sbj.feat)
             file_tree.reset_offset(offset)
 
             # find extent

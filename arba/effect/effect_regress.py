@@ -7,10 +7,10 @@ from arba.effect import Effect, compute_r2
 class EffectRegress(Effect):
     """ a consant offset depending on linear fnc of subject features:
 
-    img_feat_offset = sbj_feat @ beta
+    img_feat_offset = feat @ beta
 
     Attributes:
-        beta (np.array): (dim_sbj x dim_img) mapping from sbj to img feat
+        beta (np.array): (dim_sbj feat dim_img) mapping from sbj to img feat
     """
 
     def __init__(self, beta, *args, **kwargs):

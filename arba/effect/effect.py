@@ -33,11 +33,11 @@ class Effect:
         return len(self.mask)
 
     def get_auc(self, x, mask):
-        """ computes auc of statistic given by array x
+        """ computes auc of statistic given by array feat
 
         Args:
             x (np.array): scores (per voxel)
-            mask (mask): values in x which are to be counted towards auc
+            mask (mask): values in feat which are to be counted towards auc
 
         Returns:
             auc (float): value in [0, 1]
@@ -48,7 +48,7 @@ class Effect:
         # mask the ground truth to relevant area
         truth_vec = np.array(self.mask[mask.astype(bool)])
 
-        # compute x, y
+        # compute feat, y
         x = stat_vec[truth_vec == 0]
         y = stat_vec[truth_vec == 1]
         try:

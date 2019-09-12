@@ -26,7 +26,7 @@ class PermuteRegress:
     Attributes:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
-        data_sbj (np.array): (todo x todo) subject features
+        data_sbj (np.array): (todo feat todo) subject features
         file_tree (FileTree): observed imaging data
     """
 

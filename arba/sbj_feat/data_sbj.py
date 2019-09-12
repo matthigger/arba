@@ -20,8 +20,8 @@ class DataSubject:
     Attributes:
         sbj_list (list): list of subjects, fixes their ordering in matrices
         feat_list (list): names of features
-        x (np.array): (num_sbj, num_feat) features (possibly permuted)
-        _x (np.array): (num_sbj, num_feat) features (never permuted)
+        feat (np.array): (num_sbj, num_feat) features (possibly permuted)
+        _feat (np.array): (num_sbj, num_feat) features (never permuted)
         permute_seed: if None, features are unpermuted.  otherwise denotes the
                       seed which generated the permutation matrix applied
         perm_matrix (np.array): (num_feat, num_feat) permutation matrix
@@ -45,48 +45,48 @@ class DataSubject:
     def pseudo_inv(self):
         # memoize
         if self._pseudo_inv is None:
-            self._pseudo_inv = np.linalg.pinv(self.x)
+            self._pseudo_inv = np.linalg.pinv(self.feat)
         return self._pseudo_inv
 
     def get_x_target(self, bias=True):
         if bias:
-            return self.x[:, self.contrast]
+            return self.feat[:, self.contrast]
         else:
             c = np.array(self.contrast)
             c[0] = False
-            return self.x[:, c]
+            return self.feat[:, c]
 
     x_target = property(get_x_target)
 
     def get_x_nuisance(self, bias=True):
         c = np.logical_not(self.contrast)
         c[0] = bias
-        return self.x[:, c]
+        return self.feat[:, c]
 
     x_nuisance = property(get_x_nuisance)
 
-    def __init__(self, x, sbj_list=None, feat_list=None, permute_seed=None,
+    def __init__(self, feat, sbj_list=None, feat_list=None, permute_seed=None,
                  contrast=None):
-        self.x = None
-        self._x = x
+        self.feat = None
+        self._feat = feat
         self._pseudo_inv = None
         self.perm_seed = None
         self.perm_matrix = None
 
-        num_sbj, num_feat = x.shape
+        num_sbj, num_feat = feat.shape
 
         # sbj_list
         if sbj_list is None:
             self.sbj_list = [f'sbj{idx}' for idx in range(num_sbj)]
         else:
-            assert len(sbj_list) == num_sbj, 'x & sbj_list dimension'
+            assert len(sbj_list) == num_sbj, 'feat & sbj_list dimension'
             self.sbj_list = sbj_list
 
         # feat_list
         if feat_list is None:
-            self.feat_list = [f'sbj_feat{idx}' for idx in range(num_feat)]
+            self.feat_list = [f'feat{idx}' for idx in range(num_feat)]
         else:
-            assert len(feat_list) == num_feat, 'x & feat_list dimension'
+            assert len(feat_list) == num_feat, 'feat & feat_list dimension'
             self.feat_list = feat_list
 
         # contrast
@@ -98,7 +98,7 @@ class DataSubject:
                 'contrast dimension error'
 
         # add bias term (constant feature, serves as intercept)
-        self._x = np.hstack((np.ones((self.num_sbj, 1)), self._x))
+        self._feat = np.hstack((np.ones((self.num_sbj, 1)), self._feat))
         self.feat_list.insert(0, '1')
         self.contrast = np.insert(self.contrast, 0, True)
 
@@ -106,13 +106,13 @@ class DataSubject:
         self.permute(permute_seed)
 
     def rm_nuisance(self, beta):
-        """ returns a matrix of sbj_feat which adjust for nuisance in beta
+        """ returns a matrix of feat which adjust for nuisance in beta
 
         Args:
             beta (np.array): mapping
 
         Returns:
-            x (np.array): (num_sbj, num_feat) features
+            feat (np.array): (num_sbj, num_feat) features
         """
         raise NotImplementedError
 
@@ -128,11 +128,11 @@ class DataSubject:
         self.perm_seed = seed
         if self.perm_seed is None:
             self.perm_matrix = None
-            self.x = self._x
+            self.feat = self._feat
             return
 
         self.perm_matrix = get_perm_matrix(self.num_sbj, seed=seed)
-        self.x = self.perm_matrix @ self._x
+        self.feat = self.perm_matrix @ self._feat
 
     def freedman_lane(self, img_feat):
         """ shuffles the residuals of img_feat under a nuisance regression
