@@ -42,6 +42,7 @@ class PermuteRegressVBA(PermuteRegress):
 
     def run_single_vba(self, _seed=None):
         self.feat_sbj.permute(_seed)
+        RegionRegress.set_sbj_feat(self.feat_sbj)
 
         sg = SegGraph(file_tree=self.file_tree,
                       cls_reg=RegionRegress)

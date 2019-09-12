@@ -158,7 +158,6 @@ if __name__ == '__main__':
     # build + set  sbj_feat
     x = np.random.normal(size=(num_sbj, dim_sbj))
     sbj_feat = arba.sbj_feat.SubjectFeatures(x=x, sbj_list=file_tree.sbj_list)
-    arba.region.RegionRegress.set_sbj_feat(sbj_feat)
 
     perf = Performance()
     with file_tree.loaded():

@@ -93,6 +93,7 @@ class PermuteRegress:
                          agglomerative clustering
         """
         self.feat_sbj.permute(_seed)
+        RegionRegress.set_sbj_feat(self.feat_sbj)
 
         sg_hist = SegGraphHistory(file_tree=self.file_tree,
                                   cls_reg=RegionRegress,
