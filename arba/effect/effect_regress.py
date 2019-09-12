@@ -7,7 +7,7 @@ from arba.effect import Effect, compute_r2
 class EffectRegress(Effect):
     """ a consant offset depending on linear fnc of subject features:
 
-    img_feat_offset = data_sbj.x @ beta
+    img_feat_offset = sbj_feat.x @ beta
 
     Attributes:
         beta (np.array): (dim_sbj x dim_img) mapping from sbj to img feat
@@ -46,15 +46,15 @@ class EffectRegress(Effect):
             dim_img = img_feat.shape[1]
             img_pool_cov = np.zeros((dim_img, dim_img))
 
-        beta = sbj_feat.pseudo_inv @ img_feat
+        beta = np.linalg.pinv(sbj_feat) @ img_feat
 
         def fnc(scale):
             """ computes r2 under scale factor, returns error to target r2
             """
             _beta = beta * scale
             _r2 = compute_r2(_beta,
-                             x=sbj_feat.x,
-                             y=img_feat + sbj_feat.x @ _beta,
+                             x=sbj_feat,
+                             y=img_feat + sbj_feat @ _beta,
                              y_pool_cov=img_pool_cov)
             return (_r2 - r2) ** 2
 
