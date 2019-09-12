@@ -144,10 +144,10 @@ if __name__ == '__main__':
     if str_img_data == 'synth':
         dim_img = 1
         shape = 6, 6, 6
-        file_tree = arba.data.SynthFileTree(num_sbj=num_sbj, shape=shape,
-                                            mu=np.zeros(dim_img),
-                                            cov=np.eye(dim_img),
-                                            folder=folder / 'raw_data')
+        file_tree = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
+                                             mu=np.zeros(dim_img),
+                                             cov=np.eye(dim_img),
+                                             folder=folder / 'raw_data')
     elif str_img_data == 'hcp100':
         low_res = True,
         feat_tuple = 'fa',

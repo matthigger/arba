@@ -13,17 +13,17 @@ from arba.space import get_ref, Mask
 
 def check_loaded(fnc):
     def wrapped(self, *args, **kwargs):
-        assert self.is_loaded, 'FileTree must be loaded to call'
+        assert self.is_loaded, 'DataImage must be loaded to call'
         return fnc(self, *args, **kwargs)
 
     return wrapped
 
 
-class FileTree:
+class DataImage:
     """ manages large datasets of multivariate images
 
     the focus is on a context manager which loads data.  data is loaded into a
-    data cube, operated on by some fncs, then memory mapped.  FileTree.data
+    data cube, operated on by some fncs, then memory mapped.  DataImage.data
     is then replaced with a read-only version of the memory mapped array,
     allowing for parallel processes to operate on shared memory.
 
@@ -325,7 +325,7 @@ def scale_normalize(ft):
     """ compute & store mean and var per feat, scale + offset to Z score
 
     Args:
-        ft (FileTree): file tree to be equalized
+        ft (DataImage): file tree to be equalized
     """
     # compute stats
     shape = (len(ft.mask) * ft.num_sbj, ft.d)

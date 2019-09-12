@@ -295,7 +295,7 @@ class MergeRecord(nx.DiGraph):
 
         Args:
             node (int): node
-            file_tree (FileTree): file tree
+            file_tree (DataImage): file tree
 
         Returns:
             reg (RegionWardT2): region
@@ -326,7 +326,7 @@ class MergeRecord(nx.DiGraph):
         """ iterator over seg_graph which undergoes recorded merge operations
 
         Args:
-            file_tree (FileTree): file tree
+            file_tree (DataImage): file tree
             split (Split):
 
         Yields:
@@ -372,7 +372,7 @@ class MergeRecord(nx.DiGraph):
         """ maps each node to a region per file_tree, split
 
         Args:
-            file_tree (FileTree): file tree
+            file_tree (DataImage): file tree
             split (Split):
 
         Returns:
@@ -400,7 +400,7 @@ class MergeRecord(nx.DiGraph):
         NOTE: for large tree_hist, this will use a lot of memory
 
         Args:
-            file_tree (FileTree): file tree
+            file_tree (DataImage): file tree
             split (Split):
 
         Returns:

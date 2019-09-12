@@ -6,10 +6,10 @@ from string import ascii_uppercase
 import nibabel as nib
 import numpy as np
 
-from .file_tree import FileTree
+from .data_image import DataImage
 
 
-class SynthFileTree(FileTree):
+class DataImageSynth(DataImage):
     """ builds gaussian noise nii in temp location (for testing purposes)
 
     features are labelled alphabetically ('img_featA', 'img_featB', ....)
@@ -26,14 +26,14 @@ class SynthFileTree(FileTree):
 
     @classmethod
     def from_array(cls, data, folder=None):
-        """ given a data matrix, writes files to nii and returns FileTree
+        """ given a data matrix, writes files to nii and returns DataImage
 
         Args:
             data (np.array): (shape0, shape1, shape2, num_sbj, num_feat)
             folder: location to store output files
 
         Returns:
-            file_tree (SynthFileTree)
+            file_tree (DataImageSynth)
         """
 
         if folder is None:
@@ -61,9 +61,9 @@ class SynthFileTree(FileTree):
                 # store
                 sbj_ifeat_file_tree[sbj][feat] = f
 
-        # todo: type should be SynthFileTree ... but this is classmethod?
-        return FileTree(sbj_ifeat_file_tree=sbj_ifeat_file_tree,
-                        sbj_list=sbj_list)
+        # todo: type should be DataImageSynth ... but this is classmethod?
+        return DataImage(sbj_ifeat_file_tree=sbj_ifeat_file_tree,
+                         sbj_list=sbj_list)
 
     def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
         """

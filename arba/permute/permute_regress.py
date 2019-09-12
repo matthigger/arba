@@ -27,7 +27,7 @@ class PermuteRegress:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
         data_sbj (np.array): (todo feat todo) subject features
-        file_tree (FileTree): observed imaging data
+        file_tree (DataImage): observed imaging data
     """
 
     def __init__(self, data_sbj, file_tree, alpha=.05, num_perm=100,

@@ -47,7 +47,7 @@ def file_tree(mu=np.array((0, 0)), cov=None, shape=(3, 5, 7), n=10,
     for idx in range(n):
         sbj_feat_file_tree[idx] = write_nii(idx)
 
-    yield FileTree(sbj_feat_file_tree, fnc_list=[scale_normalize])
+    yield DataImage(sbj_feat_file_tree, fnc_list=[scale_normalize])
 
     # delete files
     for sbj, d in sbj_feat_file_tree.items():

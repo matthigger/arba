@@ -12,7 +12,7 @@ def plot_feat(file_tree, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
     """ makes a scatter of features in some region
 
     Args:
-        file_tree (FileTree): data set to plot
+        file_tree (DataImage): data set to plot
         sbj_bool (tuple): sbj to plot
         feat_tuple (tuple): features to plot
         ax (plt.Axes): axes to plot on

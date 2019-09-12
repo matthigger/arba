@@ -9,7 +9,7 @@ def sample_mask_min_var(num_vox, file_tree, prior_array=None,
 
     Args:
         num_vox (int): total number of voxels
-        file_tree (FileTree):
+        file_tree (DataImage):
         cov_measure (fnc): how should cov be measured? either np.linalg.det or
                            np.trace
 

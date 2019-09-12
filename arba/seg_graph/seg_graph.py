@@ -13,7 +13,7 @@ class SegGraph(nx.Graph):
     (see RegionWardT2)
 
     Attributes:
-        file_tree (FileTree): file tree
+        file_tree (DataImage): file tree
         split (Split):
     """
 
@@ -21,7 +21,7 @@ class SegGraph(nx.Graph):
         """
 
         Args:
-            file_tree (FileTree): file tree
+            file_tree (DataImage): file tree
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
