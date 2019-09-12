@@ -44,7 +44,7 @@ class PermuteRegressVBA(PermuteRegress):
         self.data_sbj.permute(_seed)
         RegionRegress.set_data_sbj(self.data_sbj)
 
-        sg = SegGraph(file_tree=self.file_tree,
+        sg = SegGraph(data_img=self.data_img,
                       cls_reg=RegionRegress)
 
         # get r2 img
@@ -54,8 +54,8 @@ class PermuteRegressVBA(PermuteRegress):
         r2_tfce = apply_tfce(r2)
 
         if _seed is not None:
-            return max(r2[self.file_tree.mask]), \
-                   max(r2_tfce[self.file_tree.mask])
+            return max(r2[self.data_img.mask]), \
+                   max(r2_tfce[self.data_img.mask])
 
         self.vba_r2_dict['vba'] = r2
         self.vba_r2_dict['tfce'] = r2_tfce
@@ -92,7 +92,7 @@ class PermuteRegressVBA(PermuteRegress):
     def save_vba(self, *args, **kwargs):
         for vba, mask_estimate in self.vba_mask_estimate_dict.items():
             img = nib.Nifti1Image(mask_estimate.astype(np.uint8),
-                                  affine=self.file_tree.ref.affine)
+                                  affine=self.data_img.ref.affine)
             img.to_filename(str(self.folder / f'mask_estimate_{vba}.nii.gz'))
 
         if self.mask_target is not None:

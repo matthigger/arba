@@ -13,11 +13,11 @@ import arba
 from pnl_data.set import hcp_100
 
 
-def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
+def sample_masks(effect_num_vox, data_img, num_eff=1, min_var_mask=False):
     """ gets list of masks (extent of effects) """
 
-    assert file_tree.is_loaded, 'file tree must be loaded'
-    prior_array = file_tree.mask
+    assert data_img.is_loaded, 'file tree must be loaded'
+    prior_array = data_img.mask
 
     # erode prior array if edges of prior_array are invalid (TFCE error)
     prior_array = binary_erosion(prior_array)
@@ -27,12 +27,12 @@ def sample_masks(effect_num_vox, file_tree, num_eff=1, min_var_mask=False):
     for idx in range(num_eff):
         if min_var_mask:
             mask = arba.space.sample_mask_min_var(num_vox=effect_num_vox,
-                                                  file_tree=file_tree,
+                                                  data_img=data_img,
                                                   prior_array=prior_array)
         else:
             mask = arba.space.sample_mask(prior_array=prior_array,
                                           num_vox=effect_num_vox,
-                                          ref=file_tree.ref)
+                                          ref=data_img.ref)
         mask_list.append(mask)
     return mask_list
 
@@ -42,12 +42,12 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
     for eff_idx, eff_mask in enumerate(sample_masks(**kwargs)):
         # get feat_img_init, the img_feat before effect is applied
         pc_eff = arba.space.PointCloud.from_mask(eff_mask)
-        fs_dict = arba.region.RegionRegress.get_fs_dict(file_tree,
+        fs_dict = arba.region.RegionRegress.get_fs_dict(data_img,
                                                         pc_ijk=pc_eff)
         img_dim = next(iter(fs_dict.values())).d
 
         feat_img_init = np.empty(shape=(len(fs_dict), img_dim))
-        for idx, sbj in enumerate(file_tree.sbj_list):
+        for idx, sbj in enumerate(data_img.sbj_list):
             feat_img_init[idx, :] = fs_dict[sbj].mu
         img_pool_cov = sum(fs.cov for fs in fs_dict.values()) / len(fs_dict)
 
@@ -77,7 +77,7 @@ class Performance:
         for method, estimate in estimate_dict.items():
             sens, spec = arba.effect.get_sens_spec(target=eff.mask,
                                                    estimate=estimate,
-                                                   mask=file_tree.mask)
+                                                   mask=data_img.mask)
             s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
             print(s)
             self.method_r2ss_list_dict[method].append((r2, sens, spec))
@@ -144,45 +144,45 @@ if __name__ == '__main__':
     if str_img_data == 'synth':
         dim_img = 1
         shape = 6, 6, 6
-        file_tree = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
+        data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
                                              mu=np.zeros(dim_img),
                                              cov=np.eye(dim_img),
                                              folder=folder / 'raw_data')
     elif str_img_data == 'hcp100':
         low_res = True,
         feat_tuple = 'fa',
-        file_tree = hcp_100.get_file_tree(lim_sbj=num_sbj,
+        data_img = hcp_100.get_data_img(lim_sbj=num_sbj,
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
 
     # build + set feat
     sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
     data_sbj = arba.data.DataSubject(feat=sbj_feat,
-                                         sbj_list=file_tree.sbj_list)
+                                         sbj_list=data_img.sbj_list)
 
     perf = Performance()
-    with file_tree.loaded():
-        file_tree.to_nii(folder, mean_flag=True)
+    with data_img.loaded():
+        data_img.to_nii(folder, mean_flag=True)
 
         # sample effects
         idx_r2_eff_dict = sample_effects(r2_vec=r2_vec,
                                          data_sbj=data_sbj,
                                          effect_num_vox=effect_num_vox,
-                                         file_tree=file_tree,
+                                         data_img=data_img,
                                          num_eff=num_eff,
                                          min_var_mask=min_var_effect_locations)
 
         # run each effect
         for (eff_idx, r2), eff in idx_r2_eff_dict.items():
-            file_tree.mask = eff.mask.dilate(mask_radius)
+            data_img.mask = eff.mask.dilate(mask_radius)
 
             # impose effect on data
             offset = eff.get_offset_array(data_sbj.feat)
-            file_tree.reset_offset(offset)
+            data_img.reset_offset(offset)
 
             # find extent
             _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
-            perm_reg = arba.permute.PermuteRegressVBA(data_sbj, file_tree,
+            perm_reg = arba.permute.PermuteRegressVBA(data_sbj, data_img,
                                                       num_perm=num_perm,
                                                       par_flag=par_flag,
                                                       alpha=alpha,

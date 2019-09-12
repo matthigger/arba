@@ -30,28 +30,28 @@ class RegionRegress(Region):
         assert np.all(data_sbj.contrast), 'nuisance params not supported'
 
     @staticmethod
-    def from_file_tree(file_tree, ijk=None, pc_ijk=None):
-        fs_dict = RegionRegress.get_fs_dict(file_tree, ijk=ijk, pc_ijk=pc_ijk)
+    def from_data_img(data_img, ijk=None, pc_ijk=None):
+        fs_dict = RegionRegress.get_fs_dict(data_img, ijk=ijk, pc_ijk=pc_ijk)
         if pc_ijk is None:
-            pc_ijk = arba.space.PointCloud([ijk], ref=file_tree.ref)
+            pc_ijk = arba.space.PointCloud([ijk], ref=data_img.ref)
         return RegionRegress(pc_ijk=pc_ijk, fs_dict=fs_dict)
 
     @staticmethod
-    def get_fs_dict(file_tree, ijk=None, pc_ijk=None):
-        assert file_tree.is_loaded, 'file tree must be loaded'
+    def get_fs_dict(data_img, ijk=None, pc_ijk=None):
+        assert data_img.is_loaded, 'file tree must be loaded'
         assert (ijk is None) != (pc_ijk is None), 'ijk or pc_ijk required'
 
         if pc_ijk is None:
             # slight computational speedup for a single voxel
             i, j, k = ijk
             fs_dict = dict()
-            for sbj_idx, sbj in enumerate(file_tree.sbj_list):
-                x = file_tree.data[i, j, k, sbj_idx, :]
+            for sbj_idx, sbj in enumerate(data_img.sbj_list):
+                x = data_img.data[i, j, k, sbj_idx, :]
                 fs_dict[sbj] = FeatStatSingle(x)
         else:
             # computationally slower
-            fs_dict = {sbj: file_tree.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
-                       for sbj in file_tree.sbj_list}
+            fs_dict = {sbj: data_img.get_fs(pc_ijk=pc_ijk, sbj_list=[sbj])
+                       for sbj in data_img.sbj_list}
 
         return fs_dict
 

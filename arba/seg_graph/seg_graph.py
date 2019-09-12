@@ -13,37 +13,37 @@ class SegGraph(nx.Graph):
     (see RegionWardT2)
 
     Attributes:
-        file_tree (DataImage): file tree
+        data_img (DataImage): file tree
         split (Split):
     """
 
-    def __init__(self, file_tree, cls_reg, _add_nodes=True, **kwargs):
+    def __init__(self, data_img, cls_reg, _add_nodes=True, **kwargs):
         """
 
         Args:
-            file_tree (DataImage): file tree
+            data_img (DataImage): file tree
             _add_nodes (bool): toggles whether nodes are added, useful
                                internally if empty SegGraph needed
         """
         super().__init__()
-        self.file_tree = file_tree
+        self.data_img = data_img
 
         if _add_nodes:
-            with file_tree.loaded():
+            with data_img.loaded():
                 self._add_nodes(cls_reg, **kwargs)
                 self.connect_neighbors(**kwargs)
 
     def _add_nodes(self, cls_reg, verbose=False, **kwargs):
-        assert len(self.file_tree.mask) > 0, \
-            'no active area found in file_tree'
+        assert len(self.data_img.mask) > 0, \
+            'no active area found in data_img'
 
         tqdm_dict = {'desc': 'build node per ijk',
                      'disable': not verbose,
-                     'total': self.file_tree.mask.sum().astype(int)}
+                     'total': self.data_img.mask.sum().astype(int)}
 
-        for ijk in tqdm(self.file_tree.mask.iter_ijk(), **tqdm_dict):
-            reg = cls_reg.from_file_tree(ijk=ijk,
-                                         file_tree=self.file_tree)
+        for ijk in tqdm(self.data_img.mask.iter_ijk(), **tqdm_dict):
+            reg = cls_reg.from_data_img(ijk=ijk,
+                                         data_img=self.data_img)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
@@ -69,7 +69,7 @@ class SegGraph(nx.Graph):
         x = self.to_array(**kwargs)
 
         # save
-        img_out = nib.Nifti1Image(x, self.file_tree.ref.affine)
+        img_out = nib.Nifti1Image(x, self.data_img.ref.affine)
         img_out.to_filename(str(f_out))
 
         return img_out
@@ -91,7 +91,7 @@ class SegGraph(nx.Graph):
         else:
             reg_list = list(filter(fnc_include, self.nodes))
 
-        shape = self.file_tree.ref.shape
+        shape = self.data_img.ref.shape
 
         assert (not set().intersection(*[r.pc_ijk for r in self])), \
             'non disjoint regions found'

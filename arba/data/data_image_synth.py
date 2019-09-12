@@ -33,7 +33,7 @@ class DataImageSynth(DataImage):
             folder: location to store output files
 
         Returns:
-            file_tree (DataImageSynth)
+            data_img (DataImageSynth)
         """
 
         if folder is None:
@@ -49,7 +49,7 @@ class DataImageSynth(DataImage):
 
         sbj_list = cls.get_sbj_list(num_sbj)
 
-        sbj_ifeat_file_tree = defaultdict(dict)
+        sbj_ifeat_data_img = defaultdict(dict)
         for sbj_idx, sbj in enumerate(sbj_list):
             for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
                 # write img to file
@@ -59,10 +59,10 @@ class DataImageSynth(DataImage):
                 img.to_filename(str(f))
 
                 # store
-                sbj_ifeat_file_tree[sbj][feat] = f
+                sbj_ifeat_data_img[sbj][feat] = f
 
         # todo: type should be DataImageSynth ... but this is classmethod?
-        return DataImage(sbj_ifeat_file_tree=sbj_ifeat_file_tree,
+        return DataImage(sbj_ifeat_data_img=sbj_ifeat_data_img,
                          sbj_list=sbj_list)
 
     def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
@@ -85,12 +85,12 @@ class DataImageSynth(DataImage):
 
         feat_list = self.get_feat_list(len(mu))
 
-        sbj_ifeat_file_tree = defaultdict(dict)
+        sbj_ifeat_data_img = defaultdict(dict)
         for sbj in self.get_sbj_list(num_sbj):
             # sample img
             x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
 
-            # store img (as nii, then in sbj_ifeat_file_tree)
+            # store img (as nii, then in sbj_ifeat_data_img)
             for feat_idx, feat in enumerate(feat_list):
                 f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
                                                 prefix=f'{sbj}_{feat}_').name
@@ -99,6 +99,6 @@ class DataImageSynth(DataImage):
                 img.to_filename(str(f))
 
                 # store
-                sbj_ifeat_file_tree[sbj][feat] = f
+                sbj_ifeat_data_img[sbj][feat] = f
 
-        super().__init__(sbj_ifeat_file_tree=sbj_ifeat_file_tree)
+        super().__init__(sbj_ifeat_data_img=sbj_ifeat_data_img)

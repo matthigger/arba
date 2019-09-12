@@ -43,5 +43,5 @@ class Region:
         raise NotImplementedError
 
     @staticmethod
-    def from_file_tree(file_tree, ijk=None, pc_ijk=None):
+    def from_data_img(data_img, ijk=None, pc_ijk=None):
         raise NotImplementedError
