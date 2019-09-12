@@ -55,6 +55,7 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
             eff = arba.effect.EffectRegress.from_r2(r2=r2,
                                                     feat_img=feat_img_init,
                                                     feat_sbj=data_sbj.feat,
+                                                    contrast=data_sbj.contrast,
                                                     img_pool_cov=img_pool_cov,
                                                     mask=eff_mask)
 
@@ -125,7 +126,8 @@ if __name__ == '__main__':
     # r2_vec =np.logspace(-2, -.5, 2)
     r2_vec = [.9]
     num_eff = 1
-    dim_sbj = 1
+    dim_sbj = 3
+    contrast = [1, 0, 0]
     num_sbj = 100
     min_var_effect_locations = True
 
@@ -145,20 +147,21 @@ if __name__ == '__main__':
         dim_img = 1
         shape = 6, 6, 6
         data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
-                                             mu=np.zeros(dim_img),
-                                             cov=np.eye(dim_img),
-                                             folder=folder / 'raw_data')
+                                            mu=np.zeros(dim_img),
+                                            cov=np.eye(dim_img),
+                                            folder=folder / 'raw_data')
     elif str_img_data == 'hcp100':
         low_res = True,
         feat_tuple = 'fa',
         data_img = hcp_100.get_data_img(lim_sbj=num_sbj,
-                                          low_res=low_res,
-                                          feat_tuple=feat_tuple)
+                                        low_res=low_res,
+                                        feat_tuple=feat_tuple)
 
     # build + set feat
     sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
     data_sbj = arba.data.DataSubject(feat=sbj_feat,
-                                         sbj_list=data_img.sbj_list)
+                                     sbj_list=data_img.sbj_list,
+                                     contrast=contrast)
 
     perf = Performance()
     with data_img.loaded():
