@@ -50,23 +50,6 @@ class DataSubject:
             self._pseudo_inv = np.linalg.pinv(self.feat)
         return self._pseudo_inv
 
-    def get_x_target(self, bias=True):
-        if bias:
-            return self.feat[:, self.contrast]
-        else:
-            c = np.array(self.contrast)
-            c[0] = False
-            return self.feat[:, c]
-
-    x_target = property(get_x_target)
-
-    def get_x_nuisance(self, bias=True):
-        c = np.logical_not(self.contrast)
-        c[0] = bias
-        return self.feat[:, c]
-
-    x_nuisance = property(get_x_nuisance)
-
     def __init__(self, feat, sbj_list=None, feat_list=None, permute_seed=None,
                  contrast=None):
         self.feat = None
@@ -140,14 +123,13 @@ class DataSubject:
         assert feat_img.shape[0] == self.num_sbj, 'num_sbj mismatch'
 
         # compute nuisance regression
-        beta = np.linalg.pinv(self.x_nuisance) @ feat_img
+        feat_nuisance = self._feat[:, np.logical_not(self.contrast)]
+        beta = np.linalg.pinv(feat_nuisance) @ feat_img
 
         # compute residuals
-        resid = feat_img - beta @ self.x_nuisance
+        resid = feat_img - feat_nuisance @ beta
 
         # subtract residuals, add permuted residuals
         feat_img = feat_img + (self.perm_matrix - np.eye(self.num_sbj)) @ resid
-
-        raise NotImplementedError('not tested')
 
         return feat_img

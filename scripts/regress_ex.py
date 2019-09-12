@@ -118,7 +118,7 @@ if __name__ == '__main__':
     random.seed(1)
 
     # detection params
-    par_flag = True
+    par_flag = False
     num_perm = 24
     alpha = .05
 

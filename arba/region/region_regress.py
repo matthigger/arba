@@ -27,7 +27,6 @@ class RegionRegress(Region):
     @classmethod
     def set_data_sbj(cls, data_sbj):
         cls.data_sbj = data_sbj
-        assert np.all(data_sbj.contrast), 'nuisance params not supported'
 
     @staticmethod
     def from_data_img(data_img, ijk=None, pc_ijk=None):
@@ -64,6 +63,11 @@ class RegionRegress(Region):
         for idx, sbj in enumerate(self.data_sbj.sbj_list):
             self.feat_img[idx, :] = self.fs_dict[sbj].mu
 
+        # shuffle nuisance residuals (if need be, otherwise just pass through)
+        # todo: factoring problem, why should RegionRegress consider permuting?
+        if self.data_sbj.is_permuted:
+            self.feat_img = self.data_sbj.freedman_lane(self.feat_img)
+
         # fit beta
         self.beta = _beta
         if self.beta is None:
@@ -77,7 +81,8 @@ class RegionRegress(Region):
         self.r2 = get_r2(x=self.data_sbj.feat,
                          y=self.feat_img,
                          beta=self.beta,
-                         y_pool_cov=self.space_cov_pool)
+                         y_pool_cov=self.space_cov_pool,
+                         contrast=self.data_sbj.contrast)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
