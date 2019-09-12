@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize_scalar
 
-from arba.effect import Effect, compute_r2
+from arba.effect import Effect, get_r2
 
 
 class EffectRegress(Effect):
@@ -18,8 +18,8 @@ class EffectRegress(Effect):
 
         self.beta = beta
 
-    def compute_r2(self, *args, **kwargs):
-        return compute_r2(*args, beta=self.beta, **kwargs)
+    def get_r2(self, *args, **kwargs):
+        return get_r2(*args, beta=self.beta, **kwargs)
 
     @staticmethod
     def from_r2(r2, feat_img, feat_sbj, img_pool_cov=None, *args, **kwargs):
@@ -52,10 +52,10 @@ class EffectRegress(Effect):
             """ computes r2 under scale factor, returns error to target r2
             """
             _beta = beta * scale
-            _r2 = compute_r2(_beta,
-                             x=feat_sbj,
-                             y=feat_img + feat_sbj @ _beta,
-                             y_pool_cov=img_pool_cov)
+            _r2 = get_r2(_beta,
+                         x=feat_sbj,
+                         y=feat_img + feat_sbj @ _beta,
+                         y_pool_cov=img_pool_cov)
             return (_r2 - r2) ** 2
 
         res = minimize_scalar(fnc)

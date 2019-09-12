@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def compute_r2(beta, y, x, y_pool_cov=None):
+def get_r2(beta, y, x, y_pool_cov=None):
     """ computes r2
 
     Args:

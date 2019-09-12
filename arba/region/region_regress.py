@@ -5,7 +5,7 @@ import seaborn as sns
 import arba.space
 from .feat_stat import FeatStatSingle
 from .reg import Region
-from ..effect import compute_r2
+from ..effect import get_r2
 
 
 class RegionRegress(Region):
@@ -74,10 +74,10 @@ class RegionRegress(Region):
                               self.data_sbj.num_sbj
 
         # r2
-        self.r2 = compute_r2(x=self.data_sbj.feat,
-                             y=self.feat_img,
-                             beta=self.beta,
-                             y_pool_cov=self.space_cov_pool)
+        self.r2 = get_r2(x=self.data_sbj.feat,
+                         y=self.feat_img,
+                         beta=self.beta,
+                         y_pool_cov=self.space_cov_pool)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
