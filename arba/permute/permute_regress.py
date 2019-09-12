@@ -26,11 +26,11 @@ class PermuteRegress:
     Attributes:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
-        feat_sbj (np.array): (todo x todo) subject features
+        data_sbj (np.array): (todo x todo) subject features
         file_tree (FileTree): observed imaging data
     """
 
-    def __init__(self, feat_sbj, file_tree, alpha=.05, num_perm=100,
+    def __init__(self, data_sbj, file_tree, alpha=.05, num_perm=100,
                  mask_target=None, verbose=True, folder=None, par_flag=False,
                  save_flag=True):
         assert alpha >= 1 / (num_perm + 1), \
@@ -38,7 +38,7 @@ class PermuteRegress:
 
         self.alpha = alpha
         self.num_perm = num_perm
-        self.feat_sbj = feat_sbj
+        self.data_sbj = data_sbj
         self.file_tree = file_tree
         self.mask_target = mask_target
         self.verbose = verbose
@@ -92,8 +92,8 @@ class PermuteRegress:
                          features and returns sg_hist without running
                          agglomerative clustering
         """
-        self.feat_sbj.permute(_seed)
-        RegionRegress.set_data_sbj(self.feat_sbj)
+        self.data_sbj.permute(_seed)
+        RegionRegress.set_data_sbj(self.data_sbj)
 
         sg_hist = SegGraphHistory(file_tree=self.file_tree,
                                   cls_reg=RegionRegress,
@@ -131,9 +131,9 @@ class PermuteRegress:
 
         self._compute_r2_bounds(val_list)
 
-        # reset feat_sbj permutation
-        self.feat_sbj.permute(None)
-        RegionRegress.set_data_sbj(self.feat_sbj)
+        # reset data_sbj permutation
+        self.data_sbj.permute(None)
+        RegionRegress.set_data_sbj(self.data_sbj)
 
 
         return val_list
@@ -222,7 +222,7 @@ class PermuteRegress:
                 r.plot(img_idx=0,
                        img_label=f'mean {self.file_tree.feat_list[0]}',
                        sbj_idx=1,
-                       sbj_label=self.feat_sbj.feat_list[1])
+                       sbj_label=self.data_sbj.feat_list[1])
                 save_fig(self.folder / f'node_{n}.pdf')
 
 
