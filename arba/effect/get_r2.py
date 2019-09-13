@@ -1,11 +1,11 @@
 import numpy as np
 
 
-def get_r2(beta, y, x, y_pool_cov=None, contrast=None):
+def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
     """ computes r2
 
     Args:
-        beta (np.array): (dim_x, dim_y) linear mapping
+        beta (np.array): (dim_x, dim_y) linear mapping, defaults to max r2 map
         x (np.array): (num_obs, dim_x) features in the mapping's domain
         y (np.array): (num_obs, dim_y) features in mapping's range
         y_pool_cov (np.array): pooled covariance of x (per observation)
@@ -17,6 +17,11 @@ def get_r2(beta, y, x, y_pool_cov=None, contrast=None):
     Returns:
         r2 (float): coefficient of determination
     """
+    # get beta
+    if beta is None:
+        beta = np.linalg.pinv(x) @ y
+
+    # account for contrast
     if contrast is not None:
         # subtract effect of nuisance variables from y
         flag_nuisance = np.logical_not(contrast)
@@ -35,10 +40,10 @@ def get_r2(beta, y, x, y_pool_cov=None, contrast=None):
     # compute error
     error = y - x @ beta
 
-    # compute mse
+    # compute mean squared error
     mse = np.atleast_2d((error.T @ error) / error.shape[0])
 
-    # compute covariance of imaging features
+    # compute covariance of y features
     y_cov = np.atleast_2d(np.cov(y.T, ddof=0))
 
     # compute r2

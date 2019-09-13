@@ -53,7 +53,7 @@ class EffectRegress(Effect):
             """ computes r2 under scale factor, returns error to target r2
             """
             _beta = beta * scale
-            _r2 = get_r2(_beta,
+            _r2 = get_r2(beta=_beta,
                          x=feat_sbj,
                          y=feat_img + feat_sbj @ _beta,
                          y_pool_cov=img_pool_cov,
