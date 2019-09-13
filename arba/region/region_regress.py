@@ -127,11 +127,17 @@ class RegionRegress(Region):
         feat_sbj_line = self.data_sbj.linspace(sbj_idx)
         feat_img_line = feat_sbj_line @ self.beta
 
-        plt.scatter(x, y, label='single sbj (region mean)')
-        plt.suptitle(', '.join([f'r2_vox={self.r2:.2f}',
-                                f'size={len(self)} vox']))
+        if self.data_sbj.has_nuisance:
+            _, feat_img_adjust = self.data_sbj.factor_nuisance(self.feat_img)
+            plt.scatter(x, feat_img_adjust[:, img_idx],
+                        label='sbj-region mean nuisance adjusted')
+        plt.scatter(x, y, label='sbj-region mean')
+
         plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line[:, img_idx],
                  label='beta')
+
+        plt.suptitle(', '.join([f'r2_vox={self.r2:.2f}',
+                                f'size={len(self)} vox']))
         plt.xlabel(sbj_label)
         plt.ylabel(img_label)
         plt.legend()
