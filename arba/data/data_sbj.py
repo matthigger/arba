@@ -4,6 +4,9 @@ import numpy as np
 
 from arba.permute import get_perm_matrix
 
+# reserved name of the 'constant' feature, serves as bias term in regression
+bias_feat = '1'
+
 
 class DataSubject:
     """ contains features which are constant across image (age, sex, ...)
@@ -43,7 +46,7 @@ class DataSubject:
         return self.perm_seed is not None
 
     def __init__(self, feat, sbj_list=None, feat_list=None, permute_seed=None,
-                 contrast=None):
+                 contrast=None, bias=True):
         self.feat = feat
         num_sbj, num_feat = feat.shape
 
@@ -59,6 +62,8 @@ class DataSubject:
             self.feat_list = [f'feat_sbj{c}' for c in uppercase[:num_feat]]
         else:
             assert len(feat_list) == num_feat, 'feat & feat_list dimension'
+            assert bias_feat not in feat_list, \
+                f'use of reserved feature name: {bias_feat}'
             self.feat_list = feat_list
 
         # contrast
@@ -70,9 +75,10 @@ class DataSubject:
                 'contrast dimension error'
 
         # add bias term (constant feature, serves as intercept)
-        self.feat = np.hstack((np.ones((self.num_sbj, 1)), self.feat))
-        self.feat_list.insert(0, '1')
-        self.contrast = np.insert(self.contrast, 0, True)
+        if bias:
+            self.feat = np.hstack((np.ones((self.num_sbj, 1)), self.feat))
+            self.feat_list.insert(0, bias_feat)
+            self.contrast = np.insert(self.contrast, 1, True)
 
         # compute pseudo inverse
         self.pseudo_inv = np.linalg.pinv(self.feat)
