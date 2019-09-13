@@ -54,7 +54,7 @@ class DataSubjectPoly(DataSubject):
         self.contrast = np.ones(self.feat.shape[1]).astype(bool)
 
         self.poly_nuis = None
-        if any(np.logical_not(self.contrast)):
+        if any(np.logical_not(self.contrast_raw)):
             # project nuisance features
             self.poly_nuis = PolynomialFeatures(degree=poly_order,
                                                 include_bias=False,
@@ -66,7 +66,7 @@ class DataSubjectPoly(DataSubject):
 
             # append nuisance to new contrast matrix
             contrast_nuis = np.zeros(feat_nuis.shape[1]).astype(bool)
-            self.contrast = np.stack(self.contrast, contrast_nuis)
+            self.contrast = np.hstack((self.contrast, contrast_nuis))
 
         # compute pseudo inverse
         self.pseudo_inv = np.linalg.pinv(self.feat)
