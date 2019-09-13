@@ -3,7 +3,6 @@ import tempfile
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from scipy.spatial.distance import dice
 from tqdm import tqdm
 
@@ -189,7 +188,6 @@ class PermuteRegress:
 
         if size_v_r2_null:
             # print percentiles of r2 per size
-            sns.set(font_scale=1.2)
             cmap = plt.get_cmap('viridis')
             size = np.arange(1, self.r2_null.shape[1] + 1)
             p_list = [50, 75, 90, 95, 99]

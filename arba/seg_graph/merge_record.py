@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import nibabel as nib
 import numpy as np
-import seaborn as sns
 from scipy.spatial.distance import dice
 from sortedcontainers.sortedset import SortedSet
 
@@ -493,7 +492,6 @@ class MergeRecord(nx.DiGraph):
 
         num_nodes = len(self.nodes)
 
-        sns.set(font_scale=1.2)
         if mask is None:
             node_color = None
         else:

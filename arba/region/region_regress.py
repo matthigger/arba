@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
 import arba.space
 from .feat_stat import FeatStatSingle
@@ -122,7 +121,6 @@ class RegionRegress(Region):
 
     def plot(self, img_idx, sbj_idx, img_label='image feat',
              sbj_label='sbj feat'):
-        sns.set()
         x = self.data_sbj.feat[:, sbj_idx]
         y = self.feat_img[:, img_idx]
 
