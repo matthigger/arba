@@ -6,34 +6,34 @@ from string import ascii_uppercase
 import nibabel as nib
 import numpy as np
 
-from .file_tree import FileTree
+from .data_image import DataImage
 
 
-class SynthFileTree(FileTree):
+class DataImageSynth(DataImage):
     """ builds gaussian noise nii in temp location (for testing purposes)
 
-    features are labelled alphabetically ('img_feat_A', 'img_feat_B', ....)
-    sbj are labelled numerically ('sbj_0', 'sbj_1', ...)
+    features are labelled alphabetically ('feat_imgA', 'feat_imgB', ....)
+    sbj are labelled numerically ('sbj0', 'sbj1', ...)
     """
 
     @staticmethod
     def get_sbj_list(n):
-        return [f'sbj_{idx}' for idx in range(n)]
+        return [f'sbj{idx}' for idx in range(n)]
 
     @staticmethod
     def get_feat_list(n):
-        return [f'img_feat_{x}' for x in ascii_uppercase[:n]]
+        return [f'feat_img{x}' for x in ascii_uppercase[:n]]
 
     @classmethod
     def from_array(cls, data, folder=None):
-        """ given a data matrix, writes files to nii and returns FileTree
+        """ given a data matrix, writes files to nii and returns DataImage
 
         Args:
             data (np.array): (shape0, shape1, shape2, num_sbj, num_feat)
             folder: location to store output files
 
         Returns:
-            file_tree (SynthFileTree)
+            data_img (DataImageSynth)
         """
 
         if folder is None:
@@ -49,7 +49,7 @@ class SynthFileTree(FileTree):
 
         sbj_list = cls.get_sbj_list(num_sbj)
 
-        sbj_feat_file_tree = defaultdict(dict)
+        sbj_ifeat_data_img = defaultdict(dict)
         for sbj_idx, sbj in enumerate(sbj_list):
             for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
                 # write img to file
@@ -59,11 +59,11 @@ class SynthFileTree(FileTree):
                 img.to_filename(str(f))
 
                 # store
-                sbj_feat_file_tree[sbj][feat] = f
+                sbj_ifeat_data_img[sbj][feat] = f
 
-        # todo: type should be SynthFileTree ... but this is classmethod?
-        return FileTree(sbj_feat_file_tree=sbj_feat_file_tree,
-                        sbj_list=sbj_list)
+        # todo: type should be DataImageSynth ... but this is classmethod?
+        return DataImage(sbj_ifeat_data_img=sbj_ifeat_data_img,
+                         sbj_list=sbj_list)
 
     def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
         """
@@ -85,12 +85,12 @@ class SynthFileTree(FileTree):
 
         feat_list = self.get_feat_list(len(mu))
 
-        sbj_feat_file_tree = defaultdict(dict)
+        sbj_ifeat_data_img = defaultdict(dict)
         for sbj in self.get_sbj_list(num_sbj):
             # sample img
             x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
 
-            # store img (as nii, then in sbj_feat_file_tree)
+            # store img (as nii, then in sbj_ifeat_data_img)
             for feat_idx, feat in enumerate(feat_list):
                 f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
                                                 prefix=f'{sbj}_{feat}_').name
@@ -99,6 +99,6 @@ class SynthFileTree(FileTree):
                 img.to_filename(str(f))
 
                 # store
-                sbj_feat_file_tree[sbj][feat] = f
+                sbj_ifeat_data_img[sbj][feat] = f
 
-        super().__init__(sbj_feat_file_tree=sbj_feat_file_tree)
+        super().__init__(sbj_ifeat_data_img=sbj_ifeat_data_img)

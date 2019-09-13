@@ -6,8 +6,8 @@ from arba.simulate import *
 
 
 @pytest.fixture
-def file_tree(mu=np.array((0, 0)), cov=np.eye(2), shape=(3, 5, 7), n=10):
-    """ builds files of random noise in 2d, returns file_tree
+def data_img(mu=np.array((0, 0)), cov=np.eye(2), shape=(3, 5, 7), n=10):
+    """ builds files of random noise in 2d, returns data_img
 
     Args:
         mu (np.array): mean of features
@@ -40,43 +40,43 @@ def file_tree(mu=np.array((0, 0)), cov=np.eye(2), shape=(3, 5, 7), n=10):
         return f_dict
 
     # build file tree
-    sbj_feat_file_tree = dict()
+    sbj_feat_data_img = dict()
     for idx in range(n):
-        sbj_feat_file_tree[idx] = write_nii(idx)
+        sbj_feat_data_img[idx] = write_nii(idx)
 
-    yield FileTree(sbj_feat_file_tree)
+    yield FileTree(sbj_feat_data_img)
 
     # delete files
-    for sbj, d in sbj_feat_file_tree.items():
+    for sbj, d in sbj_feat_data_img.items():
         for feat, f in d.items():
             os.remove(str(f))
 
 
-def test_len(file_tree):
-    assert len(file_tree) == 10, 'file_tree.__len__ error'
+def test_len(data_img):
+    assert len(data_img) == 10, 'data_img.__len__ error'
 
 
-def test_memory(file_tree):
-    # load file_tree, perform a few add operations
-    file_tree.load()
-    x_init = deepcopy(file_tree.data)
+def test_memory(data_img):
+    # load data_img, perform a few add operations
+    data_img.load()
+    x_init = deepcopy(data_img.data)
 
     # perform a few add operations
     np.random.seed(1)
-    mask = np.random.uniform(size=file_tree.ref.shape) < .5
-    file_tree.add(10, mask=mask)
-    file_tree.add(-10, mask=np.logical_not(mask))
+    mask = np.random.uniform(size=data_img.ref.shape) < .5
+    data_img.add(10, mask=mask)
+    data_img.add(-10, mask=np.logical_not(mask))
 
     # save data
-    x = file_tree.data
+    x = data_img.data
 
     # unload and load data, should re-apply add operations
-    file_tree.unload()
-    file_tree.load()
+    data_img.unload()
+    data_img.load()
 
-    assert np.allclose(x, file_tree.data), 'memory failure'
+    assert np.allclose(x, data_img.data), 'memory failure'
 
-    file_tree.reset_hist()
-    file_tree.load()
+    data_img.reset_hist()
+    data_img.load()
 
-    assert np.allclose(x_init, file_tree.data), 'reset failure'
+    assert np.allclose(x_init, data_img.data), 'reset failure'

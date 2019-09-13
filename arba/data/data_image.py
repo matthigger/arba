@@ -13,22 +13,23 @@ from arba.space import get_ref, Mask
 
 def check_loaded(fnc):
     def wrapped(self, *args, **kwargs):
-        assert self.is_loaded, 'FileTree must be loaded to call'
+        assert self.is_loaded, 'DataImage must be loaded to call'
         return fnc(self, *args, **kwargs)
 
     return wrapped
 
 
-class FileTree:
+class DataImage:
     """ manages large datasets of multivariate images
 
     the focus is on a context manager which loads data.  data is loaded into a
-    data cube, operated on by some fncs, then memory mapped.  FileTree.data
+    data cube, operated on by some fncs, then memory mapped.  DataImage.data
     is then replaced with a read-only version of the memory mapped array,
     allowing for parallel processes to operate on shared memory.
 
     Attributes:
-        sbj_feat_file_tree (tree): key0 are sbj, key2 are feat, values are file
+        sbj_ifeat_data_img (tree): key0 is sbj, key2 is imaging feat, vals are
+                                    files which contain imaging feat of sbj
         sbj_list (list): list of sbj (defines indexing)
         feat_list (list): list of features (defines indexing)
         scale (np.array): defines scaling of data
@@ -42,7 +43,7 @@ class FileTree:
         fs (FeatStat): feature statistics across active area of all sbj
         data (np.memmap): (space0, space1, space2, sbj_idx, feat_idx)
                           if data is loaded, a read only memmap of data
-        effect_list (list): list of effects applied
+        offset (np.array): an offset which has been added to data
 
     Hidden Attributes:
         __mask (Mask): mask of intersection of all files (only available when
@@ -55,25 +56,25 @@ class FileTree:
 
     @property
     def num_sbj(self):
-        return len(self.sbj_feat_file_tree)
+        return len(self.sbj_ifeat_data_img)
 
     @property
     def d(self):
         return len(self.feat_list)
 
     def __len__(self):
-        return len(self.sbj_feat_file_tree.keys())
+        return len(self.sbj_ifeat_data_img.keys())
 
-    def __init__(self, sbj_feat_file_tree, sbj_list=None, fnc_list=None,
+    def __init__(self, sbj_ifeat_data_img, sbj_list=None, fnc_list=None,
                  mask=None):
-        self.sbj_feat_file_tree = sbj_feat_file_tree
+        self.sbj_ifeat_data_img = sbj_ifeat_data_img
         if sbj_list is None:
-            self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+            self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
         else:
             self.sbj_list = sbj_list
-            assert set(sbj_list) == set(sbj_feat_file_tree), 'sbj_list error'
+            assert set(sbj_list) == set(sbj_ifeat_data_img), 'sbj_list error'
 
-        feat_file_dict = next(iter(self.sbj_feat_file_tree.values()))
+        feat_file_dict = next(iter(self.sbj_ifeat_data_img.values()))
         self.feat_list = sorted(feat_file_dict.keys())
         self.scale = np.eye(self.d)
         self.ref = get_ref(next(iter(feat_file_dict.values())))
@@ -89,7 +90,7 @@ class FileTree:
         self.mask = mask
         self.__mask = None
 
-        self.effect_list = list()
+        self.offset = None
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only num_sbj remains (in place)
@@ -110,10 +111,10 @@ class FileTree:
         # prune tree to approrpiate sbj
         for _, sbj_list in grp_list_iter:
             for sbj in sbj_list[n_sbj:]:
-                del self.sbj_feat_file_tree[sbj]
+                del self.sbj_ifeat_data_img[sbj]
 
         # update sbj_list
-        self.sbj_list = sorted(self.sbj_feat_file_tree.keys())
+        self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
 
     @check_loaded
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
@@ -149,7 +150,7 @@ class FileTree:
         return FeatStat.from_array(x.T)
 
     @contextmanager
-    def loaded(self, effect_list=None, **kwargs):
+    def loaded(self, offset=None, **kwargs):
         """ provides context manager with loaded data
 
         note: we only load() and unload() if the object was previously not
@@ -159,23 +160,57 @@ class FileTree:
 
         # load or check that previous load was equivilent
         if was_loaded:
-            if effect_list is not None:
-                assert effect_list == self.effect_list, \
-                    'effect_list mismatch between load()'
+            if offset is None:
+                # NOTE: if a data_img is loaded with an offset, future calls
+                # to loaded() need not request this offset
+                pass
+            else:
+                assert self.offset is not None, 'load() w/ offset after load()'
+                assert np.isclose(offset, self.offset), 'offsets not equal'
+
         else:
-            self.load(effect_list=effect_list, **kwargs)
+            self.load(offset=offset, **kwargs)
 
         try:
             yield self
         finally:
             if not was_loaded:
+                # return to original state
                 self.unload()
 
-    def load(self, effect_list=None, verbose=False, memmap=False):
+    def reset_offset(self, offset=None):
+        """ discards old offset, adds a new one.
+
+        (faster than reloadeding for each new offset)
+
+        Args:
+            offset (np.array):
+        """
+        if isinstance(self.data, np.memmap):
+            # make writable
+            self.data = np.memmap(self.f_data, dtype='float32', mode='w+',
+                                  shape=self.data.shape)
+
+        # subtract old
+        if self.offset is not None:
+            self.data -= self.offset
+
+        # add new, record it
+        if offset is not None:
+            self.data += offset
+        self.offset = offset
+
+        if isinstance(self.data, np.memmap):
+            # make read only again
+            self.data.flush()
+            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                                  shape=self.data.shape)
+
+    def load(self, offset=None, verbose=False, memmap=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
-            effect_list = (list): list of effects
+            offset (np.array): image offset
             verbose (bool): toggles command line output
             memmap (bool): toggles memory map (self.data becomes read only, but
                            accesible from all threads to save on memory)
@@ -193,7 +228,7 @@ class FileTree:
                                  desc='load per sbj',
                                  disable=not verbose):
             for feat_idx, feat in enumerate(self.feat_list):
-                f = self.sbj_feat_file_tree[sbj][feat]
+                f = self.sbj_ifeat_data_img[sbj][feat]
                 img = nib.load(str(f))
                 self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
 
@@ -210,13 +245,10 @@ class FileTree:
         for fnc in self.fnc_list:
             fnc(self)
 
-        # apply effects
-        if effect_list is None:
-            self.effect_list = list()
-        else:
-            self.effect_list = effect_list
-        for effect in self.effect_list:
-            self.data += effect.get_offset_array(sbj_list=self.sbj_list)
+        # apply offset
+        if offset is not None:
+            self.data += offset
+        self.offset = offset
 
         # flush data to memmap, make read only copy
         if memmap:
@@ -237,7 +269,7 @@ class FileTree:
 
         self.data = None
         self.__mask = None
-        self.effect_list = list()
+        self.offset = None
 
     @check_loaded
     def to_nii(self, folder=None, mean_flag=True):
@@ -271,7 +303,7 @@ class FileTree:
         return np.array([sbj in sbj_set for sbj in self.sbj_list])
 
     def __eq__(self, other):
-        if self.sbj_feat_file_tree != other.sbj_feat_file_tree:
+        if self.sbj_ifeat_data_img != other.sbj_ifeat_data_img:
             return False
 
         if self.ref != other.ref:
@@ -293,7 +325,7 @@ def scale_normalize(ft):
     """ compute & store mean and var per feat, scale + offset to Z score
 
     Args:
-        ft (FileTree): file tree to be equalized
+        ft (DataImage): file tree to be equalized
     """
     # compute stats
     shape = (len(ft.mask) * ft.num_sbj, ft.d)

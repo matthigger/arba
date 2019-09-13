@@ -37,14 +37,14 @@ def ft_tuple(var=1, eff=10, shape=(10, 10, 10), shape_eff=(4, 5, 6), n_null=10,
 
         return f
 
-    def get_file_tree(eff, n, label=''):
-        sbj_feat_file_tree = defaultdict(dict)
+    def get_data_img(eff, n, label=''):
+        sbj_feat_data_img = defaultdict(dict)
         for idx in range(n):
             sbj = f'{label}_{idx}'
-            sbj_feat_file_tree[sbj]['feat'] = write_nii(eff, label=sbj)
-        return FileTree(sbj_feat_file_tree)
+            sbj_feat_data_img[sbj]['feat'] = write_nii(eff, label=sbj)
+        return FileTree(sbj_feat_data_img)
 
-    ft0 = get_file_tree(eff=0, n=n_null, label='null')
-    ft1 = get_file_tree(eff=eff, n=n_effect, label='effect')
+    ft0 = get_data_img(eff=0, n=n_null, label='null')
+    ft1 = get_data_img(eff=eff, n=n_effect, label='effect')
 
     return ft0, ft1

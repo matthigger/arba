@@ -21,8 +21,8 @@ class SegGraphHistory(SegGraph):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.merge_record = MergeRecord(self.file_tree.mask,
-                                        ref=self.file_tree.ref,
+        self.merge_record = MergeRecord(self.data_img.mask,
+                                        ref=self.data_img.ref,
                                         **kwargs)
         self.merge_record.apply_fnc_leaf(self)
         self._err_edge_list = None
@@ -134,7 +134,7 @@ class SegGraphHistory(SegGraph):
         err_list = list()
         while len(edge_list) < n:
             #
-            # x = [(err,
+            # feat = [(err,
             #       mask[next(iter(r0.pc_ijk))] &
             #       mask[next(iter(r1.pc_ijk))])
             #      for err, (r0, r1) in self._err_edge_list]

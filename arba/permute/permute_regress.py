@@ -26,17 +26,20 @@ class PermuteRegress:
     Attributes:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
-        feat_sbj (np.array): (todo x todo) subject features
-        file_tree (FileTree): observed imaging data
+        data_sbj (np.array): (todo feat todo) subject features
+        data_img (DataImage): observed imaging data
     """
 
-    def __init__(self, feat_sbj, file_tree, alpha=.05, num_perm=100,
+    def __init__(self, data_sbj, data_img, alpha=.05, num_perm=100,
                  mask_target=None, verbose=True, folder=None, par_flag=False,
                  save_flag=True):
+        assert alpha >= 1 / (num_perm + 1), \
+            'not enough perm for alpha, never sig'
+
         self.alpha = alpha
         self.num_perm = num_perm
-        self.feat_sbj = feat_sbj
-        self.file_tree = file_tree
+        self.data_sbj = data_sbj
+        self.data_img = data_img
         self.mask_target = mask_target
         self.verbose = verbose
 
@@ -47,7 +50,7 @@ class PermuteRegress:
         if self.folder is None:
             self.folder = pathlib.Path(tempfile.mkdtemp())
 
-        with file_tree.loaded():
+        with data_img.loaded():
             self.run_single()
 
             self.permute(par_flag=par_flag)
@@ -89,13 +92,10 @@ class PermuteRegress:
                          features and returns sg_hist without running
                          agglomerative clustering
         """
-        if _seed is not None:
-            RegionRegress.shuffle_feat_sbj(seed=_seed)
-        else:
-            RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                       sbj_list=self.file_tree.sbj_list)
+        self.data_sbj.permute(_seed)
+        RegionRegress.set_data_sbj(self.data_sbj)
 
-        sg_hist = SegGraphHistory(file_tree=self.file_tree,
+        sg_hist = SegGraphHistory(data_img=self.data_img,
                                   cls_reg=RegionRegress,
                                   fnc_dict={'r2': get_r2})
 
@@ -131,9 +131,9 @@ class PermuteRegress:
 
         self._compute_r2_bounds(val_list)
 
-        # ensure that RegionRegress has appropriate feat_sbj ordering
-        RegionRegress.set_feat_sbj(feat_sbj=self.feat_sbj,
-                                   sbj_list=self.file_tree.sbj_list)
+        # reset data_sbj permutation
+        self.data_sbj.permute(None)
+        RegionRegress.set_data_sbj(self.data_sbj)
 
         return val_list
 
@@ -215,10 +215,13 @@ class PermuteRegress:
         if print_node:
             for n in self.sig_node_cover:
                 r = self.merge_record.resolve_node(n,
-                                                   file_tree=self.sg_hist.file_tree,
+                                                   data_img=self.sg_hist.data_img,
                                                    reg_cls=RegionRegress)
                 r.pc_ijk.to_mask().to_nii(self.folder / f'node_{n}.nii.gz')
-                r.plot(img_feat_label='fa')
+                r.plot(img_idx=0,
+                       img_label=f'mean {self.data_img.feat_list[0]}',
+                       sbj_idx=1,
+                       sbj_label=self.data_sbj.feat_list[1])
                 save_fig(self.folder / f'node_{n}.pdf')
 
 

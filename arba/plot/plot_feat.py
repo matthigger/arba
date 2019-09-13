@@ -7,12 +7,12 @@ from arba.space import Mask, PointCloud
 sns.set(font_scale=1.2)
 
 
-def plot_feat(file_tree, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
+def plot_feat(data_img, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
               ax=None, max_pts=1000, **kwargs):
     """ makes a scatter of features in some region
 
     Args:
-        file_tree (FileTree): data set to plot
+        data_img (DataImage): data set to plot
         sbj_bool (tuple): sbj to plot
         feat_tuple (tuple): features to plot
         ax (plt.Axes): axes to plot on
@@ -25,7 +25,7 @@ def plot_feat(file_tree, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
         ax (plt.Axes)
     """
 
-    assert all(feat in file_tree.feat_list for feat in feat_tuple), \
+    assert all(feat in data_img.feat_list for feat in feat_tuple), \
         'invalid feat'
 
     assert 1 == sum(((mask is not None),
@@ -36,7 +36,7 @@ def plot_feat(file_tree, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
     if pc is not None:
         mask = pc.to_mask()
     elif ijk is not None:
-        mask = np.zeros(file_tree.ref.shape)
+        mask = np.zeros(data_img.ref.shape)
         i, j, k = ijk
         mask[i, j, k] = 1
 
@@ -44,13 +44,13 @@ def plot_feat(file_tree, sbj_bool, feat_tuple, mask=None, pc=None, ijk=None,
     if ax is None:
         _, ax = plt.subplots(1, 1)
 
-    with file_tree.loaded():
+    with data_img.loaded():
         # get relevant data
-        _data = file_tree.data[mask, :, :]
+        _data = data_img.data[mask, :, :]
         _data = _data[sbj_bool, :]
 
-        x = _data[:, file_tree.feat_list.index(feat_tuple[0])]
-        y = _data[:, file_tree.feat_list.index(feat_tuple[1])]
+        x = _data[:, data_img.feat_list.index(feat_tuple[0])]
+        y = _data[:, data_img.feat_list.index(feat_tuple[1])]
 
         # sub-sample if needed
         if x.size > max_pts:
