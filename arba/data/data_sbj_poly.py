@@ -41,6 +41,9 @@ class DataSubjectPoly(DataSubject):
         idx_target = np.where(self.contrast)[0]
         idx_nuisance = np.where(np.logical_not(self.contrast))[0]
 
+        feat_raw_target = self.feat[:, idx_target]
+        feat_raw_nuisance = self.feat[:, idx_nuisance]
+
         # get lists of feature names
         feat_list_trgt = [self.feat_list[idx] for idx in idx_target]
         feat_list_nuis = [self.feat_list[idx] for idx in idx_nuisance]
@@ -49,18 +52,17 @@ class DataSubjectPoly(DataSubject):
         self.poly_trgt = PolynomialFeatures(degree=poly_order,
                                             include_bias=True,
                                             interaction_only=interaction_only)
-        self.feat = self.poly_trgt.fit_transform(self.feat[:, idx_target])
+        self.feat = self.poly_trgt.fit_transform(feat_raw_target)
         self.feat_list = self.poly_trgt.get_feature_names(feat_list_trgt)
         self.contrast = np.ones(self.feat.shape[1]).astype(bool)
 
         self.poly_nuis = None
-        if any(np.logical_not(self.contrast_raw)):
+        if self.has_nuisance:
             # project nuisance features
             self.poly_nuis = PolynomialFeatures(degree=poly_order,
                                                 include_bias=False,
                                                 interaction_only=interaction_only)
-            feat_nuis = self.poly_nuis.fit_transform(
-                self.feat[:, idx_nuisance])
+            feat_nuis = self.poly_nuis.fit_transform(feat_raw_nuisance)
             self.feat_list += self.poly_nuis.get_feature_names(feat_list_nuis)
             self.feat = np.hstack((self.feat, feat_nuis))
 
