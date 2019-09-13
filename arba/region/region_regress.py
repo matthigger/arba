@@ -124,16 +124,14 @@ class RegionRegress(Region):
         x = self.data_sbj.feat[:, sbj_idx]
         y = self.feat_img[:, img_idx]
 
-        feat_sbj_line = self.data_sbj.feat.mean(axis=0)
-        feat_sbj_line = np.repeat(np.atleast_2d(feat_sbj_line), repeats=2,
-                                  axis=0)
-        feat_sbj_line[:, sbj_idx] = min(x), max(x)
+        feat_sbj_line = self.data_sbj.linspace(sbj_idx)
         feat_img_line = feat_sbj_line @ self.beta
 
         plt.scatter(x, y, label='single sbj (region mean)')
         plt.suptitle(', '.join([f'r2_vox={self.r2:.2f}',
                                 f'size={len(self)} vox']))
-        plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line, label='beta')
+        plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line[:, img_idx],
+                 label='beta')
         plt.xlabel(sbj_label)
         plt.ylabel(img_label)
         plt.legend()

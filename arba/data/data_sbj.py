@@ -128,3 +128,27 @@ class DataSubject:
         feat_img = feat_img + (self.perm_matrix - np.eye(self.num_sbj)) @ resid
 
         return feat_img
+
+    def linspace(self, idx, n=100, feat=None):
+        """ returns feat_img which spans the range of values
+
+        Args:
+            idx (int): index of feature to change
+            n (int): number of observations to return
+            feat (np.array): (num_obs, num_feat): subject features (defaults to
+                                                  self.feat)
+
+        Returns:
+             feat (np.array): (n, self.num_feat) all features are their
+                              observation average, except for the idx-th
+                              feature which is n linearly spaced points from
+                              min to max
+        """
+        if feat is None:
+            feat = self.feat
+
+        feat_img = feat.mean(axis=0)
+        feat_img = np.repeat(np.atleast_2d(feat_img), repeats=n, axis=0)
+        feat_img[:, idx] = np.linspace(min(feat[:, idx]),
+                                       max(feat[:, idx]), n)
+        return feat_img
