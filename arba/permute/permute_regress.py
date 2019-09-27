@@ -40,7 +40,7 @@ class PermuteRegress(Permute):
 
         # build estimate mask
         arba_mask = self.merge_record.build_mask(self.sig_node)
-        self.method_est_mask_dict = {'arba': arba_mask}
+        self.mode_est_mask_dict = {'arba': arba_mask}
 
     def _set_seed(self, seed=None):
         self.data_sbj.permute(seed)
@@ -125,7 +125,7 @@ class PermuteRegress(Permute):
                                           log_y=False)
             save_fig(self.folder / 'size_v_r2z_score.pdf')
 
-        for label, mask in self.method_est_mask_dict.items():
+        for label, mask in self.mode_est_mask_dict.items():
             mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
         if size_v_r2_null:
@@ -147,7 +147,7 @@ class PermuteRegress(Permute):
             f_mask = self.folder / 'mask_target.nii.gz'
             self.mask_target.to_nii(f_mask)
 
-            for label, mask in self.method_est_mask_dict.items():
+            for label, mask in self.mode_est_mask_dict.items():
                 compute_print_dice(mask_estimate=mask,
                                    mask_target=self.mask_target,
                                    save_folder=self.folder,

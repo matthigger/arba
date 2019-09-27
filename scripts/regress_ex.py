@@ -47,17 +47,13 @@ class Performance:
         self.method_r2ss_list_dict = defaultdict(list)
 
     def check_in(self, perm_reg):
-        # compute spec / sens
-        estimate_dict = {'arba': perm_reg.mask_estimate}
-        estimate_dict.update(perm_reg.vba_mask_estimate_dict)
-
-        for method, estimate in estimate_dict.items():
+        for mode, est_mask in perm_reg.mode_est_mask_dict.items():
             sens, spec = arba.effect.get_sens_spec(target=eff.mask,
-                                                   estimate=estimate,
+                                                   estimate=est_mask,
                                                    mask=data_img.mask)
-            s = f'{method} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
+            s = f'{mode} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
             print(s)
-            self.method_r2ss_list_dict[method].append((r2, sens, spec))
+            self.method_r2ss_list_dict[mode].append((r2, sens, spec))
 
     def plot(self, folder):
         sns.set(font_scale=1)
@@ -97,7 +93,7 @@ if __name__ == '__main__':
 
     # detection params
     par_flag = True
-    num_perm = 100
+    num_perm = 24
     alpha = .05
 
     # regression effect params
@@ -105,13 +101,13 @@ if __name__ == '__main__':
     r2_vec = [.9]
     num_eff = 1
     num_sbj = 100
-    min_var_effect_locations = True
+    min_var_effect_locations = False
 
     str_img_data = 'synth'  # 'hcp100' or 'synth'
 
     mask_radius = 1000
 
-    effect_num_vox = 20
+    effect_num_vox = 5
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -126,7 +122,7 @@ if __name__ == '__main__':
         contrast = [1, 0, 0]
         dim_sbj = 3
         dim_img = 1
-        shape = 6, 6, 6
+        shape = 4, 4, 4
         data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
                                             mu=np.zeros(dim_img),
                                             cov=np.eye(dim_img),
@@ -182,8 +178,8 @@ if __name__ == '__main__':
                                                       alpha=alpha,
                                                       mask_target=eff.mask,
                                                       verbose=True,
-                                                      save_flag=True,
                                                       folder=_folder)
+            perm_reg.save()
 
             # record performance
             perf.check_in(perm_reg)
