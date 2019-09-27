@@ -27,7 +27,7 @@ class PermuteRegress(Permute):
         data_img (DataImage): observed imaging data
     """
 
-    def __init__(self, data_sbj, *args, save_flag=True, **kwargs):
+    def __init__(self, data_sbj, *args, **kwargs):
         self.data_sbj = data_sbj
 
         super().__init__(*args, **kwargs)
@@ -37,31 +37,43 @@ class PermuteRegress(Permute):
         self.node_z_dict = dict()
         self.node_r2_dict = self.merge_record.fnc_node_val_list['r2']
         self.sig_node = self.get_sig_node()
-        self.mask_estimate = self.merge_record.build_mask(self.sig_node)
 
-        if save_flag:
-            self.save()
+        # build estimate mask
+        arba_mask = self.merge_record.build_mask(self.sig_node)
+        self.method_est_mask_dict = {'arba': arba_mask}
 
-    def set_seed(self, seed=None):
+    def _set_seed(self, seed=None):
         self.data_sbj.permute(seed)
         RegionRegress.set_data_sbj(self.data_sbj)
 
-    def get_sg_hist(self):
+    def get_sg_hist(self, seed=None):
+        self._set_seed(seed)
         return SegGraphHistory(data_img=self.data_img,
                                cls_reg=RegionRegress,
                                fnc_dict={'r2': get_r2})
 
     def run_single_permute(self, seed):
-        merge_record = super().run_single_permute(seed)
+        sg_hist = self.get_sg_hist(seed)
+        r2_list = sg_hist.merge_record.fnc_node_val_list['r2'].values()
 
-        r2_list = merge_record.fnc_node_val_list['r2'].values()
-
-        return sorted(r2_list, reverse=True)
+        return {'r2': sorted(r2_list, reverse=True)}
 
     def permute(self, par_flag=False):
         val_list = super().permute(par_flag=par_flag)
 
-        self._compute_r2_bounds(val_list)
+        self.r2_null = np.vstack(d['r2'] for d in val_list)
+        num_perm, num_vox = self.r2_null.shape
+
+        # sum and normalize
+        self.r2_null = np.cumsum(self.r2_null, axis=1)
+        self.r2_null = self.r2_null / np.arange(1, num_vox + 1)
+
+        # sort per region size
+        self.r2_null = np.sort(self.r2_null, axis=0)
+
+        # compute stats (for z)
+        self.mu_null = np.mean(self.r2_null, axis=0)
+        self.std_null = np.std(self.r2_null, axis=0)
 
         return val_list
 
@@ -89,24 +101,6 @@ class PermuteRegress(Permute):
         std = self.std_null[reg_size - 1]
         return (r2 - mu) / std
 
-    def _compute_r2_bounds(self, val_list):
-        """ computes bound on r2, per region size, for every permutation """
-        # build r2_null, has shape (num_perm, num_vox).  each column is a
-        # sorted list of upper bounds on r2 per permutation.
-        self.r2_null = np.vstack(val_list)
-        num_perm, num_vox = self.r2_null.shape
-
-        # sum and normalize
-        self.r2_null = np.cumsum(self.r2_null, axis=1)
-        self.r2_null = self.r2_null / np.arange(1, num_vox + 1)
-
-        # sort per region size
-        self.r2_null = np.sort(self.r2_null, axis=0)
-
-        # compute stats (for z)
-        self.mu_null = np.mean(self.r2_null, axis=0)
-        self.std_null = np.std(self.r2_null, axis=0)
-
     def save(self, size_v_r2=True, size_v_r2_pval=True, size_v_r2_z=True,
              size_v_r2_null=True, mask_detected=True, print_node=True):
 
@@ -131,8 +125,8 @@ class PermuteRegress(Permute):
                                           log_y=False)
             save_fig(self.folder / 'size_v_r2z_score.pdf')
 
-        if mask_detected:
-            self.mask_estimate.to_nii(self.folder / 'mask_estimate.nii.gz')
+        for label, mask in self.method_est_mask_dict.items():
+            mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
         if size_v_r2_null:
             # print percentiles of r2 per size
@@ -150,13 +144,14 @@ class PermuteRegress(Permute):
             save_fig(self.folder / 'size_v_r2_null.pdf')
 
         if self.mask_target is not None:
-            compute_print_dice(mask_estimate=self.mask_estimate,
-                               mask_target=self.mask_target,
-                               save_folder=self.folder,
-                               label='arba')
-
             f_mask = self.folder / 'mask_target.nii.gz'
             self.mask_target.to_nii(f_mask)
+
+            for label, mask in self.method_est_mask_dict.items():
+                compute_print_dice(mask_estimate=mask,
+                                   mask_target=self.mask_target,
+                                   save_folder=self.folder,
+                                   label=label)
 
         if print_node:
             for n in self.sig_node:

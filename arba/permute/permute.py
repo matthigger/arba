@@ -12,15 +12,10 @@ class Permute:
     """ runs permutation testing to find regions whose stat is significant
 
     additionally, this object serves as a container for the result objects
-
-    Attributes:
-        num_perm (int): number of permutations to run
-        alpha (float): confidence threshold
-        data_img (DataImage): observed imaging data
     """
 
     def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,
-                 verbose=True, folder=None, par_flag=False, save_flag=True):
+                 verbose=True, folder=None, par_flag=False):
         assert alpha >= 1 / (num_perm + 1), \
             'not enough perm for alpha, never sig'
 
@@ -43,34 +38,25 @@ class Permute:
             self.permute(par_flag=par_flag)
 
     @abstractmethod
-    def set_seed(self, seed=None):
-        pass
+    def _set_seed(self, seed=None):
+        raise NotImplementedError
 
     @abstractmethod
-    def get_sg_hist(self):
+    def get_sg_hist(self, seed=None):
         """ constructs a SegGraphHistory """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def run_single_permute(self, seed):
+        raise NotImplementedError
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
         """
-        # ensure unpermuted data
-        self.set_seed(seed=None)
-
         # build sg_hist, reduce
         self.sg_hist = self.get_sg_hist()
         self.sg_hist.reduce_to(1, verbose=self.verbose)
-
         self.merge_record = self.sg_hist.merge_record
-
-    @abstractmethod
-    def run_single_permute(self, seed):
-        """ runs a single permutation test, return merge_record """
-        self.set_seed(seed)
-        sg_hist = self.get_sg_hist()
-
-        merge_record = sg_hist.merge_record
-        return merge_record
 
     @abstractmethod
     def permute(self, par_flag=False):
@@ -88,6 +74,6 @@ class Permute:
                 val_list.append(self.run_single_permute(**d))
 
         # reset permutation to original data
-        self.set_seed(seed=None)
+        self._set_seed(seed=None)
 
         return val_list
