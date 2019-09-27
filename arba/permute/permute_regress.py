@@ -1,13 +1,11 @@
 import pathlib
-import tempfile
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.distance import dice
-from tqdm import tqdm
 
-from mh_pytools import parallel
 from .get_pval import get_pval
+from .permute import Permute
 from ..plot import save_fig
 from ..region import RegionRegress
 from ..seg_graph import SegGraphHistory
@@ -17,7 +15,7 @@ def get_r2(reg, **kwargs):
     return reg.r2
 
 
-class PermuteRegress:
+class PermuteRegress(Permute):
     """ runs permutation testing to find regions whose r^2 > 0 is significant
 
     additionally, this object serves as a container for the result objects
@@ -25,116 +23,66 @@ class PermuteRegress:
     Attributes:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
-        data_sbj (np.array): (todo feat todo) subject features
+        data_sbj (DataSubject): observed subject data
         data_img (DataImage): observed imaging data
     """
 
-    def __init__(self, data_sbj, data_img, alpha=.05, num_perm=100,
-                 mask_target=None, verbose=True, folder=None, par_flag=False,
-                 save_flag=True):
-        assert alpha >= 1 / (num_perm + 1), \
-            'not enough perm for alpha, never sig'
-
-        self.alpha = alpha
-        self.num_perm = num_perm
+    def __init__(self, data_sbj, *args, save_flag=True, **kwargs):
         self.data_sbj = data_sbj
-        self.data_img = data_img
-        self.mask_target = mask_target
-        self.verbose = verbose
 
-        self.sg_hist = None
-        self.merge_record = None
+        super().__init__(*args, **kwargs)
 
-        self.folder = folder
-        if self.folder is None:
-            self.folder = pathlib.Path(tempfile.mkdtemp())
+        # get mask of estimate
+        self.node_pval_dict = dict()
+        self.node_z_dict = dict()
+        self.node_r2_dict = self.merge_record.fnc_node_val_list['r2']
+        self.sig_node = self.get_sig_node()
+        self.mask_estimate = self.merge_record.build_mask(self.sig_node)
 
-        with data_img.loaded():
-            self.run_single()
+        if save_flag:
+            self.save()
 
-            self.permute(par_flag=par_flag)
-
-            # compute pval + z score per node
-            self.node_pval_dict = dict()
-            self.node_z_dict = dict()
-            self.node_r2_dict = self.merge_record.fnc_node_val_list['r2']
-            for n in self.merge_record.nodes:
-                reg_size = self.merge_record.node_size_dict[n]
-                r2 = self.node_r2_dict[n]
-
-                self.node_pval_dict[n] = \
-                    get_pval(stat=r2,
-                             stat_null=self.r2_null[:, reg_size - 1],
-                             sort_flag=False,
-                             stat_include_flag=True)
-                self.node_z_dict[n] = self.get_r2_z_score(r2, reg_size)
-
-            node_p_negz_dict = {n: (p, -self.node_z_dict[n])
-                                for n, p in self.node_pval_dict.items() if
-                                p <= self.alpha}
-
-            self.sig_node_cover = \
-                self.merge_record._cut_greedy(node_p_negz_dict, max_flag=False)
-
-            self.mask_estimate = \
-                self.merge_record.build_mask(self.sig_node_cover)
-
-            if save_flag:
-                self.save()
-
-    def run_single(self, _seed=None):
-        """ runs a single Agglomerative Clustering run
-
-        Args:
-            _seed (int): if passed, toggles 'permutation testing' mode.
-                         shuffles assignment of subject features to imaging
-                         features and returns sg_hist without running
-                         agglomerative clustering
-        """
-        self.data_sbj.permute(_seed)
+    def set_seed(self, seed=None):
+        self.data_sbj.permute(seed)
         RegionRegress.set_data_sbj(self.data_sbj)
 
-        sg_hist = SegGraphHistory(data_img=self.data_img,
-                                  cls_reg=RegionRegress,
-                                  fnc_dict={'r2': get_r2})
+    def get_sg_hist(self):
+        return SegGraphHistory(data_img=self.data_img,
+                               cls_reg=RegionRegress,
+                               fnc_dict={'r2': get_r2})
 
-        if _seed is not None:
-            return sg_hist
+    def run_single_permute(self, seed):
+        merge_record = super().run_single_permute(seed)
 
-        self.sg_hist = sg_hist
-        self.sg_hist.reduce_to(1, verbose=self.verbose)
-
-        self.merge_record = self.sg_hist.merge_record
-
-    def run_single_permute(self, **kwargs):
-        sg_hist = self.run_single(**kwargs)
-
-        merge_record = sg_hist.merge_record
         r2_list = merge_record.fnc_node_val_list['r2'].values()
 
         return sorted(r2_list, reverse=True)
 
     def permute(self, par_flag=False):
-        # if seed = 0, evaluates as false and doesn't do anything
-        seed_list = np.arange(1, self.num_perm + 1)
-        arg_list = [{'_seed': x} for x in seed_list]
-
-        if par_flag:
-            val_list = parallel.run_par_fnc(obj=self, fnc='run_single_permute',
-                                            arg_list=arg_list,
-                                            verbose=self.verbose)
-        else:
-            val_list = list()
-            for d in tqdm(arg_list, desc='permute', disable=not self.verbose):
-                val_list.append(self.run_single_permute(**d))
+        val_list = super().permute(par_flag=par_flag)
 
         self._compute_r2_bounds(val_list)
 
-        # reset data_sbj permutation
-        self.data_sbj.permute(None)
-        RegionRegress.set_data_sbj(self.data_sbj)
-
         return val_list
+
+    def get_sig_node(self):
+        # compute pval + z score per node
+        for n in self.merge_record.nodes:
+            reg_size = self.merge_record.node_size_dict[n]
+            r2 = self.node_r2_dict[n]
+
+            self.node_pval_dict[n] = \
+                get_pval(stat=r2,
+                         stat_null=self.r2_null[:, reg_size - 1],
+                         sort_flag=False,
+                         stat_include_flag=True)
+            self.node_z_dict[n] = self.get_r2_z_score(r2, reg_size)
+
+        node_p_negz_dict = {n: (p, -self.node_z_dict[n])
+                            for n, p in self.node_pval_dict.items() if
+                            p <= self.alpha}
+
+        return self.merge_record._cut_greedy(node_p_negz_dict, max_flag=False)
 
     def get_r2_z_score(self, r2, reg_size):
         mu = self.mu_null[reg_size - 1]
@@ -211,7 +159,7 @@ class PermuteRegress:
             self.mask_target.to_nii(f_mask)
 
         if print_node:
-            for n in self.sig_node_cover:
+            for n in self.sig_node:
                 r = self.merge_record.resolve_node(n,
                                                    data_img=self.sg_hist.data_img,
                                                    reg_cls=RegionRegress)
