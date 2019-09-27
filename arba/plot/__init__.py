@@ -1,3 +1,5 @@
-from .norm2d import *
+import seaborn as sns
+
 from .save_fig import *
-from .plot_feat import *
+
+sns.set()

@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
 import arba.space
 from .feat_stat import FeatStatSingle
@@ -122,20 +121,23 @@ class RegionRegress(Region):
 
     def plot(self, img_idx, sbj_idx, img_label='image feat',
              sbj_label='sbj feat'):
-        sns.set()
         x = self.data_sbj.feat[:, sbj_idx]
         y = self.feat_img[:, img_idx]
 
-        feat_sbj_line = self.data_sbj.feat.mean(axis=0)
-        feat_sbj_line = np.repeat(np.atleast_2d(feat_sbj_line), repeats=2,
-                                  axis=0)
-        feat_sbj_line[:, sbj_idx] = min(x), max(x)
+        feat_sbj_line = self.data_sbj.linspace(sbj_idx)
         feat_img_line = feat_sbj_line @ self.beta
 
-        plt.scatter(x, y, label='single sbj (region mean)')
+        if self.data_sbj.has_nuisance:
+            _, feat_img_adjust = self.data_sbj.factor_nuisance(self.feat_img)
+            plt.scatter(x, feat_img_adjust[:, img_idx],
+                        label='sbj-region mean nuisance adjusted')
+        plt.scatter(x, y, label='sbj-region mean')
+
+        plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line[:, img_idx],
+                 label='beta')
+
         plt.suptitle(', '.join([f'r2_vox={self.r2:.2f}',
                                 f'size={len(self)} vox']))
-        plt.plot(feat_sbj_line[:, sbj_idx], feat_img_line, label='beta')
         plt.xlabel(sbj_label)
         plt.ylabel(img_label)
         plt.legend()
