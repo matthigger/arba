@@ -1,40 +1,16 @@
 import pathlib
 import random
 import shutil
-import tempfile
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from scipy.ndimage.morphology import binary_erosion
 
 import arba
+from arba.space.mask.sample import sample_masks
+from mh_pytools import file
 from pnl_data.set import hcp_100
-
-
-def sample_masks(effect_num_vox, data_img, num_eff=1, min_var_mask=False):
-    """ gets list of masks (extent of effects) """
-
-    assert data_img.is_loaded, 'file tree must be loaded'
-    prior_array = data_img.mask
-
-    # erode prior array if edges of prior_array are invalid (TFCE error)
-    prior_array = binary_erosion(prior_array)
-
-    # sample effect extent
-    mask_list = list()
-    for idx in range(num_eff):
-        if min_var_mask:
-            mask = arba.space.sample_mask_min_var(num_vox=effect_num_vox,
-                                                  data_img=data_img,
-                                                  prior_array=prior_array)
-        else:
-            mask = arba.space.sample_mask(prior_array=prior_array,
-                                          num_vox=effect_num_vox,
-                                          ref=data_img.ref)
-        mask_list.append(mask)
-    return mask_list
 
 
 def sample_effects(r2_vec, data_sbj, **kwargs):
@@ -114,57 +90,70 @@ class Performance:
 
 
 if __name__ == '__main__':
+    import tempfile
+
     np.random.seed(1)
     random.seed(1)
 
     # detection params
-    par_flag = False
-    num_perm = 24
+    par_flag = True
+    num_perm = 100
     alpha = .05
 
     # regression effect params
-    # r2_vec =np.logspace(-2, -.5, 2)
+    # r2_vec = np.logspace(-2, -.1, 7)
     r2_vec = [.9]
     num_eff = 1
-    dim_sbj = 3
-    contrast = [1, 0, 0]
     num_sbj = 100
     min_var_effect_locations = True
 
     str_img_data = 'synth'  # 'hcp100' or 'synth'
 
-    mask_radius = 6
+    mask_radius = 1000
 
-    effect_num_vox = 10
+    effect_num_vox = 20
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
+    # folder = pathlib.Path('/home/mu584/dropbox_pnl/arba_reg_ex/hcp_age_sex')
+    # assert not folder.exists(), 'folder exists'
+    # folder.mkdir(parents=True)
     shutil.copy(__file__, folder / 'regress_ex.py')
     print(folder)
 
     # duild bummy images
     if str_img_data == 'synth':
+        contrast = [1, 0, 0]
+        dim_sbj = 3
         dim_img = 1
         shape = 6, 6, 6
         data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
                                             mu=np.zeros(dim_img),
                                             cov=np.eye(dim_img),
                                             folder=folder / 'raw_data')
+
+        sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
+        data_sbj = arba.data.DataSubject(feat=sbj_feat,
+                                         sbj_list=data_img.sbj_list,
+                                         contrast=contrast)
+
     elif str_img_data == 'hcp100':
         low_res = True,
         feat_tuple = 'fa',
-        data_img = hcp_100.get_data_img(lim_sbj=num_sbj,
-                                        low_res=low_res,
-                                        feat_tuple=feat_tuple)
+        contrast = [1, 1]
+        data_img = hcp_100.get_data_image(lim_sbj=num_sbj,
+                                          low_res=low_res,
+                                          feat_tuple=feat_tuple)
 
-    # build + set feat
-    sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
-    data_sbj = arba.data.DataSubject(feat=sbj_feat,
-                                     sbj_list=data_img.sbj_list,
-                                     contrast=contrast)
+        age_sex = hcp_100.age_sex_array(data_img.sbj_list)
+        data_sbj = arba.data.DataSubject(feat=age_sex,
+                                         feat_list=['age_grp', 'sex'],
+                                         sbj_list=data_img.sbj_list,
+                                         contrast=contrast)
 
     perf = Performance()
     with data_img.loaded():
+        mask_img_full = data_img.mask
         data_img.to_nii(folder, mean_flag=True)
 
         # sample effects
@@ -177,7 +166,8 @@ if __name__ == '__main__':
 
         # run each effect
         for (eff_idx, r2), eff in idx_r2_eff_dict.items():
-            data_img.mask = eff.mask.dilate(mask_radius)
+            data_img.mask = np.logical_and(eff.mask.dilate(mask_radius),
+                                           mask_img_full)
 
             # impose effect on data
             offset = eff.get_offset_array(data_sbj.feat)
@@ -185,6 +175,7 @@ if __name__ == '__main__':
 
             # find extent
             _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
+            file.save(eff, _folder / 'effect.p.gz')
             perm_reg = arba.permute.PermuteRegressVBA(data_sbj, data_img,
                                                       num_perm=num_perm,
                                                       par_flag=par_flag,
