@@ -38,19 +38,9 @@ class RegionDiscriminate(Region):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # get delta (note: key order doesn't matter, -delta yields same t2)
-        grp0, grp1 = tuple(RegionDiscriminate.grp_sbj_list_dict.keys())
-        self.delta = self.fs_dict[grp1] - self.fs_dict[grp0]
+        self.delta, self.cov_pool, self.t2 = get_t2_stats(fs_dict=self.fs_dict)
 
-        # get pool cov
-        n0, n1 = self.fs_dict[grp0], self.fs_dict[grp1]
-        lam0, lam1 = n0 / (n0 + n1), n1 / (n0 + n1)
-        self.cov_pool = self.fs_dict[grp0].cov * lam0 + \
-                        self.fs_dict[grp1].cov * lam1
         self.cov_pool_det = np.linalg.det(self.cov_pool)
-
-        # compute t2
-        self.t2 = self.delta @ np.linalg.inv(self.cov_pool) @ self.delta
 
     @staticmethod
     def get_error(reg_1, reg_2, reg_u=None):
@@ -65,3 +55,23 @@ class RegionDiscriminate(Region):
         assert err >= 0, 'err is negative'
 
         return err
+
+
+def get_t2_stats(fs_dict, grp_tuple=None):
+    if grp_tuple is None:
+        grp0, grp1 = tuple(RegionDiscriminate.grp_sbj_list_dict.keys())
+    else:
+        grp0, grp1 = grp_tuple
+
+    delta = fs_dict[grp1].mu - fs_dict[grp0].mu
+
+    # get pool cov
+    n0, n1 = fs_dict[grp0].n, fs_dict[grp1].n
+    lam0, lam1 = n0 / (n0 + n1), n1 / (n0 + n1)
+    cov_pool = fs_dict[grp0].cov * lam0 + \
+               fs_dict[grp1].cov * lam1
+
+    # compute t2
+    t2 = delta @ np.linalg.inv(cov_pool) @ delta
+
+    return delta, cov_pool, t2
