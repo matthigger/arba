@@ -58,8 +58,7 @@ class EffectConstant(Effect):
         return x
 
     @staticmethod
-    def from_t2(t2, mask, data_img, grp_sbj_list_dict, edge_n=None,
-                grp_target=None):
+    def from_t2(t2, mask, data_img, split, edge_n=None, grp_target=None):
         """ scales effect with observations
 
         Args:
@@ -67,15 +66,15 @@ class EffectConstant(Effect):
             mask (Mask): effect location
             data_img (DataImage):
             grp_target: grp that effect is applied to
-            grp_sbj_list_dict (dict): keys are grp labels, values are sbj_list
+            split (dict): keys are grp labels, values are sbj_list
             edge_n (int): number of voxels on edge of mask (taxicab erosion)
                           which have a 'scaled' effect.  For example, if edge_n
                           = 1, then the outermost layer of voxels has only half
                           the delta applied.  see Effect.scale
         """
         # get grp_tuple, grp_tuple[1] has effect applied
-        assert len(grp_sbj_list_dict) == 2, 'invalid grp_sbj_list_dict'
-        grp_tuple = sorted(grp_sbj_list_dict.keys())
+        assert len(split) == 2, 'invalid split'
+        grp_tuple = sorted(split.keys())
         if grp_target is not None:
             assert grp_target in grp_tuple
             if grp_target is not grp_tuple[1]:
@@ -83,7 +82,7 @@ class EffectConstant(Effect):
 
         # get fs_dict
         fs_dict = dict()
-        for grp, sbj_list in grp_sbj_list_dict.items():
+        for grp, sbj_list in split.items():
             fs_dict[grp] = data_img.get_fs(sbj_list=sbj_list, mask=mask)
 
         delta, cov_pool, _ = get_t2_stats(fs_dict, grp_tuple=grp_tuple)

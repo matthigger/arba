@@ -8,28 +8,26 @@ class RegionDiscriminate(Region):
     """ merges regions to minimize population pooled covariance for discrim
 
     Class Attributes:
-        grp_sbj_list_dict (dict): keys are groups, values are lists of sbj in
-                                  the grp
+        split (dict): keys are groups, values are lists of sbj in that grp
 
     Instance Attributes:
         t2 (float): hotelling's t^2 (delta.T @ (cov_pool)^-1 @ delta) where
                     delta is difference in grp means and cov_pool is the grp
                     pooled covariance
     """
-    grp_sbj_list_dict = None
+    split = None
 
     @classmethod
-    def set_grp_sbj_list_dict(cls, grp_sbj_list_dict):
-        cls.grp_sbj_list_dict = grp_sbj_list_dict
+    def set_split(cls, split):
+        cls.split = split
 
     @staticmethod
     def from_data_img(data_img, ijk=None, pc_ijk=None):
-        assert RegionDiscriminate.grp_sbj_list_dict is not None, \
-            'call set_grp_sbj_list_dict'
+        assert RegionDiscriminate.split is not None, 'call set_split'
 
         fs_dict = dict()
-        for grp, sbj_list in RegionDiscriminate.grp_sbj_list_dict.items():
-            fs_dict[grp] = data_img.get_fs_dict(ijk=ijk, pc_ijk=pc_ijk)
+        for grp, sbj_list in RegionDiscriminate.split.items():
+            fs_dict[grp] = data_img.get_fs(ijk=ijk, pc_ijk=pc_ijk)
 
         if pc_ijk is None:
             pc_ijk = arba.space.PointCloud([ijk], ref=data_img.ref)
@@ -59,7 +57,7 @@ class RegionDiscriminate(Region):
 
 def get_t2_stats(fs_dict, grp_tuple=None):
     if grp_tuple is None:
-        grp0, grp1 = tuple(RegionDiscriminate.grp_sbj_list_dict.keys())
+        grp0, grp1 = tuple(RegionDiscriminate.split.keys())
     else:
         grp0, grp1 = grp_tuple
 
