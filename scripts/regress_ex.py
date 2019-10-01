@@ -1,16 +1,14 @@
 import pathlib
 import random
 import shutil
-from collections import defaultdict
 
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
 import arba
 from arba.space.mask.sample import sample_masks
 from mh_pytools import file
 from pnl_data.set import hcp_100
+from scripts.performance import Performance
 
 
 def sample_effects(r2_vec, data_sbj, **kwargs):
@@ -38,51 +36,6 @@ def sample_effects(r2_vec, data_sbj, **kwargs):
             idx_r2_eff_dict[eff_idx, r2] = eff
 
     return idx_r2_eff_dict
-
-
-class Performance:
-    """ throwaway: tracks sensitivity and specificty per method """
-
-    def __init__(self):
-        self.method_r2ss_list_dict = defaultdict(list)
-
-    def check_in(self, perm_reg):
-        for mode, est_mask in perm_reg.mode_est_mask_dict.items():
-            sens, spec = arba.effect.get_sens_spec(target=eff.mask,
-                                                   estimate=est_mask,
-                                                   mask=data_img.mask)
-            s = f'{mode} (r2: {r2:.2e}): sens {sens:.3f} spec {spec:.3f}'
-            print(s)
-            self.method_r2ss_list_dict[mode].append((r2, sens, spec))
-
-    def plot(self, folder):
-        sns.set(font_scale=1)
-        fig, ax = plt.subplots(1, 2)
-        for idx, feat in enumerate(('sensitivity', 'specificity')):
-            plt.sca(ax[idx])
-            for method, r2ss_list in self.method_r2ss_list_dict.items():
-                r2 = [x[0] for x in r2ss_list]
-                vals = [x[1 + idx] for x in r2ss_list]
-                plt.scatter(r2, vals, label=method, alpha=.4)
-
-                d = defaultdict(list)
-                for _r2, val in zip(r2, vals):
-                    d[_r2].append(val)
-
-                x = []
-                y = []
-                for _r2, val_list in sorted(d.items()):
-                    x.append(_r2)
-                    y.append(np.mean(val_list))
-                plt.plot(x, y)
-
-            plt.ylabel(feat)
-            plt.xlabel(r'$r^2$')
-            plt.legend()
-            plt.gca().set_xscale('log')
-        arba.plot.save_fig(folder / 'r2_vs_sens_spec.pdf', size_inches=(10, 4))
-
-        print(folder)
 
 
 if __name__ == '__main__':
@@ -147,7 +100,7 @@ if __name__ == '__main__':
                                          sbj_list=data_img.sbj_list,
                                          contrast=contrast)
 
-    perf = Performance()
+    perf = Performance(stat_label='r2')
     with data_img.loaded():
         mask_img_full = data_img.mask
         data_img.to_nii(folder, mean_flag=True)
@@ -182,5 +135,5 @@ if __name__ == '__main__':
             perm_reg.save()
 
             # record performance
-            perf.check_in(perm_reg)
+            perf.check_in(stat=r2, perm_reg=perm_reg)
         perf.plot(folder)
