@@ -18,7 +18,8 @@ class DataImageSynth(DataImage):
 
     @staticmethod
     def get_sbj_list(n):
-        return [f'sbj{idx}' for idx in range(n)]
+        w = np.ceil(np.log10(n)).astype(int)
+        return [f'sbj{str(idx).zfill(w)}' for idx in range(n)]
 
     @staticmethod
     def get_feat_list(n):
