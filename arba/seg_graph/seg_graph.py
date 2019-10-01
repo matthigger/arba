@@ -43,7 +43,7 @@ class SegGraph(nx.Graph):
 
         for ijk in tqdm(self.data_img.mask.iter_ijk(), **tqdm_dict):
             reg = cls_reg.from_data_img(ijk=ijk,
-                                         data_img=self.data_img)
+                                        data_img=self.data_img)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):

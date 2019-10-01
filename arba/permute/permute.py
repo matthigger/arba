@@ -12,6 +12,11 @@ class Permute:
     """ runs permutation testing to find regions whose stat is significant
 
     additionally, this object serves as a container for the result objects
+
+    Attributes:
+        num_perm (int): number of permutations to run
+        alpha (float): confidence threshold
+        data_img (DataImage): observed imaging data
     """
 
     def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,

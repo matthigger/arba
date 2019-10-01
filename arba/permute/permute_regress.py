@@ -21,10 +21,7 @@ class PermuteRegress(Permute):
     additionally, this object serves as a container for the result objects
 
     Attributes:
-        num_perm (int): number of permutations to run
-        alpha (float): confidence threshold
         data_sbj (DataSubject): observed subject data
-        data_img (DataImage): observed imaging data
     """
 
     def __init__(self, data_sbj, *args, **kwargs):
