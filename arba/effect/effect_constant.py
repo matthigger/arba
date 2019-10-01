@@ -42,13 +42,20 @@ class EffectConstant(Effect):
         self.t2 = self.delta @ np.linalg.inv(self.pool_cov) @ self.delta
         self._eff_img = None
 
-    def apply(self, x, negate=False):
+    def apply(self, x, *args, **kwargs):
         """ given an image, feat, applies the effect
         """
+        return x + self.get_offset(*args, **kwargs)
+
+    def get_offset(self, shape, sbj_bool, negate=False):
+        delta = self.delta
         if negate:
-            return x - self.eff_img
-        else:
-            return x + self.eff_img
+            delta = np.array(delta) * -1
+
+        x = np.zeros((*shape, len(sbj_bool), len(self.delta)))
+        for sbj_idx in np.where(sbj_bool)[0]:
+            x[self.mask, sbj_idx, :] += delta
+        return x
 
     @staticmethod
     def from_t2(t2, mask, data_img, grp_sbj_list_dict, edge_n=None,
@@ -64,8 +71,7 @@ class EffectConstant(Effect):
             edge_n (int): number of voxels on edge of mask (taxicab erosion)
                           which have a 'scaled' effect.  For example, if edge_n
                           = 1, then the outermost layer of voxels has only half
-                          the delta applied.  see Effect.scale and eff_img for
-                          detail
+                          the delta applied.  see Effect.scale
         """
         # get grp_tuple, grp_tuple[1] has effect applied
         assert len(grp_sbj_list_dict) == 2, 'invalid grp_sbj_list_dict'
@@ -124,12 +130,3 @@ class EffectConstant(Effect):
         img.to_filename(str(f_out))
 
         return f_out
-
-    @property
-    def eff_img(self):
-        if self._eff_img is None:
-            shape = (*self.mask.shape, self.d)
-            self._eff_img = np.zeros(shape)
-            for idx in range(self.d):
-                self._eff_img[..., idx] = self.delta[idx] * self.scale
-        return self._eff_img

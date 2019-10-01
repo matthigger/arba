@@ -62,6 +62,33 @@ class MergeRecord(nx.DiGraph):
 
         self.node_size_dict = {n: 1 for n in self.leaf_ijk_dict.keys()}
 
+    def get_array(self, fnc, node_list=None):
+        if node_list is None:
+            node_list = self.leaf_ijk_dict.keys()
+        else:
+            raise NotImplementedError('ensure non overlapping')
+
+        node_val_dict = self.fnc_node_val_list[fnc]
+
+        x = np.zeros(shape=self.ref.shape)
+        for n in node_list:
+            for leaf in self.leaf_iter(n):
+                ijk = self.leaf_ijk_dict[leaf]
+                x[ijk] = node_val_dict[n]
+
+        return x
+
+    def fnc_to_nii(self, *args, file=None, **kwargs):
+        if file is None:
+            file = pathlib.Path(tempfile.NamedTemporaryFile(suffix='.nii.gz'))
+
+        x = self.get_array(*args, **kwargs)
+
+        img = nib.Nifti1Image(x, affine=self.ref.affine)
+        img.to_filename(file)
+
+        return file
+
     def _cut_biggest_rep(self, node_val_dict, thresh=.9):
         """ gets largest nodes whose val is >= thresh% of leaf ancestors mean
 
@@ -301,7 +328,7 @@ class MergeRecord(nx.DiGraph):
         """
 
         return reg_cls.from_data_img(pc_ijk=self.get_pc(node=node),
-                                      data_img=data_img)
+                                     data_img=data_img)
 
     def resolve_pc(self, pc):
         """ gets node associated with point cloud
