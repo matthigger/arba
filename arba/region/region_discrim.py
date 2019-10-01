@@ -27,7 +27,8 @@ class RegionDiscriminate(Region):
 
         fs_dict = dict()
         for grp, sbj_list in RegionDiscriminate.split.items():
-            fs_dict[grp] = data_img.get_fs(ijk=ijk, pc_ijk=pc_ijk)
+            fs_dict[grp] = data_img.get_fs(ijk=ijk, pc_ijk=pc_ijk,
+                                           sbj_list=sbj_list)
 
         if pc_ijk is None:
             pc_ijk = arba.space.PointCloud([ijk], ref=data_img.ref)
