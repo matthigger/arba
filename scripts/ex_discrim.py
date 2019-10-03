@@ -6,6 +6,7 @@ import numpy as np
 
 import arba
 from mh_pytools import file
+from pnl_data.set import hcp_100
 from scripts.performance import Performance
 
 
@@ -26,43 +27,48 @@ def sample_effects(t2_vec, grp_sbj_list_dict, grp_target=None, **kwargs):
 
 if __name__ == '__main__':
     import tempfile
+    import shutil
 
     np.random.seed(1)
     random.seed(1)
 
     # detection params
     par_flag = False
-    num_perm = 25
-    alpha = .05
+    num_perm = 5
+    alpha = .5
 
     # regression effect params
-    # t2_vec = np.logspace(-2, 2, 5)
-    t2_vec = [10]
+    # t2_vec = np.logspace(-1, 1, 5)
+    t2_vec = [1]
     num_eff = 1
     num_sbj = 100
-    min_var_effect_locations = False
+    min_var_effect_locations = True
 
     str_img_data = 'synth'  # 'hcp100' or 'synth'
 
-    mask_radius = 1000
+    mask_radius = 5
 
-    effect_num_vox = 20
+    effect_num_vox = 250
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
+    shutil.copy(__file__, folder / pathlib.Path(__file__).name)
 
     # duild bummy images
     if str_img_data == 'synth':
-        dim_sbj = 3
         dim_img = 1
-        shape = 6, 6, 6
+        shape = 10, 10, 10
         data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
                                             mu=np.zeros(dim_img),
                                             cov=np.eye(dim_img),
                                             folder=folder / 'raw_data')
 
     elif str_img_data == 'hcp100':
-        raise NotImplementedError
+        low_res = True,
+        feat_tuple = 'fa', 'md'
+        data_img = hcp_100.get_data_image(lim_sbj=num_sbj,
+                                          low_res=low_res,
+                                          feat_tuple=feat_tuple)
 
     # split data into two even groups
     half = int(len(data_img.sbj_list) / 2)
@@ -73,7 +79,7 @@ if __name__ == '__main__':
     t2_letter_dict = dict(zip(t2_vec, ascii_uppercase))
 
     perf = Performance(stat_label='t2')
-    with data_img.loaded():
+    with data_img.loaded(memmap=True):
         mask_img_full = data_img.mask
         data_img.to_nii(folder, mean_flag=True)
 
@@ -100,14 +106,14 @@ if __name__ == '__main__':
             # find extent
             _folder = folder / f'eff{eff_idx}_t2_{t2_letter_dict[t2]}_{t2:.2e}'
             file.save(eff, _folder / 'effect.p.gz')
-            perm_reg = arba.permute.PermuteDiscriminate(data_img,
-                                                        split=split,
-                                                        num_perm=num_perm,
-                                                        par_flag=par_flag,
-                                                        alpha=alpha,
-                                                        mask_target=eff.mask,
-                                                        verbose=True,
-                                                        folder=_folder)
+            perm_reg = arba.permute.PermuteDiscriminateVBA(data_img,
+                                                           split=split,
+                                                           num_perm=num_perm,
+                                                           par_flag=par_flag,
+                                                           alpha=alpha,
+                                                           mask_target=eff.mask,
+                                                           verbose=True,
+                                                           folder=_folder)
 
             perm_reg.save()
 

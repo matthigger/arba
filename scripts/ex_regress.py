@@ -45,7 +45,7 @@ if __name__ == '__main__':
     random.seed(1)
 
     # detection params
-    par_flag = True
+    par_flag = False
     num_perm = 24
     alpha = .05
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # folder = pathlib.Path('/home/mu584/dropbox_pnl/arba_reg_ex/hcp_age_sex')
     # assert not folder.exists(), 'folder exists'
     # folder.mkdir(parents=True)
-    shutil.copy(__file__, folder / 'regress_ex.py')
+    shutil.copy(__file__, folder / pathlib.Path(__file__).name)
     print(folder)
 
     # duild bummy images
