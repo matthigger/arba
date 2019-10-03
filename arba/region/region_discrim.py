@@ -51,7 +51,7 @@ class RegionDiscriminate(Region):
               reg_1.cov_pool_det * len(reg_1) - \
               reg_2.cov_pool_det * len(reg_2)
 
-        assert err >= 0, 'err is negative'
+        # assert err >= 0, 'err is negative'
 
         return err
 
@@ -73,4 +73,5 @@ def get_t2_stats(fs_dict, grp_tuple=None):
     # compute t2
     t2 = delta @ np.linalg.inv(cov_pool) @ delta
 
+    # todo: t2 actually refers to mean t2 per observation
     return delta, cov_pool, t2
