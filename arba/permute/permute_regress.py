@@ -15,7 +15,7 @@ class PermuteRegress(Permute):
 
     def __init__(self, data_sbj, *args, **kwargs):
         self.data_sbj = data_sbj
-        super().__init__(*args, **kwargs)
+        super(type(self), self).__init__(*args, **kwargs)
 
     def _set_seed(self, seed=None):
         self.data_sbj.permute(seed)

@@ -1,6 +1,6 @@
+import abc
 import pathlib
 import tempfile
-from abc import abstractmethod
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,7 +60,7 @@ class Permute:
         arba_mask = self.merge_record.build_mask(self.sig_node)
         self.mode_est_mask_dict = {'arba': arba_mask}
 
-    @abstractmethod
+    @abc.abstractmethod
     def _set_seed(self, seed=None):
         raise NotImplementedError
 
@@ -70,8 +70,9 @@ class Permute:
                                cls_reg=self.reg_cls,
                                stat_save=(self.stat,))
 
-    def run_single_permute(self, seed, _sg_hist=None):
+    def run_single_permute(self, seed=None, _sg_hist=None):
         if _sg_hist is None:
+            assert seed is not None, 'seed required'
             sg_hist = self.get_sg_hist(seed)
         else:
             sg_hist = _sg_hist

@@ -16,7 +16,7 @@ class PermuteDiscriminate(Permute):
 
     def __init__(self, *args, split, **kwargs):
         self.split = split
-        super().__init__(*args, **kwargs)
+        super(type(self), self).__init__(*args, **kwargs)
 
     def _set_seed(self, seed=None):
         split = self.split.shuffle(seed=seed)
