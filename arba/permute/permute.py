@@ -11,6 +11,7 @@ from tqdm import tqdm
 from mh_pytools import parallel
 from .get_pval import get_pval
 from ..plot import save_fig
+from ..seg_graph import SegGraphHistory
 
 
 class Permute:
@@ -52,7 +53,7 @@ class Permute:
             self.permute(par_flag=par_flag)
 
         # get mask of estimate
-        self.node_stat_dict = self.merge_record.fnc_node_val_list[self.stat]
+        self.node_stat_dict = self.merge_record.stat_node_val_dict[self.stat]
         self.sig_node = self.get_sig_node()
 
         # build estimate mask
@@ -63,20 +64,25 @@ class Permute:
     def _set_seed(self, seed=None):
         raise NotImplementedError
 
-    @abstractmethod
     def get_sg_hist(self, seed=None):
-        """ constructs a SegGraphHistory """
-        raise NotImplementedError
+        self._set_seed(seed)
+        return SegGraphHistory(data_img=self.data_img,
+                               cls_reg=self.reg_cls,
+                               stat_save=(self.stat,))
 
-    def run_single_permute(self, seed):
-        sg_hist = self.get_sg_hist(seed)
+    def run_single_permute(self, seed, _sg_hist=None):
+        if _sg_hist is None:
+            sg_hist = self.get_sg_hist(seed)
+        else:
+            sg_hist = _sg_hist
+
         sg_hist.reduce_to(1, verbose=self.verbose)
 
         merge_record = sg_hist.merge_record
         max_size = len(merge_record.leaf_ijk_dict)
 
         # record max stat per size
-        node_stat_dict = merge_record.fnc_node_val_list[self.stat]
+        node_stat_dict = merge_record.stat_node_val_dict[self.stat]
         max_stat = np.zeros(max_size)
         for node, stat in node_stat_dict.items():
             size = merge_record.node_size_dict[node]

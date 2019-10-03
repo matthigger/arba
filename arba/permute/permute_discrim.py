@@ -1,10 +1,5 @@
 from .permute import Permute
 from ..region import RegionDiscriminate
-from ..seg_graph import SegGraphHistory
-
-
-def get_t2(reg, **kwargs):
-    return reg.t2
 
 
 class PermuteDiscriminate(Permute):
@@ -26,9 +21,3 @@ class PermuteDiscriminate(Permute):
     def _set_seed(self, seed=None):
         split = self.split.shuffle(seed=seed)
         RegionDiscriminate.set_split(split)
-
-    def get_sg_hist(self, seed=None):
-        self._set_seed(seed)
-        return SegGraphHistory(data_img=self.data_img,
-                               cls_reg=RegionDiscriminate,
-                               fnc_dict={'t2': get_t2})
