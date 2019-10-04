@@ -14,9 +14,10 @@ class PermuteDiscriminate(Permute):
     stat = 't2'
     reg_cls = RegionDiscriminate
 
-    def __init__(self, *args, split, **kwargs):
+    def __init__(self, *args, split=None, **kwargs):
+        assert split is not None, 'split required'
         self.split = split
-        super(type(self), self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _set_seed(self, seed=None):
         split = self.split.shuffle(seed=seed)
