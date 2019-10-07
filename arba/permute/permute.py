@@ -26,7 +26,7 @@ class Permute:
     """
 
     def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,
-                 verbose=True, folder=None, par_flag=False):
+                 verbose=True, folder=None, par_flag=False, stat_save=tuple()):
         assert alpha >= 1 / (num_perm + 1), \
             'not enough perm for alpha, never sig'
 
@@ -42,6 +42,8 @@ class Permute:
 
         self.sg_hist = None
         self.merge_record = None
+
+        self.stat_save = (*stat_save, self.stat)
 
         self.folder = folder
         if self.folder is None:
@@ -68,7 +70,7 @@ class Permute:
         self._set_seed(seed)
         return SegGraphHistory(data_img=self.data_img,
                                cls_reg=self.reg_cls,
-                               stat_save=(self.stat,))
+                               stat_save=self.stat_save)
 
     def run_single_permute(self, seed=None, _sg_hist=None):
         if _sg_hist is None:
@@ -177,7 +179,18 @@ class Permute:
         if size_v_stat:
             self.merge_record.plot_size_v(self.stat, label=self.stat,
                                           mask=self.mask_target,
-                                          log_y=False)
+                                          log_y=True)
+
+            # get mu, std per size
+            max_size = max(self.merge_record.node_size_dict.values())
+            size = range(1, max_size + 1)
+            p = (1 - self.alpha) * 100
+            max_stat = np.percentile(self.stat_null, p,
+                                     axis=0)
+            plt.plot(size, max_stat, linestyle='--', color='k', linewidth=4,
+                     label=f'{p:.0f}%')
+            plt.legend()
+
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
 
         for label, mask in self.mode_est_mask_dict.items():
@@ -186,7 +199,7 @@ class Permute:
         if size_v_stat_pval:
             self.merge_record.plot_size_v(self.node_pval_dict, label='pval',
                                           mask=self.mask_target,
-                                          log_y=False)
+                                          log_y=True)
             save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
 
         if size_v_stat_z:
@@ -208,6 +221,7 @@ class Permute:
             plt.ylabel(self.stat)
             plt.xlabel('size')
             plt.gca().set_xscale('log')
+            plt.gca().set_yscale('log')
             plt.legend()
             save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
 
