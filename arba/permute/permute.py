@@ -26,9 +26,14 @@ class Permute:
     """
 
     def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,
-                 verbose=True, folder=None, par_flag=False, stat_save=tuple()):
+                 verbose=True, folder=None, par_flag=False, stat_save=tuple(),
+                 method_fill='lininterp'):
         assert alpha >= 1 / (num_perm + 1), \
             'not enough perm for alpha, never sig'
+
+        self.method_fill = method_fill
+        assert self.method_fill in ('lininterp', 'exp_reg', 'bound'), \
+            '{self.method_fill} not recognized fill method_fill'
 
         self.alpha = alpha
         self.num_perm = num_perm
@@ -79,6 +84,9 @@ class Permute:
         else:
             sg_hist = _sg_hist
 
+        if self.method_fill == 'bound':
+            return self.fill(sg_hist)
+
         sg_hist.reduce_to(1, verbose=self.verbose)
 
         merge_record = sg_hist.merge_record
@@ -95,17 +103,39 @@ class Permute:
         # record which sizes are observed (unobserved will be interpolated)
         observed = max_stat != 0
 
+        return {self.stat: self.fill(max_stat, observed)}
+
+    def fill(self, *args, **kwargs):
+        if self.method_fill == 'lininterp':
+            return self.fill_lininterp(*args, **kwargs)
+        elif self.method_fill == 'exp_reg':
+            return self.fill_exp_reg(*args, **kwargs)
+        elif self.method_fill == 'bound':
+            return self.fill_bound(*args, **kwargs)
+
+
+    @staticmethod
+    def fill_lininterp(max_stat, observed):
+        """ fills unobserved sizes given lin interpolated (in loglog) values
+        """
         # ensure monotonicity (increase max_stat values)
         for idx in range(len(max_stat) - 2, 0, -1):
             if max_stat[idx] < max_stat[idx + 1]:
                 max_stat[idx] = max_stat[idx + 1]
 
         # fill unobserved with linearly interpolated values
-        size = np.array(range(max_size))
+        size = np.array(range(len(max_stat)))
         fnc = interp1d(size[observed], max_stat[observed])
         max_stat = fnc(size)
+        return max_stat
 
-        return {self.stat: max_stat}
+    @staticmethod
+    def fill_bound(sg_hist):
+        raise NotImplementedError
+
+    @staticmethod
+    def fill_exp_reg(max_stat, observed):
+        raise NotImplementedError
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
