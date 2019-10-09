@@ -14,17 +14,14 @@ class Effect:
 
     Attributes:
         mask (Mask): effect location
-        fs (FeatStat): FeatStat of unaffected area (used to compute severity
-                       of an effect ... eg t2)
         scale (np.array): scale of effect, defaults to mask, otherwise values
                   between 0 and 1. allows `soft' boundary to effect
 
     todo: call of get_auc(), get_dice() and get_sens_spec() should be uniform
     """
 
-    def __init__(self, mask, scale=None, fs=None):
+    def __init__(self, mask, scale=None):
         self.mask = mask
-        self.fs = fs
         self.scale = scale
         if self.scale is None:
             self.scale = self.mask

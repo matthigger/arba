@@ -26,15 +26,14 @@ class MergeRecord(nx.DiGraph):
         ref: reference space
         ijk_leaf_dict (dict): keys are ijk, values are leaf nodes
         leaf_ijk_dict (dict): keys are leaf nodes, values are ijk
-        fnc_dict (dict): keys are function names (str), values are fnc applied
-                         to the region objects
-        fnc_node_val_list (dict): keys are function names (fnc_dict.keys()),
-                                  values are dicts (whose keys are nodes and
-                                  values are fnc returns)
+        stat_save (tuple): which attributes of regions to record
+        stat_node_val_dict (dict): keys are stats (see stat_save). values are
+                                   node_val_dict which records stat per node
         node_size_dict (dict): keys are nodes, values are size (in voxels)
     """
 
-    def __init__(self, mask=None, pc=None, ref=None, fnc_dict=None, **kwargs):
+    def __init__(self, mask=None, pc=None, ref=None, stat_save=tuple(),
+                 **kwargs):
         super().__init__()
 
         if pc is None:
@@ -43,12 +42,8 @@ class MergeRecord(nx.DiGraph):
             else:
                 pc = PointCloud.from_mask(mask)
 
-        self.fnc_dict = fnc_dict
-        if fnc_dict is None:
-            self.fnc_node_val_list = dict()
-        else:
-            self.fnc_node_val_list = {var_name: dict()
-                                      for var_name in fnc_dict.keys()}
+        self.stat_save = stat_save
+        self.stat_node_val_dict = defaultdict(dict)
 
         # define space
         self.ref = ref
@@ -61,6 +56,33 @@ class MergeRecord(nx.DiGraph):
         self.add_nodes_from(self.leaf_ijk_dict.keys())
 
         self.node_size_dict = {n: 1 for n in self.leaf_ijk_dict.keys()}
+
+    def get_array(self, fnc, node_list=None):
+        if node_list is None:
+            node_list = self.leaf_ijk_dict.keys()
+        else:
+            raise NotImplementedError('ensure non overlapping')
+
+        node_val_dict = self.stat_node_val_dict[fnc]
+
+        x = np.zeros(shape=self.ref.shape)
+        for n in node_list:
+            for leaf in self.leaf_iter(n):
+                ijk = self.leaf_ijk_dict[leaf]
+                x[ijk] = node_val_dict[n]
+
+        return x
+
+    def fnc_to_nii(self, *args, file=None, **kwargs):
+        if file is None:
+            file = pathlib.Path(tempfile.NamedTemporaryFile(suffix='.nii.gz'))
+
+        x = self.get_array(*args, **kwargs)
+
+        img = nib.Nifti1Image(x, affine=self.ref.affine)
+        img.to_filename(file)
+
+        return file
 
     def _cut_biggest_rep(self, node_val_dict, thresh=.9):
         """ gets largest nodes whose val is >= thresh% of leaf ancestors mean
@@ -154,12 +176,14 @@ class MergeRecord(nx.DiGraph):
         return self.get_cover(node_list=node_list, sort_flag=False)
 
     def apply_fnc_leaf(self, sg):
+        if not self.stat_save:
+            return
+
         for reg in sg.nodes:
             ijk = next(iter(reg.pc_ijk))
             node = self.ijk_leaf_dict[ijk]
-            for fnc_name, fnc in self.fnc_dict.items():
-                val = fnc(reg)
-                self.fnc_node_val_list[fnc_name][node] = val
+            for stat in self.stat_save:
+                self.stat_node_val_dict[stat][node] = getattr(reg, stat)
 
     def leaf_iter(self, node=None, node_list=None):
         """ returns an iterator over the leafs which cover a node (or nodes)
@@ -277,11 +301,10 @@ class MergeRecord(nx.DiGraph):
         for node in node_tuple:
             self.add_edge(node_sum, node)
 
-        # compute fnc on sum
-        for fnc_name, fnc in self.fnc_dict.items():
+        # record stats of reg_sum
+        for stat in self.stat_save:
             assert reg_sum is not None, 'reg_sum required if fnc'
-            val = fnc(reg_sum, reg_tuple=reg_tuple)
-            self.fnc_node_val_list[fnc_name][node_sum] = val
+            self.stat_node_val_dict[stat][node_sum] = getattr(reg_sum, stat)
 
         # track size
         self.node_size_dict[node_sum] = \
@@ -301,7 +324,7 @@ class MergeRecord(nx.DiGraph):
         """
 
         return reg_cls.from_data_img(pc_ijk=self.get_pc(node=node),
-                                      data_img=data_img)
+                                     data_img=data_img)
 
     def resolve_pc(self, pc):
         """ gets node associated with point cloud
@@ -513,7 +536,7 @@ class MergeRecord(nx.DiGraph):
             if isinstance(fnc, dict):
                 node_pos[n] = size, fnc[n]
             else:
-                node_pos[n] = size, self.fnc_node_val_list[fnc][n]
+                node_pos[n] = size, self.stat_node_val_dict[fnc][n]
 
         nodelist = [n for n, c in node_color.items() if c > 0]
         node_color = {n: node_color[n] for n in nodelist}

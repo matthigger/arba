@@ -16,10 +16,10 @@ class RegionRegress(Region):
     Instance Attributes:
         feat_img (np.array): (num_sbj, dim_img) mean features observed (per
                               sbj) across the entire region
-        pc_ijk (PointCloud): set of voxels (tuples of ijk)
         beta (np.array): (dim_sbj, dim_img) mapping from img to sbj space
         err_cov (np.array): (dim_img, dim_img) error covariance observed
         err_cov_det (float): covariance of err_cov
+        r2 (float): coefficient of determination
     """
     data_sbj = None
 

@@ -43,7 +43,7 @@ class SegGraph(nx.Graph):
 
         for ijk in tqdm(self.data_img.mask.iter_ijk(), **tqdm_dict):
             reg = cls_reg.from_data_img(ijk=ijk,
-                                         data_img=self.data_img)
+                                        data_img=self.data_img)
             self.add_node(reg)
 
     def connect_neighbors(self, edge_directions=np.eye(3), **kwargs):
@@ -74,14 +74,16 @@ class SegGraph(nx.Graph):
 
         return img_out
 
-    def to_array(self, fnc=None, fnc_include=None, background=0):
+    def to_array(self, fnc=None, attr=None, fnc_include=None, background=0):
         """ constructs array of region idx """
+        assert (fnc is not None) or (attr is not None), 'fnc or attr required'
+
+        if attr is not None:
+            def fnc(reg):
+                return getattr(reg, attr)
+
         if fnc is None:
-            if fnc_include is not None:
-                nodes = [reg for reg in self.nodes if fnc_include(reg)]
-            else:
-                nodes = self.nodes
-            reg_to_idx = {reg: idx for idx, reg in enumerate(nodes)}
+            reg_to_idx = {reg: idx for idx, reg in enumerate(self.nodes)}
 
             def fnc(reg):
                 return reg_to_idx[reg]

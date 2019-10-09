@@ -186,10 +186,9 @@ class DataImage:
         Args:
             offset (np.array):
         """
-        if isinstance(self.data, np.memmap):
-            # make writable
-            self.data = np.memmap(self.f_data, dtype='float32', mode='w+',
-                                  shape=self.data.shape)
+        memmap = isinstance(self.data, np.memmap)
+        if memmap:
+            self.data = np.array(self.data)
 
         # subtract old
         if self.offset is not None:
@@ -200,13 +199,16 @@ class DataImage:
             self.data += offset
         self.offset = offset
 
-        if isinstance(self.data, np.memmap):
-            # make read only again
-            self.data.flush()
+        if memmap:
+            # write to memmap
+            x = np.memmap(self.f_data, dtype='float32', mode='w+',
+                          shape=self.data.shape)
+            x[:] = self.data[:]
+            x.flush()
             self.data = np.memmap(self.f_data, dtype='float32', mode='r',
                                   shape=self.data.shape)
 
-    def load(self, offset=None, verbose=False, memmap=False):
+    def load(self, offset=None, verbose=False, memmap=False, scale_norm=False):
         """ loads data, applies fnc in self.fnc_list
 
         Args:
@@ -214,6 +216,7 @@ class DataImage:
             verbose (bool): toggles command line output
             memmap (bool): toggles memory map (self.data becomes read only, but
                            accesible from all threads to save on memory)
+            scale_norm (bool): toggles scaling data to unit variance
         """
 
         if self.is_loaded:
@@ -249,6 +252,10 @@ class DataImage:
         if offset is not None:
             self.data += offset
         self.offset = offset
+
+        if scale_norm:
+            fs = self.get_fs(mask=self.mask)
+            self.data = self.data @ np.diag((1 / np.diag(fs.cov)) ** .5)
 
         # flush data to memmap, make read only copy
         if memmap:
@@ -319,21 +326,3 @@ class DataImage:
             return False
 
         return True
-
-
-def scale_normalize(ft):
-    """ compute & store mean and var per feat, scale + offset to Z score
-
-    Args:
-        ft (DataImage): file tree to be equalized
-    """
-    # compute stats
-    shape = (len(ft.mask) * ft.num_sbj, ft.d)
-    shape_orig = (len(ft.mask), ft.num_sbj, ft.d)
-    _data = ft.data[ft.mask, :, :].reshape(shape, order='F')
-    ft.fs = FeatStat.from_array(_data.T)
-
-    # apply scale equalization
-    scale = np.diag(1 / np.diag(ft.fs.cov)) ** .5
-    _data = (_data - ft.fs.mu) @ scale
-    ft.data[ft.mask, :, :] = _data.reshape(shape_orig, order='F')
