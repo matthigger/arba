@@ -12,6 +12,7 @@ from mh_pytools import parallel
 from .get_pval import get_pval
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
+import warnings
 
 
 class Permute:
@@ -34,6 +35,8 @@ class Permute:
         self.method_fill = method_fill
         assert self.method_fill in ('lininterp', 'exp_reg', 'bound'), \
             '{self.method_fill} not recognized fill method_fill'
+        if self.method_fill == 'bound':
+            warnings.warn('method_fill=bound likely doesnt hold! for dev only')
 
         self.alpha = alpha
         self.num_perm = num_perm
@@ -85,7 +88,7 @@ class Permute:
             sg_hist = _sg_hist
 
         if self.method_fill == 'bound':
-            return self.fill(sg_hist)
+            return {self.stat: self.fill(sg_hist)}
 
         sg_hist.reduce_to(1, verbose=self.verbose)
 
@@ -113,7 +116,6 @@ class Permute:
         elif self.method_fill == 'bound':
             return self.fill_bound(*args, **kwargs)
 
-
     @staticmethod
     def fill_lininterp(max_stat, observed):
         """ fills unobserved sizes given lin interpolated (in loglog) values
@@ -129,9 +131,12 @@ class Permute:
         max_stat = fnc(size)
         return max_stat
 
-    @staticmethod
-    def fill_bound(sg_hist):
-        raise NotImplementedError
+    def fill_bound(self, sg_hist):
+        """ largest stat in regions of size n is sum of n maximum 1 voxel stats
+        """
+        node_stat_dict = sg_hist.merge_record.stat_node_val_dict[self.stat]
+        max_stat = sorted(node_stat_dict.values(), reverse=True)
+        return np.cumsum(max_stat)
 
     @staticmethod
     def fill_exp_reg(max_stat, observed):

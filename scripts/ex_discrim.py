@@ -32,23 +32,25 @@ if __name__ == '__main__':
     np.random.seed(1)
     random.seed(1)
 
+    method_fill = 'bound'
+
     # detection params
-    par_flag = True
+    par_flag = False
     num_perm = 24
     alpha = .05
 
     # regression effect params
     t2_vec = np.logspace(-1, 1, 5)
     # t2_vec = [.5]
-    num_eff = 2
+    num_eff = 1
     num_sbj = 100
     min_var_effect_locations = False
 
-    str_img_data = 'hcp100'  # 'hcp100' or 'synth'
+    str_img_data = 'synth'  # 'hcp100' or 'synth'
 
     mask_radius = 5
 
-    effect_num_vox = 50
+    effect_num_vox = 100
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -114,7 +116,8 @@ if __name__ == '__main__':
                                                            alpha=alpha,
                                                            mask_target=eff.mask,
                                                            verbose=True,
-                                                           folder=_folder)
+                                                           folder=_folder,
+                                                           method_fill=method_fill)
 
             perm_reg.save(size_v_stat=False, size_v_stat_null=False,
                           size_v_stat_pval=False, print_node=False,
