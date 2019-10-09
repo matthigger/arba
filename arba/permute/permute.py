@@ -187,7 +187,7 @@ class Permute:
             p = (1 - self.alpha) * 100
             max_stat = np.percentile(self.stat_null, p,
                                      axis=0)
-            plt.plot(size, max_stat, linestyle='--', color='k', linewidth=4,
+            plt.plot(size, max_stat, linestyle='-', color='g', linewidth=3,
                      label=f'{p:.0f}%')
             plt.legend()
 

@@ -33,31 +33,32 @@ if __name__ == '__main__':
     random.seed(1)
 
     # detection params
-    par_flag = False
-    num_perm = 5
-    alpha = .5
+    par_flag = True
+    num_perm = 24
+    alpha = .05
 
     # regression effect params
-    # t2_vec = np.logspace(-1, 1, 5)
-    t2_vec = [1]
-    num_eff = 1
+    t2_vec = np.logspace(-1, 1, 5)
+    # t2_vec = [.5]
+    num_eff = 2
     num_sbj = 100
-    min_var_effect_locations = True
+    min_var_effect_locations = False
 
-    str_img_data = 'synth'  # 'hcp100' or 'synth'
+    str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
     mask_radius = 5
 
-    effect_num_vox = 250
+    effect_num_vox = 50
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
+    print(folder)
     shutil.copy(__file__, folder / pathlib.Path(__file__).name)
 
     # duild bummy images
     if str_img_data == 'synth':
         dim_img = 1
-        shape = 10, 10, 10
+        shape = 12, 12, 12
         data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
                                             mu=np.zeros(dim_img),
                                             cov=np.eye(dim_img),
@@ -115,7 +116,9 @@ if __name__ == '__main__':
                                                            verbose=True,
                                                            folder=_folder)
 
-            perm_reg.save()
+            perm_reg.save(size_v_stat=False, size_v_stat_null=False,
+                          size_v_stat_pval=False, print_node=False,
+                          size_v_stat_z=False)
 
             # record performance
             perf.check_in(stat=t2, perm_reg=perm_reg)
