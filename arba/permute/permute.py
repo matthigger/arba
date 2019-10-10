@@ -1,6 +1,7 @@
 import abc
 import pathlib
 import tempfile
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,11 +10,11 @@ from scipy.spatial.distance import dice
 from tqdm import tqdm
 
 from mh_pytools import parallel
+from .get_lin_bound import get_lin_bound
 from .get_pval import get_pval
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
-import warnings
-
+from sklearn.neighbors import KNeighborsRegressor
 
 class Permute:
     """ runs permutation testing to find regions whose stat is significant
@@ -33,7 +34,7 @@ class Permute:
             'not enough perm for alpha, never sig'
 
         self.method_fill = method_fill
-        assert self.method_fill in ('lininterp', 'exp_reg', 'bound'), \
+        assert self.method_fill in ('lininterp', 'exp_reg', 'bound', 'knn_smooth'), \
             '{self.method_fill} not recognized fill method_fill'
         if self.method_fill == 'bound':
             warnings.warn('method_fill=bound likely doesnt hold! for dev only')
@@ -88,7 +89,7 @@ class Permute:
             sg_hist = _sg_hist
 
         if self.method_fill == 'bound':
-            return {self.stat: self.fill(sg_hist)}
+            return self.fill(sg_hist)
 
         sg_hist.reduce_to(1, verbose=self.verbose)
 
@@ -106,7 +107,7 @@ class Permute:
         # record which sizes are observed (unobserved will be interpolated)
         observed = max_stat != 0
 
-        return {self.stat: self.fill(max_stat, observed)}
+        return self.fill(max_stat, observed)
 
     def fill(self, *args, **kwargs):
         if self.method_fill == 'lininterp':
@@ -115,9 +116,30 @@ class Permute:
             return self.fill_exp_reg(*args, **kwargs)
         elif self.method_fill == 'bound':
             return self.fill_bound(*args, **kwargs)
+        elif self.method_fill == 'knn_smooth':
+            return self.fill_knn_smooth(*args, **kwargs)
 
-    @staticmethod
-    def fill_lininterp(max_stat, observed):
+    def fill_knn_smooth(self, max_stat, observed):
+        """ fills unobserved sizes by smoothling in log log space
+        """
+
+        def reshape(x):
+            return np.atleast_2d(x).T
+
+        size = np.arange(1, len(max_stat) + 1)
+
+        knn_reg = KNeighborsRegressor(n_neighbors=5)
+        knn_reg.fit(np.log10(reshape(size[observed])),
+                    np.log10(reshape(max_stat[observed])))
+        max_stat_filled = 10 ** knn_reg.predict(np.log10(reshape(size)))
+
+        # put observations back in
+        max_stat_filled = np.squeeze(max_stat_filled, axis=1)
+        max_stat_filled[observed] = max_stat[observed]
+
+        return {self.stat: max_stat_filled}
+
+    def fill_lininterp(self, max_stat, observed):
         """ fills unobserved sizes given lin interpolated (in loglog) values
         """
         # ensure monotonicity (increase max_stat values)
@@ -126,21 +148,33 @@ class Permute:
                 max_stat[idx] = max_stat[idx + 1]
 
         # fill unobserved with linearly interpolated values
-        size = np.array(range(len(max_stat)))
-        fnc = interp1d(size[observed], max_stat[observed])
-        max_stat = fnc(size)
-        return max_stat
+        size = np.arange(1, len(max_stat) + 1)
+        fnc = interp1d(np.log10(size[observed]),
+                       np.log10(max_stat[observed]))
+        max_stat = 10 ** fnc(np.log10(size))
+
+        return {self.stat: max_stat}
 
     def fill_bound(self, sg_hist):
         """ largest stat in regions of size n is sum of n maximum 1 voxel stats
         """
         node_stat_dict = sg_hist.merge_record.stat_node_val_dict[self.stat]
         max_stat = sorted(node_stat_dict.values(), reverse=True)
-        return np.cumsum(max_stat)
 
-    @staticmethod
-    def fill_exp_reg(max_stat, observed):
-        raise NotImplementedError
+        size = np.arange(1, len(max_stat) + 1)
+        return {self.stat: np.cumsum(max_stat) / size}
+
+    def fill_exp_reg(self, max_stat, observed):
+        """ builds a linear upper bound over all observations
+        """
+        size = np.arange(1, len(max_stat) + 1)
+
+        fnc = get_lin_bound(x=np.log10(size[observed]),
+                            y=np.log10(max_stat[observed]))
+
+        max_stat_filled = 10 ** fnc(np.log10(size))
+
+        return {self.stat: max_stat_filled}
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
@@ -188,7 +222,7 @@ class Permute:
                                               stat_include_flag=True)
 
             mu, std = np.mean(stat_null), np.std(stat_null)
-            self.node_z_dict[n] = (stat - mu) / std
+            self.node_z_dict[n] = (stat - mu)
 
         # keys are nodes, values are tuples of pval and negative z score. these
         # tuples sort the nodes from most compelling (smallest value) to least
@@ -241,7 +275,7 @@ class Permute:
             self.merge_record.plot_size_v(self.node_z_dict,
                                           label=f'{self.stat}z',
                                           mask=self.mask_target,
-                                          log_y=False)
+                                          log_y=True)
             save_fig(self.folder / f'size_v_{self.stat}_z_score.pdf')
 
         if size_v_stat_null:
