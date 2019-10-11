@@ -176,7 +176,7 @@ class Permute:
         return sig_node
 
     def save(self, size_v_stat=True, size_v_stat_null=True,
-             size_v_stat_pval=True, print_node=True, size_v_stat_z=True):
+             size_v_stat_pval=True, print_node=True, performance=True):
 
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
@@ -207,30 +207,32 @@ class Permute:
                                           log_y=True)
             save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
 
-        # if size_v_stat_z:
-        #     self.merge_record.plot_size_v(self.node_z_dict,
-        #                                   label=f'{self.stat}z',
-        #                                   mask=self.mask_target,
-        #                                   log_y=True)
-        #     save_fig(self.folder / f'size_v_{self.stat}_z_score.pdf')
-        #
-        # if size_v_stat_null:
-        #     # print percentiles of stat per size
-        #     cmap = plt.get_cmap('viridis')
-        #     size = np.arange(1, self.stat_null.shape[1] + 1)
-        #     p_list = [50, 75, 90, 95, 99]
-        #     for p_idx, p in enumerate(p_list):
-        #         perc_line = np.percentile(self.stat_null, p, axis=0)
-        #         plt.plot(size, perc_line, label=f'{p}-th percentile',
-        #                  color=cmap(p_idx / len(p_list)))
-        #     plt.ylabel(self.stat)
-        #     plt.xlabel('size')
-        #     plt.gca().set_xscale('log')
-        #     plt.gca().set_yscale('log')
-        #     plt.legend()
-        #     save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
+        if size_v_stat_null:
+            # scatter permutations
+            size = np.arange(1, self.stat_null.shape[1] + 1)
+            _size = np.repeat(np.atleast_2d(size), self.num_perm, axis=0)
+            xy = np.vstack((_size.flatten(), self.stat_null.flatten())).T
+            xy = xy[~np.isnan(xy[:, 1]), :]
 
-        if self.mask_target is not None:
+            fig, ax = plt.subplots(1, 1)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            plt.scatter(xy[:, 0], xy[:, 1], color='g', alpha=.15,
+                        label='observed')
+
+            plt.plot(size, 10 ** self.log_stat_predict, label='model mean')
+            for idx, p in enumerate(np.logspace(-1, -3, 3)):
+                stat = self.log_stat_predict + \
+                       self.log_stat_err_std * scipy.stats.norm.isf(p)
+                plt.plot(size, 10 ** stat, label=f'model p={p}')
+
+            plt.ylabel(f'max {self.stat} in permutation')
+            plt.xlabel('size')
+            plt.legend()
+
+            save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
+
+        if performance and self.mask_target is not None:
             f_mask = self.folder / 'mask_target.nii.gz'
             self.mask_target.to_nii(f_mask)
 

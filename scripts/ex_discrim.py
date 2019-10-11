@@ -38,9 +38,9 @@ if __name__ == '__main__':
     alpha = .05
 
     # regression effect params
-    # t2_vec = np.logspace(-1, 1, 5)
-    t2_vec = [.5]
-    num_eff = 1
+    t2_vec = np.logspace(-2, 1, 7)
+    # t2_vec = [.5]
+    num_eff = 10
     num_sbj = 100
     min_var_effect_locations = False
 
