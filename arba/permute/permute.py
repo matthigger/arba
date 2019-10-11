@@ -1,6 +1,7 @@
 import abc
 import pathlib
 import tempfile
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,7 +9,6 @@ import scipy.stats
 from scipy.spatial.distance import dice
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
-import warnings
 
 from mh_pytools import parallel
 from ..plot import save_fig
@@ -146,7 +146,8 @@ class Permute:
                     sample_weight=_weight)
 
         # record prediction
-        self.log_stat_predict = lin_reg.predict(np.atleast_2d(np.log10(size)).T)
+        self.log_stat_predict = lin_reg.predict(
+            np.atleast_2d(np.log10(size)).T)
 
         # compute prediction error
         err = np.log10(self.stat_null) - self.log_stat_predict.T
@@ -233,11 +234,15 @@ class Permute:
             f_mask = self.folder / 'mask_target.nii.gz'
             self.mask_target.to_nii(f_mask)
 
+            s = ''
             for label, mask in self.mode_est_mask_dict.items():
-                compute_print_dice(mask_estimate=mask,
-                                   mask_target=self.mask_target,
-                                   save_folder=self.folder,
-                                   label=label)
+                s += get_performance_str(mask_estimate=mask,
+                                         mask_target=self.mask_target,
+                                         label=label) + '\n'
+
+            print(s)
+            with open(str(self.folder / 'performance.txt'), 'a+') as f:
+                print(s, file=f)
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
@@ -252,18 +257,22 @@ class Permute:
                 save_fig(self.folder / f'node_{n}.pdf')
 
 
-def compute_print_dice(mask_estimate, mask_target, save_folder, label=None):
+def get_performance_str(mask_estimate, mask_target, label=None):
     mask_estimate = mask_estimate.astype(bool)
     mask_target = mask_target.astype(bool)
     dice_score = 1 - dice(mask_estimate.flatten(), mask_target.flatten())
-    with open(str(save_folder / 'dice.txt'), 'a+') as f:
-        print(f'---{label}---', file=f)
-        print(f'dice is {dice_score:.3f}', file=f)
-        print(f'target vox: {mask_target.sum()}', file=f)
-        print(f'detected vox: {mask_estimate.sum()}', file=f)
-        true_detect = (mask_target & mask_estimate).sum()
-        print(f'true detected vox: {true_detect}', file=f)
-        false_detect = (~mask_target & mask_estimate).sum()
-        print(f'false detected vox: {false_detect}', file=f)
+    target = mask_target.sum()
+    target_correct = (mask_target & mask_estimate).sum()
+    sens = target_correct / target
 
-    return dice_score
+    non_target = (~mask_target).sum()
+    non_target_correct = (~mask_target & ~mask_estimate).sum()
+    non_target_wrong = non_target - non_target_correct
+    spec = non_target_correct / non_target
+
+    s = f'---{label}---\n'
+    s += f'dice: {dice_score:.3f}\n'
+    s += f'sens: {sens:.3f} ({target_correct} of {target} vox detected correctly)\n'
+    s += f'spec: {spec:.3f} ({non_target_wrong} of {non_target} vox detected incorrectly)\n'
+
+    return s
