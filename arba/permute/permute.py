@@ -178,6 +178,14 @@ class Permute:
     def save(self, size_v_stat=True, size_v_stat_null=True,
              size_v_stat_pval=True, print_node=True, performance=True):
 
+        def plot_thresh(p_list):
+            size = np.arange(1, self.stat_null.shape[1] + 1)
+            plt.plot(size, 10 ** self.log_stat_predict, label='null mean')
+            for idx, p in enumerate(p_list):
+                stat = self.log_stat_predict + \
+                       self.log_stat_err_std * scipy.stats.norm.isf(p)
+                plt.plot(size, 10 ** stat, label=f'null p={p}')
+
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
 
@@ -185,15 +193,7 @@ class Permute:
             self.merge_record.plot_size_v(self.stat, label=self.stat,
                                           mask=self.mask_target,
                                           log_y=True)
-
-            # get mu, std per size
-            max_size = max(self.merge_record.node_size_dict.values())
-            size = range(1, max_size + 1)
-            p = (1 - self.alpha) * 100
-            max_stat = np.percentile(self.stat_null, p,
-                                     axis=0)
-            plt.plot(size, max_stat, linestyle='-', color='g', linewidth=3,
-                     label=f'{p:.0f}%')
+            plot_thresh(p_list=[.05, .01, .001])
             plt.legend()
 
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
@@ -220,12 +220,7 @@ class Permute:
             plt.scatter(xy[:, 0], xy[:, 1], color='g', alpha=.15,
                         label='observed')
 
-            plt.plot(size, 10 ** self.log_stat_predict, label='model mean')
-            for idx, p in enumerate(np.logspace(-1, -3, 3)):
-                stat = self.log_stat_predict + \
-                       self.log_stat_err_std * scipy.stats.norm.isf(p)
-                plt.plot(size, 10 ** stat, label=f'model p={p}')
-
+            plot_thresh(p_list=[.05, .01, .001])
             plt.ylabel(f'max {self.stat} in permutation')
             plt.xlabel('size')
             plt.legend()
