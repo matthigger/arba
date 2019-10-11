@@ -1,20 +1,19 @@
 import abc
 import pathlib
 import tempfile
-import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d
+import scipy.stats
 from scipy.spatial.distance import dice
+from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
+import warnings
 
 from mh_pytools import parallel
-from .get_lin_bound import get_lin_bound
-from .get_pval import get_pval
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
-from sklearn.neighbors import KNeighborsRegressor
+
 
 class Permute:
     """ runs permutation testing to find regions whose stat is significant
@@ -28,16 +27,9 @@ class Permute:
     """
 
     def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,
-                 verbose=True, folder=None, par_flag=False, stat_save=tuple(),
-                 method_fill='lininterp'):
+                 verbose=True, folder=None, par_flag=False, stat_save=tuple()):
         assert alpha >= 1 / (num_perm + 1), \
             'not enough perm for alpha, never sig'
-
-        self.method_fill = method_fill
-        assert self.method_fill in ('lininterp', 'exp_reg', 'bound', 'knn_smooth'), \
-            '{self.method_fill} not recognized fill method_fill'
-        if self.method_fill == 'bound':
-            warnings.warn('method_fill=bound likely doesnt hold! for dev only')
 
         self.alpha = alpha
         self.num_perm = num_perm
@@ -88,9 +80,6 @@ class Permute:
         else:
             sg_hist = _sg_hist
 
-        if self.method_fill == 'bound':
-            return self.fill(sg_hist)
-
         sg_hist.reduce_to(1, verbose=self.verbose)
 
         merge_record = sg_hist.merge_record
@@ -98,83 +87,13 @@ class Permute:
 
         # record max stat per size
         node_stat_dict = merge_record.stat_node_val_dict[self.stat]
-        max_stat = np.zeros(max_size)
+        max_stat = np.zeros(max_size) * np.nan
         for node, stat in node_stat_dict.items():
             size = merge_record.node_size_dict[node]
-            if stat > max_stat[size - 1]:
+            if np.isnan(max_stat[size - 1]) or stat > max_stat[size - 1]:
                 max_stat[size - 1] = stat
 
-        # record which sizes are observed (unobserved will be interpolated)
-        observed = max_stat != 0
-
-        return self.fill(max_stat, observed)
-
-    def fill(self, *args, **kwargs):
-        if self.method_fill == 'lininterp':
-            return self.fill_lininterp(*args, **kwargs)
-        elif self.method_fill == 'exp_reg':
-            return self.fill_exp_reg(*args, **kwargs)
-        elif self.method_fill == 'bound':
-            return self.fill_bound(*args, **kwargs)
-        elif self.method_fill == 'knn_smooth':
-            return self.fill_knn_smooth(*args, **kwargs)
-
-    def fill_knn_smooth(self, max_stat, observed):
-        """ fills unobserved sizes by smoothling in log log space
-        """
-
-        def reshape(x):
-            return np.atleast_2d(x).T
-
-        size = np.arange(1, len(max_stat) + 1)
-
-        knn_reg = KNeighborsRegressor(n_neighbors=5)
-        knn_reg.fit(np.log10(reshape(size[observed])),
-                    np.log10(reshape(max_stat[observed])))
-        max_stat_filled = 10 ** knn_reg.predict(np.log10(reshape(size)))
-
-        # put observations back in
-        max_stat_filled = np.squeeze(max_stat_filled, axis=1)
-        max_stat_filled[observed] = max_stat[observed]
-
-        return {self.stat: max_stat_filled}
-
-    def fill_lininterp(self, max_stat, observed):
-        """ fills unobserved sizes given lin interpolated (in loglog) values
-        """
-        # ensure monotonicity (increase max_stat values)
-        for idx in range(len(max_stat) - 2, 0, -1):
-            if max_stat[idx] < max_stat[idx + 1]:
-                max_stat[idx] = max_stat[idx + 1]
-
-        # fill unobserved with linearly interpolated values
-        size = np.arange(1, len(max_stat) + 1)
-        fnc = interp1d(np.log10(size[observed]),
-                       np.log10(max_stat[observed]))
-        max_stat = 10 ** fnc(np.log10(size))
-
         return {self.stat: max_stat}
-
-    def fill_bound(self, sg_hist):
-        """ largest stat in regions of size n is sum of n maximum 1 voxel stats
-        """
-        node_stat_dict = sg_hist.merge_record.stat_node_val_dict[self.stat]
-        max_stat = sorted(node_stat_dict.values(), reverse=True)
-
-        size = np.arange(1, len(max_stat) + 1)
-        return {self.stat: np.cumsum(max_stat) / size}
-
-    def fill_exp_reg(self, max_stat, observed):
-        """ builds a linear upper bound over all observations
-        """
-        size = np.arange(1, len(max_stat) + 1)
-
-        fnc = get_lin_bound(x=np.log10(size[observed]),
-                            y=np.log10(max_stat[observed]))
-
-        max_stat_filled = 10 ** fnc(np.log10(size))
-
-        return {self.stat: max_stat_filled}
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
@@ -205,36 +124,52 @@ class Permute:
         self.stat_null = np.vstack(d[self.stat] for d in val_list)
         self.stat_null = np.sort(self.stat_null, axis=0)
 
+        # average stat across permutations (same regression, quicker comp)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            stat_null_mean = np.nanmean(self.stat_null, axis=0)
+
+        # get weights (num observations per mean) and size
+        weight = self.num_perm - np.isnan(self.stat_null).sum(axis=0)
+        size = np.arange(1, self.stat_null.shape[1] + 1)
+
+        # drop all sizes which were never observed
+        observed = weight.astype(bool)
+        _size = size[observed]
+        _stat_null_mean = stat_null_mean[observed]
+        _weight = weight[observed]
+
+        # fit linear model
+        lin_reg = LinearRegression()
+        lin_reg.fit(np.atleast_2d(np.log10(_size)).T,
+                    np.atleast_2d(np.log10(_stat_null_mean)).T,
+                    sample_weight=_weight)
+
+        # record prediction
+        self.log_stat_predict = lin_reg.predict(np.atleast_2d(np.log10(size)).T)
+
+        # compute prediction error
+        err = np.log10(self.stat_null) - self.log_stat_predict.T
+        self.log_stat_err_std = np.nanstd(err.flatten())
+
         return val_list
 
     def get_sig_node(self):
         # get nodes with largest stat
         self.node_pval_dict = dict()
-        self.node_z_dict = dict()
         for n in self.merge_record.nodes:
             reg_size = self.merge_record.node_size_dict[n]
-            stat = self.node_stat_dict[n]
-            stat_null = self.stat_null[:, reg_size - 1]
+            log_stat = np.log10(self.node_stat_dict[n])
+            log_stat_null = self.log_stat_predict[reg_size - 1]
+            z = (log_stat - log_stat_null) / self.log_stat_err_std
+            self.node_pval_dict[n] = 1 - scipy.stats.norm.cdf(z)
 
-            self.node_pval_dict[n] = get_pval(stat=stat,
-                                              stat_null=stat_null,
-                                              sort_flag=False,
-                                              stat_include_flag=True)
+        # trim to sig nodes
+        signode_pval_dict = {n: p for n, p in self.node_pval_dict.items()
+                             if p <= self.alpha}
 
-            mu, std = np.mean(stat_null), np.std(stat_null)
-            self.node_z_dict[n] = (stat - mu)
-
-        # keys are nodes, values are tuples of pval and negative z score. these
-        # tuples sort the nodes from most compelling (smallest value) to least
-        node_p_negz_dict = dict()
-        for n, p in self.node_pval_dict.items():
-            if p > self.alpha:
-                # node isn't significant
-                continue
-            node_p_negz_dict[n] = p, -self.node_z_dict[n]
-
-        # cut to a disjoint set of the most compelling nodes
-        sig_node = self.merge_record._cut_greedy(node_p_negz_dict,
+        # cut to a disjoint set of the most compelling nodes (min pval)
+        sig_node = self.merge_record._cut_greedy(signode_pval_dict,
                                                  max_flag=False)
 
         return sig_node
@@ -271,28 +206,28 @@ class Permute:
                                           log_y=True)
             save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
 
-        if size_v_stat_z:
-            self.merge_record.plot_size_v(self.node_z_dict,
-                                          label=f'{self.stat}z',
-                                          mask=self.mask_target,
-                                          log_y=True)
-            save_fig(self.folder / f'size_v_{self.stat}_z_score.pdf')
-
-        if size_v_stat_null:
-            # print percentiles of stat per size
-            cmap = plt.get_cmap('viridis')
-            size = np.arange(1, self.stat_null.shape[1] + 1)
-            p_list = [50, 75, 90, 95, 99]
-            for p_idx, p in enumerate(p_list):
-                perc_line = np.percentile(self.stat_null, p, axis=0)
-                plt.plot(size, perc_line, label=f'{p}-th percentile',
-                         color=cmap(p_idx / len(p_list)))
-            plt.ylabel(self.stat)
-            plt.xlabel('size')
-            plt.gca().set_xscale('log')
-            plt.gca().set_yscale('log')
-            plt.legend()
-            save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
+        # if size_v_stat_z:
+        #     self.merge_record.plot_size_v(self.node_z_dict,
+        #                                   label=f'{self.stat}z',
+        #                                   mask=self.mask_target,
+        #                                   log_y=True)
+        #     save_fig(self.folder / f'size_v_{self.stat}_z_score.pdf')
+        #
+        # if size_v_stat_null:
+        #     # print percentiles of stat per size
+        #     cmap = plt.get_cmap('viridis')
+        #     size = np.arange(1, self.stat_null.shape[1] + 1)
+        #     p_list = [50, 75, 90, 95, 99]
+        #     for p_idx, p in enumerate(p_list):
+        #         perc_line = np.percentile(self.stat_null, p, axis=0)
+        #         plt.plot(size, perc_line, label=f'{p}-th percentile',
+        #                  color=cmap(p_idx / len(p_list)))
+        #     plt.ylabel(self.stat)
+        #     plt.xlabel('size')
+        #     plt.gca().set_xscale('log')
+        #     plt.gca().set_yscale('log')
+        #     plt.legend()
+        #     save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
 
         if self.mask_target is not None:
             f_mask = self.folder / 'mask_target.nii.gz'
