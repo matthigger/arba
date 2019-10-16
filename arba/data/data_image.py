@@ -11,14 +11,6 @@ from arba.region import FeatStat
 from arba.space import get_ref, Mask
 
 
-def check_loaded(fnc):
-    def wrapped(self, *args, **kwargs):
-        assert self.is_loaded, 'DataImage must be loaded to call'
-        return fnc(self, *args, **kwargs)
-
-    return wrapped
-
-
 class DataImage:
     """ manages large datasets of multivariate images
 
@@ -117,9 +109,9 @@ class DataImage:
         # update sbj_list
         self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
 
-    @check_loaded
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
                sbj_bool=None):
+        assert self.is_loaded, 'data_image is not loaded'
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
         assert 2 == ((ijk is None) + (mask is None) + (pc_ijk is None)), \
@@ -270,7 +262,6 @@ class DataImage:
         self.__mask = None
         self.offset = None
 
-    @check_loaded
     def to_nii(self, folder=None, mean=False, sbj_list=None):
         """ prints nii of each sbj's features, optionally averages across sbj
 
@@ -282,6 +273,7 @@ class DataImage:
         Returns:
             folder (Path): output folder
         """
+        assert self.is_loaded, 'data_image is not loaded'
 
         def save_img(x, f):
             img = nib.Nifti1Image(x, affine=self.ref.affine)
