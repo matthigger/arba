@@ -1,14 +1,12 @@
-import os
+import abc
 import pathlib
 import tempfile
 from contextlib import contextmanager
 
 import nibabel as nib
 import numpy as np
-from tqdm import tqdm
 
 from arba.region import FeatStat
-from arba.space import get_ref, Mask
 
 
 class DataImage:
@@ -20,23 +18,14 @@ class DataImage:
     allowing for parallel processes to operate on shared memory.
 
     Attributes:
-        sbj_ifeat_data_img (tree): key0 is sbj, key2 is imaging feat, vals are
-                                    files which contain imaging feat of sbj
+        mask (np.array): mask of active area (boolean)
         sbj_list (list): list of sbj (defines indexing)
         feat_list (list): list of features (defines indexing)
-        scale (np.array): defines scaling of data
         ref (RefSpace): defines shape and affine of data
 
     Attributes available after load()
-        mask (Mask): mask of active area
-        fs (FeatStat): feature statistics across active area of all sbj
-        data (np.memmap): (space0, space1, space2, sbj_idx, feat_idx)
-                          if data is loaded, a read only memmap of data
+        data (np.array): (space0, space1, space2, sbj_idx, feat_idx) data
         offset (np.array): an offset which has been added to data
-
-    Hidden Attributes:
-        __mask (Mask): mask of intersection of all files (only available when
-                       loaded)
     """
 
     @property
@@ -44,8 +33,9 @@ class DataImage:
         return bool(self.f_data)
 
     @property
+    @abc.abstractmethod
     def is_loaded(self):
-        return self.data is not None
+        pass
 
     @property
     def num_sbj(self):
@@ -55,62 +45,27 @@ class DataImage:
     def d(self):
         return len(self.feat_list)
 
-    def __len__(self):
-        return len(self.sbj_list)
+    def __init__(self, sbj_list, feat_list, ref, mask=None, memmap=False):
+        self.sbj_list = sbj_list
+        self.feat_list = feat_list
+        self.ref = ref
 
-    def __init__(self, sbj_ifeat_data_img, sbj_list=None, mask=None,
-                 memmap=False):
-        self.sbj_ifeat_data_img = sbj_ifeat_data_img
-        if sbj_list is None:
-            self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
-        else:
-            self.sbj_list = sbj_list
-            assert set(sbj_list) == set(sbj_ifeat_data_img), 'sbj_list error'
+        self.mask = mask
+        if self.mask is None:
+            self.mask = np.ones(ref.shape).astype(bool)
 
-        feat_file_dict = next(iter(self.sbj_ifeat_data_img.values()))
-        self.feat_list = sorted(feat_file_dict.keys())
-        self.scale = np.eye(self.d)
-        self.ref = get_ref(next(iter(feat_file_dict.values())))
-
-        self.fs = None
         self.data = None
-        self.f_data = None
         self.offset = None
 
         if memmap:
-            # get tmp location for data
             self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
             self.f_data = pathlib.Path(self.f_data)
-
-        self.mask = mask
-        self.__mask = None
-
-    def discard_to(self, n_sbj, split=None):
-        """ discards sbj so only num_sbj remains (in place)
-
-        Args:
-            n_sbj (int):
-            split (Split): if passed, ensures at most num_sbj per split grp
-        """
-        if self.is_loaded:
-            raise AttributeError('may not be loaded during discard_to()')
-
-        # get appropriate grp_list_iter, iter of grp, sbj_list
-        if split is None:
-            grp_list_iter = iter(('grp0', self.sbj_list))
         else:
-            grp_list_iter = split.grp_list_iter()
-
-        # prune tree to approrpiate sbj
-        for _, sbj_list in grp_list_iter:
-            for sbj in sbj_list[n_sbj:]:
-                del self.sbj_ifeat_data_img[sbj]
-
-        # update sbj_list
-        self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
+            self.f_data = None
 
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
                sbj_bool=None):
+
         assert self.is_loaded, 'data_image is not loaded'
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
@@ -119,8 +74,6 @@ class DataImage:
 
         # get sbj_bool
         if sbj_bool is None:
-            if sbj_list is None:
-                sbj_list = self.sbj_list
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # get data array
@@ -134,6 +87,7 @@ class DataImage:
             x = self.data[mask, :, :]
             x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
         else:
+            # point cloud
             n = len(pc_ijk)
             x = np.empty((n, self.d))
             for idx, (i, j, k) in enumerate(pc_ijk):
@@ -144,10 +98,9 @@ class DataImage:
 
     @contextmanager
     def loaded(self, offset=None, **kwargs):
-        """ provides context manager with loaded data
+        """ context manager which ensures data is loaded into object
 
-        note: we only load() and unload() if the object was previously not
-        loaded
+        this context manager may be nested without error
         """
         was_loaded = self.is_loaded
 
@@ -206,60 +159,34 @@ class DataImage:
                 self.data += offset
             self.offset = offset
 
-    def load(self, offset=None, verbose=False, scale_norm=False):
+    @abc.abstractmethod
+    def load(self, _data, offset=None):
         """ loads data
 
         Args:
+            _data (np.array): data to be loaded
             offset (np.array): image offset
-            verbose (bool): toggles command line output
-            scale_norm (bool): toggles scaling data to unit variance
         """
-
-        if self.is_loaded:
-            raise AttributeError('already loaded')
-
-        # initialize array
-        shape = (*self.ref.shape, self.num_sbj, self.d)
-        self.data = np.empty(shape)
-
-        # load data
-        for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
-                                 desc='load per sbj',
-                                 disable=not verbose):
-            for feat_idx, feat in enumerate(self.feat_list):
-                f = self.sbj_ifeat_data_img[sbj][feat]
-                img = nib.load(str(f))
-                self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
-
-        # get mask of data
-        self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-
-        # get mask
-        if self.mask is not None:
-            self.mask = np.logical_and(self.__mask, self.mask)
-        else:
-            self.mask = self.__mask
+        # save
+        self.data = _data
 
         # apply offset
         if offset is not None:
             self.data += offset
         self.offset = offset
 
-        if scale_norm:
-            fs = self.get_fs(mask=self.mask)
-            self.data = self.data @ np.diag((1 / np.diag(fs.cov)) ** .5)
+        # apply mask
+        self.data[np.logical_not(self.mask)] = 0
 
+        # memmap
         if self.memmap:
             self._flush_memmap()
 
+    @abc.abstractmethod
     def unload(self):
-        # delete memory map file
-        if self.f_data is not None and self.f_data.exists():
-            os.remove(str(self.f_data))
-            self.f_data = None
-
+        if self.memmap:
+            self.f_data.unlink(missing_ok=True)
         self.data = None
-        self.__mask = None
         self.offset = None
 
     def to_nii(self, folder=None, mean=False, sbj_list=None):
