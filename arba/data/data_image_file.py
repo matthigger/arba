@@ -18,10 +18,6 @@ class DataImageFile(DataImage):
         mask (np.array): logical and of two masks above
     """
 
-    @property
-    def is_loaded(self):
-        return self.data is not None
-
     def __init__(self, sbj_ifeat_data_img, *args, **kwargs):
         self.sbj_ifeat_data_img = sbj_ifeat_data_img
         kwargs['sbj_list'] = sorted(self.sbj_ifeat_data_img.keys())

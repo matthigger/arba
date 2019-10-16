@@ -18,24 +18,24 @@ class DataImage:
     allowing for parallel processes to operate on shared memory.
 
     Attributes:
-        mask (np.array): mask of active area (boolean)
         sbj_list (list): list of sbj (defines indexing)
         feat_list (list): list of features (defines indexing)
         ref (RefSpace): defines shape and affine of data
+        mask (np.array): mask of active area (boolean)
 
     Attributes available after load()
         data (np.array): (space0, space1, space2, sbj_idx, feat_idx) data
         offset (np.array): an offset which has been added to data
+        f_data (Pathlib.Path): location of memmap of data.  None if not memmap
     """
 
     @property
-    def memmap(self):
+    def is_memmap(self):
         return bool(self.f_data)
 
     @property
-    @abc.abstractmethod
     def is_loaded(self):
-        pass
+        return self.data is not None
 
     @property
     def num_sbj(self):
@@ -45,7 +45,7 @@ class DataImage:
     def num_feat(self):
         return len(self.feat_list)
 
-    def __init__(self, sbj_list, feat_list, ref, mask=None, memmap=False):
+    def __init__(self, sbj_list, feat_list, ref, mask=None):
         self.sbj_list = sbj_list
         self.feat_list = feat_list
         self.ref = ref
@@ -56,12 +56,7 @@ class DataImage:
 
         self.data = None
         self.offset = None
-
-        if memmap:
-            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
-            self.f_data = pathlib.Path(self.f_data)
-        else:
-            self.f_data = None
+        self.f_data = None
 
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
                sbj_bool=None):
@@ -126,16 +121,21 @@ class DataImage:
 
     @contextmanager
     def data_writable(self):
-        if self.memmap:
+        if self.is_memmap:
             self.data = np.array(self.data)
 
         try:
             yield self
         finally:
-            if self.memmap:
-                self._flush_memmap()
+            if self.is_memmap:
+                self.flush_to_memmap()
 
-    def _flush_memmap(self):
+    def flush_to_memmap(self):
+        assert self.f_data is None, 'cannot flush until last memmap deleted'
+
+        self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+        self.f_data = pathlib.Path(self.f_data)
+
         x = np.memmap(self.f_data, dtype='float32', mode='w',
                       shape=self.data.shape)
         x[:] = self.data[:]
@@ -160,12 +160,13 @@ class DataImage:
             self.offset = offset
 
     @abc.abstractmethod
-    def load(self, _data, offset=None):
+    def load(self, _data, offset=None, memmap=False):
         """ loads data
 
         Args:
             _data (np.array): data to be loaded
             offset (np.array): image offset
+            memmap (bool): toggles whether array is written to memory map
         """
         # save
         self.data = _data
@@ -179,8 +180,8 @@ class DataImage:
         self.data[np.logical_not(self.mask)] = 0
 
         # memmap
-        if self.memmap:
-            self._flush_memmap()
+        if memmap:
+            self.flush_to_memmap()
 
     @abc.abstractmethod
     def unload(self):

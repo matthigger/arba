@@ -9,11 +9,6 @@ from .data_image import DataImage
 class DataImageSynth(DataImage):
     """ DataImage from an array
     """
-
-    @property
-    def is_loaded(self):
-        return True
-
     @staticmethod
     def get_sbj_list(n):
         """ builds dummy list of sbj"""
