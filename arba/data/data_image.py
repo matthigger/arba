@@ -279,26 +279,41 @@ class DataImage:
         self.offset = None
 
     @check_loaded
-    def to_nii(self, folder=None, mean_flag=True):
-        """ writes each feature to a nii file
+    def to_nii(self, folder=None, mean=False, sbj_list=None):
+        """ prints nii of each sbj's features, optionally averages across sbj
 
         Args:
-            folder (str or Path): output folder
+            folder (str or Path): output folder, defaults to random tmp folder
+            mean (bool): toggles averaging across sbj
+            sbj_list (list): which sbj to include
 
         Returns:
-            f_out (Path): nii file out
+            folder (Path): output folder
         """
+
+        def save_img(x, f):
+            img = nib.Nifti1Image(x, affine=self.ref.affine)
+            img.to_filename(str(folder / f))
+
+        # get output folder, make it if need be
         if folder is None:
             folder = tempfile.TemporaryDirectory().name
         folder = pathlib.Path(folder)
+        folder.mkdir(parents=True, exist_ok=True)
+
+        # get sbj which are to be saved
+        sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # write to file
         for feat_idx, feat in enumerate(self.feat_list):
-            x = self.data[:, :, :, :, feat_idx]
-            if mean_flag:
-                x = np.mean(x, axis=3)
-            img = nib.Nifti1Image(x, affine=self.ref.affine)
-            img.to_filename(str(folder / f'{feat}.nii.gz'))
+            if mean:
+                x = self.data[:, :, :, sbj_bool, feat_idx].mean(axis=3)
+                save_img(x=x, f=f'{feat}.nii.gz')
+            else:
+                for sbj_idx in np.nonzero(sbj_bool):
+                    x = self.data[:, :, :, sbj_idx, feat_idx]
+                    sbj = self.sbj_list[sbj_idx]
+                    save_img(x=x, f=f'{feat}_{sbj}.nii.gz')
 
         return folder
 
