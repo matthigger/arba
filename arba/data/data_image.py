@@ -323,21 +323,3 @@ class DataImage:
 
         sbj_set = set(sbj_list)
         return np.array([sbj in sbj_set for sbj in self.sbj_list])
-
-    def __eq__(self, other):
-        if self.sbj_ifeat_data_img != other.sbj_ifeat_data_img:
-            return False
-
-        if self.ref != other.ref:
-            return False
-
-        if self.mask != other.mask:
-            return False
-
-        if self.scale != other.scale:
-            return False
-
-        if self.fnc_list != other.fnc_list:
-            return False
-
-        return True
