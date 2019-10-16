@@ -71,7 +71,7 @@ def test_all(data_img):
 
         # compute feat_stat of data, should be 0 mean, unit variance
         _data = data_img.data[data_img.mask, :, :]
-        shape = (len(data_img) * data_img.num_sbj, data_img.d)
+        shape = (len(data_img) * data_img.num_sbj, data_img.num_feat)
         _data = _data.reshape(shape, order='F')
         fs = FeatStat.from_array(_data.T)
         assert np.allclose(fs.mu, 0), 'data not centered'

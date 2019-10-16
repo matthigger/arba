@@ -43,7 +43,7 @@ class DataImageFile(DataImage):
             raise AttributeError('already loaded')
 
         # initialize array
-        shape = (*self.ref.shape, self.num_sbj, self.d)
+        shape = (*self.ref.shape, self.num_sbj, self.num_feat)
         data = np.empty(shape)
 
         # load data

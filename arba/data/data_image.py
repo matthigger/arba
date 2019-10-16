@@ -42,7 +42,7 @@ class DataImage:
         return len(self.sbj_list)
 
     @property
-    def d(self):
+    def num_feat(self):
         return len(self.feat_list)
 
     def __init__(self, sbj_list, feat_list, ref, mask=None, memmap=False):
@@ -81,18 +81,18 @@ class DataImage:
             # single point
             i, j, k = ijk
             x = self.data[i, j, k, :, :]
-            x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+            x = x[sbj_bool, :].reshape((-1, self.num_feat), order='F')
         elif mask is not None:
             # mask
             x = self.data[mask, :, :]
-            x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
+            x = x[:, sbj_bool, :].reshape((-1, self.num_feat), order='F')
         else:
             # point cloud
             n = len(pc_ijk)
-            x = np.empty((n, self.d))
+            x = np.empty((n, self.num_feat))
             for idx, (i, j, k) in enumerate(pc_ijk):
                 _x = self.data[i, j, k, :, :]
-                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.d), order='F')
+                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.num_feat), order='F')
 
         return FeatStat.from_array(x.T)
 
