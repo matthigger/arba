@@ -60,7 +60,7 @@ if __name__ == '__main__':
         dim_img = 1
         shape = 12, 12, 12
         data = np.random.standard_normal((*shape, num_sbj, dim_img))
-        data_img = arba.data.DataImageSynth(data)
+        data_img = arba.data.DataImageArray(data)
         data_img.to_nii(folder=folder / 'raw_data')
 
     elif str_img_data == 'hcp100':

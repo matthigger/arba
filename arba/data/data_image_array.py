@@ -6,7 +6,7 @@ import arba.space
 from .data_image import DataImage
 
 
-class DataImageSynth(DataImage):
+class DataImageArray(DataImage):
     """ DataImage from an array
     """
     @staticmethod
@@ -21,17 +21,6 @@ class DataImageSynth(DataImage):
         return [f'feat_img{x}' for x in ascii_uppercase[:n]]
 
     def __init__(self, data, sbj_list=None, feat_list=None, **kwargs):
-        """ given a data matrix, writes files to nii and returns DataImage
-
-        Args:
-            data (np.array): (shape0, shape1, shape2, num_sbj, num_feat)
-            sbj_list (list): list of sbj
-            feat_list (list): list of features
-
-        Returns:
-            data_img (DataImageSynth)
-        """
-
         # sbj_list, feat_list
         num_sbj, num_feat = data.shape[3:]
         if sbj_list is None:
@@ -46,9 +35,9 @@ class DataImageSynth(DataImage):
         super().load(_data=data)
 
     def load(self):
-        """ DataImageSynth have no files, can't be loaded """
+        """ DataImageArray have no files, can't be loaded """
         pass
 
     def unload(self):
-        """ DataImageSynth have no files, can't be unloaded """
+        """ DataImageArray have no files, can't be unloaded """
         pass
