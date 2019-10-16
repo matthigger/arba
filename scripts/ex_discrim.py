@@ -5,7 +5,6 @@ from string import ascii_uppercase
 import numpy as np
 
 import arba
-from mh_pytools import file
 from pnl_data.set import hcp_100
 from scripts.performance import Performance
 
@@ -44,7 +43,7 @@ if __name__ == '__main__':
     num_sbj = 100
     min_var_effect_locations = False
 
-    str_img_data = 'synth'  # 'hcp100' or 'synth'
+    str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
     mask_radius = 5
 
@@ -65,7 +64,7 @@ if __name__ == '__main__':
 
     elif str_img_data == 'hcp100':
         low_res = True,
-        feat_tuple = 'fa', 'md'
+        feat_tuple = 'fa',
         data_img = hcp_100.get_data_image(lim_sbj=num_sbj,
                                           low_res=low_res,
                                           feat_tuple=feat_tuple)
@@ -94,19 +93,20 @@ if __name__ == '__main__':
 
         # run each effect
         for (eff_idx, t2), eff in idx_t2_eff_dict.items():
-            data_img.mask = np.logical_and(eff.mask.dilate(mask_radius),
-                                           mask_img_full)
+            _data_img, trim_slice = data_img.trim(
+                mask=eff.mask.dilate(mask_radius))
+            eff.mask = eff.mask[trim_slice]
+            eff.mask.ref = _data_img.ref
 
             # impose effect on data
-            sbj_bool = split.get_sbj_bool(data_img.sbj_list)
-            offset = eff.get_offset(shape=data_img.ref.shape,
+            sbj_bool = split.get_sbj_bool(_data_img.sbj_list)
+            offset = eff.get_offset(shape=_data_img.ref.shape,
                                     sbj_bool=sbj_bool)
-            data_img.reset_offset(offset)
+            _data_img.reset_offset(offset)
 
-            # find extent
+            # estimate extents
             _folder = folder / f'eff{eff_idx}_t2_{t2_letter_dict[t2]}_{t2:.2e}'
-            file.save(eff, _folder / 'effect.p.gz')
-            perm_reg = arba.permute.PermuteDiscriminateVBA(data_img,
+            perm_reg = arba.permute.PermuteDiscriminateVBA(_data_img,
                                                            split=split,
                                                            num_perm=num_perm,
                                                            par_flag=par_flag,
@@ -115,9 +115,9 @@ if __name__ == '__main__':
                                                            verbose=True,
                                                            folder=_folder)
 
-            perm_reg.save(null_vba=True, size_v_stat=True,
-                          size_v_stat_null=True, size_v_stat_pval=True,
-                          print_node=True, performance=True)
+            perm_reg.save(null_vba=False, size_v_stat=True,
+                          size_v_stat_null=False, size_v_stat_pval=False,
+                          print_node=False, performance=True)
 
             # record performance
             perf.check_in(stat=t2, perm_reg=perm_reg)

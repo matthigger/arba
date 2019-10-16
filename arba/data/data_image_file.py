@@ -2,7 +2,7 @@ import nibabel as nib
 import numpy as np
 from tqdm import tqdm
 
-from arba.space import Mask
+from arba.space import Mask, get_ref
 from .data_image import DataImage
 
 
@@ -20,10 +20,12 @@ class DataImageFile(DataImage):
 
     def __init__(self, sbj_ifeat_data_img, *args, **kwargs):
         self.sbj_ifeat_data_img = sbj_ifeat_data_img
-        kwargs['sbj_list'] = sorted(self.sbj_ifeat_data_img.keys())
+        sbj_list = sorted(self.sbj_ifeat_data_img.keys())
         ifeat_data_img_dict = next(iter(self.sbj_ifeat_data_img.values()))
-        kwargs['feat_list'] = sorted(ifeat_data_img_dict.keys())
-        super().__init__(*args, **kwargs)
+        feat_list = sorted(ifeat_data_img_dict.keys())
+        ref = get_ref(next(iter(ifeat_data_img_dict.values())))
+        super().__init__(*args, sbj_list=sbj_list, feat_list=feat_list,
+                         ref=ref, **kwargs)
 
         self.mask_init = self.mask
         self.mask_img = None

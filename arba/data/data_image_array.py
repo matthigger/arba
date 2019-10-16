@@ -9,6 +9,7 @@ from .data_image import DataImage
 class DataImageArray(DataImage):
     """ DataImage from an array
     """
+
     @staticmethod
     def get_sbj_list(n):
         """ builds dummy list of sbj"""
@@ -20,7 +21,8 @@ class DataImageArray(DataImage):
         """ builds dummy list of feat"""
         return [f'feat_img{x}' for x in ascii_uppercase[:n]]
 
-    def __init__(self, data, sbj_list=None, feat_list=None, **kwargs):
+    def __init__(self, data, sbj_list=None, feat_list=None, ref=None,
+                 **kwargs):
         # sbj_list, feat_list
         num_sbj, num_feat = data.shape[3:]
         if sbj_list is None:
@@ -28,7 +30,8 @@ class DataImageArray(DataImage):
         if feat_list is None:
             feat_list = self.get_feat_list(num_feat)
 
-        ref = arba.space.RefSpace(shape=data.shape[:3])
+        if ref is None:
+            ref = arba.space.RefSpace(shape=data.shape[:3])
 
         super().__init__(sbj_list=sbj_list, feat_list=feat_list, ref=ref,
                          **kwargs)

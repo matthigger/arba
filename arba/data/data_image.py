@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import nibabel as nib
 import numpy as np
 
+import arba.space
 from arba.region import FeatStat
 
 
@@ -58,6 +59,65 @@ class DataImage:
         self.offset = None
         self.f_data = None
 
+    def trim(self, mask=None):
+        """ returns a DataImageSynth which discards dims with only zeros
+
+        if the input mask is:
+        array([[1., 0., 0.],
+               [0., 1., 0.],
+               [0., 0., 0.]])
+
+        then the output mask is
+        array([[1., 0.],
+               [0., 1.]])
+
+        because the last row and column contain zeros (exclusively)
+
+        Args:
+            mask (np.array): mask to apply before trimming
+
+        Returns:
+            data_image (DataImageArray): reduced DataImage
+            trim_slice (np.slice): the slice of self.data used
+        """
+        from .data_image_array import DataImageArray
+
+        assert self.is_loaded
+
+        if mask is None:
+            mask = self.mask
+        else:
+            mask = np.logical_and(self.mask, mask)
+
+        # get min, max ijk
+        min_ijk = []
+        max_ijk = []
+        for idx in range(3):
+            not_idx = set(range(3)) - {idx}
+            idx_present = np.nonzero(mask.any(axis=tuple(not_idx)))[0]
+            min_ijk.append(idx_present[0])
+            max_ijk.append(idx_present[-1])
+
+        # build slice
+        trim_slice = np.s_[
+                     min_ijk[0]: max_ijk[0],
+                     min_ijk[1]: max_ijk[1],
+                     min_ijk[2]: max_ijk[2]]
+
+        # build new ref space
+        shape = np.array(max_ijk) - np.array(min_ijk)
+        affine = np.array(self.ref.affine)
+        affine[:3, -1] += np.diag(affine)[:3] * np.array(min_ijk)
+        ref = arba.space.RefSpace(affine=affine, shape=shape)
+
+        # build reduced DataImage
+        data_image = DataImageArray(data=self.data[trim_slice],
+                                    sbj_list=self.sbj_list,
+                                    feat_list=self.feat_list,
+                                    ref=ref,
+                                    mask=self.mask[trim_slice])
+        return data_image, trim_slice
+
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
                sbj_bool=None):
 
@@ -87,7 +147,8 @@ class DataImage:
             x = np.empty((n, self.num_feat))
             for idx, (i, j, k) in enumerate(pc_ijk):
                 _x = self.data[i, j, k, :, :]
-                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.num_feat), order='F')
+                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.num_feat),
+                                                    order='F')
 
         return FeatStat.from_array(x.T)
 
@@ -185,7 +246,7 @@ class DataImage:
 
     @abc.abstractmethod
     def unload(self):
-        if self.memmap:
+        if self.is_memmap:
             self.f_data.unlink(missing_ok=True)
         self.data = None
         self.offset = None
