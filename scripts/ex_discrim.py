@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # regression effect params
     t2_vec = np.logspace(-2, 1, 7)
     # t2_vec = [.5]
-    num_eff = 10
+    num_eff = 1
     num_sbj = 100
     min_var_effect_locations = False
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     mask_radius = 5
 
-    effect_num_vox = 50
+    effect_num_vox = 150
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -59,10 +59,9 @@ if __name__ == '__main__':
     if str_img_data == 'synth':
         dim_img = 1
         shape = 12, 12, 12
-        data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
-                                            mu=np.zeros(dim_img),
-                                            cov=np.eye(dim_img),
-                                            folder=folder / 'raw_data')
+        data = np.random.standard_normal((*shape, num_sbj, dim_img))
+        data_img = arba.data.DataImageSynth(data)
+        data_img.to_nii(folder=folder / 'raw_data')
 
     elif str_img_data == 'hcp100':
         low_res = True,
@@ -80,9 +79,9 @@ if __name__ == '__main__':
     t2_letter_dict = dict(zip(t2_vec, ascii_uppercase))
 
     perf = Performance(stat_label='t2')
-    with data_img.loaded(memmap=True):
+    with data_img.loaded():
         mask_img_full = data_img.mask
-        data_img.to_nii(folder, mean_flag=True)
+        data_img.to_nii(folder, mean=True)
 
         # sample effects
         idx_t2_eff_dict = sample_effects(t2_vec=t2_vec,
@@ -116,7 +115,9 @@ if __name__ == '__main__':
                                                            verbose=True,
                                                            folder=_folder)
 
-            perm_reg.save()
+            perm_reg.save(null_vba=True, size_v_stat=True,
+                          size_v_stat_null=True, size_v_stat_pval=True,
+                          print_node=True, performance=True)
 
             # record performance
             perf.check_in(stat=t2, perm_reg=perm_reg)

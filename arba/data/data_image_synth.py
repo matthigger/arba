@@ -1,11 +1,10 @@
 import pathlib
 import tempfile
-from collections import defaultdict
 from string import ascii_uppercase
 
-import nibabel as nib
 import numpy as np
 
+import arba.space
 from .data_image import DataImage
 
 
@@ -15,91 +14,74 @@ class DataImageSynth(DataImage):
     features are labelled alphabetically ('feat_imgA', 'feat_imgB', ....)
     sbj are labelled numerically ('sbj0', 'sbj1', ...)
     """
+    # DataImageSynth are always loaded
+    is_loaded = True
+
+    # todo: this attribute not used by subclass ... breaks abstraction
+    sbj_ifeat_data_img = None
 
     @staticmethod
     def get_sbj_list(n):
+        """ builds dummy list of sbj"""
         w = np.ceil(np.log10(n)).astype(int)
         return [f'sbj{str(idx).zfill(w)}' for idx in range(n)]
 
     @staticmethod
     def get_feat_list(n):
+        """ builds dummy list of feat"""
         return [f'feat_img{x}' for x in ascii_uppercase[:n]]
 
-    @classmethod
-    def from_array(cls, data, folder=None):
+    def __init__(self, data, sbj_list=None, feat_list=None, memmap=False,
+                 mask=None):
         """ given a data matrix, writes files to nii and returns DataImage
 
         Args:
             data (np.array): (shape0, shape1, shape2, num_sbj, num_feat)
-            folder: location to store output files
+            sbj_list (list): list of sbj
+            feat_list (list): list of features
 
         Returns:
             data_img (DataImageSynth)
         """
 
-        if folder is None:
-            folder = pathlib.Path(tempfile.TemporaryDirectory().name)
-        else:
-            folder = pathlib.Path(folder)
-        if not folder.exists():
-            folder.mkdir(exist_ok=True, parents=True)
-
         assert len(data.shape) == 5, 'data must be of dimension 5'
 
+        # sbj_list, feat_list
         num_sbj, num_feat = data.shape[3:]
+        self.sbj_list = sbj_list
+        if self.sbj_list is None:
+            self.sbj_list = self.get_sbj_list(num_sbj)
+        self.feat_list = feat_list
+        if self.feat_list is None:
+            self.feat_list = self.get_feat_list(num_feat)
 
-        sbj_list = cls.get_sbj_list(num_sbj)
+        # store data
+        self.data = data
+        self.offset = None
 
-        sbj_ifeat_data_img = defaultdict(dict)
-        for sbj_idx, sbj in enumerate(sbj_list):
-            for feat_idx, feat in enumerate(cls.get_feat_list(num_feat)):
-                # write img to file
-                f = folder / f'{sbj}_{feat}.nii.gz'
-                x = data[:, :, :, sbj_idx, feat_idx]
-                img = nib.Nifti1Image(x, affine=np.eye(4))
-                img.to_filename(str(f))
+        # build dummy ref space
+        self.ref = arba.space.RefSpace(shape=data.shape[:3])
 
-                # store
-                sbj_ifeat_data_img[sbj][feat] = f
-
-        # todo: type should be DataImageSynth ... but this is classmethod?
-        return DataImage(sbj_ifeat_data_img=sbj_ifeat_data_img,
-                         sbj_list=sbj_list)
-
-    def __init__(self, num_sbj, shape, mu=0, cov=1, folder=None):
-        """
-
-        Args:
-            num_sbj (int): number of sbj
-            shape (tuple): img shape
-            mu (np.array): average feature
-            cov (np.array): feature covar
-        """
-        if folder is None:
-            folder = pathlib.Path(tempfile.TemporaryDirectory().name)
+        # mask
+        self.mask = mask
+        if self.mask is None:
+            self.mask = np.ones(self.ref.shape).astype(bool)
         else:
-            folder = pathlib.Path(folder)
-            folder.mkdir(exist_ok=True, parents=True)
+            self.data[np.logical_not(self.mask)] = 0
 
-        mu = np.atleast_1d(mu)
-        cov = np.atleast_2d(cov)
+        # memmap
+        self.f_data = None
+        if memmap:
+            # get tmp location for data
+            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+            self.f_data = pathlib.Path(self.f_data)
+        if self.memmap:
+            self._flush_memmap()
 
-        feat_list = self.get_feat_list(len(mu))
+    def load(self):
+        """ DataImageSynth have no files, can't be loaded """
+        pass
 
-        sbj_ifeat_data_img = defaultdict(dict)
-        for sbj in self.get_sbj_list(num_sbj):
-            # sample img
-            x = np.random.multivariate_normal(mean=mu, cov=cov, size=shape)
-
-            # store img (as nii, then in sbj_ifeat_data_img)
-            for feat_idx, feat in enumerate(feat_list):
-                f = tempfile.NamedTemporaryFile(suffix='.nii.gz',
-                                                prefix=f'{sbj}_{feat}_').name
-                f = folder / pathlib.Path(f).name
-                img = nib.Nifti1Image(x[..., feat_idx], affine=np.eye(4))
-                img.to_filename(str(f))
-
-                # store
-                sbj_ifeat_data_img[sbj][feat] = f
-
-        super().__init__(sbj_ifeat_data_img=sbj_ifeat_data_img)
+    def unload(self):
+        """ DataImageSynth have no files, can't be unloaded """
+        pass
