@@ -34,9 +34,6 @@ class DataImage:
         feat_list (list): list of features (defines indexing)
         scale (np.array): defines scaling of data
         ref (RefSpace): defines shape and affine of data
-        fnc_list (list): each is a function which is passed self, may
-                         operate on data as needed before it is write
-                         protected
 
     Attributes available after load()
         mask (Mask): mask of active area
@@ -51,22 +48,26 @@ class DataImage:
     """
 
     @property
+    def memmap(self):
+        return bool(self.f_data)
+
+    @property
     def is_loaded(self):
         return self.data is not None
 
     @property
     def num_sbj(self):
-        return len(self.sbj_ifeat_data_img)
+        return len(self.sbj_list)
 
     @property
     def d(self):
         return len(self.feat_list)
 
     def __len__(self):
-        return len(self.sbj_ifeat_data_img.keys())
+        return len(self.sbj_list)
 
-    def __init__(self, sbj_ifeat_data_img, sbj_list=None, fnc_list=None,
-                 mask=None):
+    def __init__(self, sbj_ifeat_data_img, sbj_list=None, mask=None,
+                 memmap=False):
         self.sbj_ifeat_data_img = sbj_ifeat_data_img
         if sbj_list is None:
             self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
@@ -79,18 +80,18 @@ class DataImage:
         self.scale = np.eye(self.d)
         self.ref = get_ref(next(iter(feat_file_dict.values())))
 
-        self.fnc_list = fnc_list
-        if fnc_list is None:
-            self.fnc_list = list()
-
         self.fs = None
         self.data = None
         self.f_data = None
+        self.offset = None
+
+        if memmap:
+            # get tmp location for data
+            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+            self.f_data = pathlib.Path(self.f_data)
 
         self.mask = mask
         self.__mask = None
-
-        self.offset = None
 
     def discard_to(self, n_sbj, split=None):
         """ discards sbj so only num_sbj remains (in place)
@@ -178,51 +179,54 @@ class DataImage:
                 # return to original state
                 self.unload()
 
-    def reset_offset(self, offset=None):
-        """ discards old offset, adds a new one.
+    @contextmanager
+    def data_writable(self):
+        if self.memmap:
+            self.data = np.array(self.data)
 
-        (faster than reloadeding for each new offset)
+        try:
+            yield self
+        finally:
+            if self.memmap:
+                self._flush_memmap()
+
+    def _flush_memmap(self):
+        x = np.memmap(self.f_data, dtype='float32', mode='w',
+                      shape=self.data.shape)
+        x[:] = self.data[:]
+        x.flush()
+        self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                              shape=self.data.shape)
+
+    def reset_offset(self, offset=None):
+        """ discards old offset, adds a new one (faster than reloading)
 
         Args:
             offset (np.array):
         """
-        memmap = isinstance(self.data, np.memmap)
-        if memmap:
-            self.data = np.array(self.data)
+        with self.data_writable():
+            # out with the old
+            if self.offset is not None:
+                self.data -= self.offset
 
-        # subtract old
-        if self.offset is not None:
-            self.data -= self.offset
+            # in with the new
+            if offset is not None:
+                self.data += offset
+            self.offset = offset
 
-        # add new, record it
-        if offset is not None:
-            self.data += offset
-        self.offset = offset
-
-        if memmap:
-            # write to memmap
-            x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                          shape=self.data.shape)
-            x[:] = self.data[:]
-            x.flush()
-            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                                  shape=self.data.shape)
-
-    def load(self, offset=None, verbose=False, memmap=False, scale_norm=False):
-        """ loads data, applies fnc in self.fnc_list
+    def load(self, offset=None, verbose=False, scale_norm=False):
+        """ loads data
 
         Args:
             offset (np.array): image offset
             verbose (bool): toggles command line output
-            memmap (bool): toggles memory map (self.data becomes read only, but
-                           accesible from all threads to save on memory)
             scale_norm (bool): toggles scaling data to unit variance
         """
 
         if self.is_loaded:
             raise AttributeError('already loaded')
 
-        # build memmap file
+        # initialize array
         shape = (*self.ref.shape, self.num_sbj, self.d)
         self.data = np.empty(shape)
 
@@ -244,10 +248,6 @@ class DataImage:
         else:
             self.mask = self.__mask
 
-        # apply all fnc
-        for fnc in self.fnc_list:
-            fnc(self)
-
         # apply offset
         if offset is not None:
             self.data += offset
@@ -257,16 +257,8 @@ class DataImage:
             fs = self.get_fs(mask=self.mask)
             self.data = self.data @ np.diag((1 / np.diag(fs.cov)) ** .5)
 
-        # flush data to memmap, make read only copy
-        if memmap:
-            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
-            self.f_data = pathlib.Path(self.f_data)
-            x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                          shape=shape)
-            x[:] = self.data[:]
-            x.flush()
-            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                                  shape=shape)
+        if self.memmap:
+            self._flush_memmap()
 
     def unload(self):
         # delete memory map file
@@ -310,7 +302,7 @@ class DataImage:
                 x = self.data[:, :, :, sbj_bool, feat_idx].mean(axis=3)
                 save_img(x=x, f=f'{feat}.nii.gz')
             else:
-                for sbj_idx in np.nonzero(sbj_bool):
+                for sbj_idx in np.where(sbj_bool)[0]:
                     x = self.data[:, :, :, sbj_idx, feat_idx]
                     sbj = self.sbj_list[sbj_idx]
                     save_img(x=x, f=f'{feat}_{sbj}.nii.gz')
