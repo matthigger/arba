@@ -1,15 +1,16 @@
 import abc
 import pathlib
 import tempfile
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import interp1d
+import scipy.stats
 from scipy.spatial.distance import dice
+from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 
 from mh_pytools import parallel
-from .get_pval import get_pval
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
 
@@ -86,24 +87,11 @@ class Permute:
 
         # record max stat per size
         node_stat_dict = merge_record.stat_node_val_dict[self.stat]
-        max_stat = np.zeros(max_size)
+        max_stat = np.zeros(max_size) * np.nan
         for node, stat in node_stat_dict.items():
             size = merge_record.node_size_dict[node]
-            if stat > max_stat[size - 1]:
+            if np.isnan(max_stat[size - 1]) or stat > max_stat[size - 1]:
                 max_stat[size - 1] = stat
-
-        # record which sizes are observed (unobserved will be interpolated)
-        observed = max_stat != 0
-
-        # ensure monotonicity (increase max_stat values)
-        for idx in range(len(max_stat) - 2, 0, -1):
-            if max_stat[idx] < max_stat[idx + 1]:
-                max_stat[idx] = max_stat[idx + 1]
-
-        # fill unobserved with linearly interpolated values
-        size = np.array(range(max_size))
-        fnc = interp1d(size[observed], max_stat[observed])
-        max_stat = fnc(size)
 
         return {self.stat: max_stat}
 
@@ -136,42 +124,67 @@ class Permute:
         self.stat_null = np.vstack(d[self.stat] for d in val_list)
         self.stat_null = np.sort(self.stat_null, axis=0)
 
+        # average stat across permutations (same regression, quicker comp)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            stat_null_mean = np.nanmean(self.stat_null, axis=0)
+
+        # get weights (num observations per mean) and size
+        weight = self.num_perm - np.isnan(self.stat_null).sum(axis=0)
+        size = np.arange(1, self.stat_null.shape[1] + 1)
+
+        # drop all sizes which were never observed
+        observed = weight.astype(bool)
+        _size = size[observed]
+        _stat_null_mean = stat_null_mean[observed]
+        _weight = weight[observed]
+
+        # fit linear model
+        lin_reg = LinearRegression()
+        lin_reg.fit(np.atleast_2d(np.log10(_size)).T,
+                    np.atleast_2d(np.log10(_stat_null_mean)).T,
+                    sample_weight=_weight)
+
+        # record prediction
+        self.log_stat_predict = lin_reg.predict(
+            np.atleast_2d(np.log10(size)).T)
+
+        # compute prediction error
+        err = np.log10(self.stat_null) - self.log_stat_predict.T
+        self.log_stat_err_std = np.nanstd(err.flatten())
+
         return val_list
 
     def get_sig_node(self):
         # get nodes with largest stat
         self.node_pval_dict = dict()
-        self.node_z_dict = dict()
         for n in self.merge_record.nodes:
             reg_size = self.merge_record.node_size_dict[n]
-            stat = self.node_stat_dict[n]
-            stat_null = self.stat_null[:, reg_size - 1]
+            log_stat = np.log10(self.node_stat_dict[n])
+            log_stat_null = self.log_stat_predict[reg_size - 1]
+            z = (log_stat - log_stat_null) / self.log_stat_err_std
+            self.node_pval_dict[n] = 1 - scipy.stats.norm.cdf(z)
 
-            self.node_pval_dict[n] = get_pval(stat=stat,
-                                              stat_null=stat_null,
-                                              sort_flag=False,
-                                              stat_include_flag=True)
+        # trim to sig nodes
+        signode_pval_dict = {n: p for n, p in self.node_pval_dict.items()
+                             if p <= self.alpha}
 
-            mu, std = np.mean(stat_null), np.std(stat_null)
-            self.node_z_dict[n] = (stat - mu) / std
-
-        # keys are nodes, values are tuples of pval and negative z score. these
-        # tuples sort the nodes from most compelling (smallest value) to least
-        node_p_negz_dict = dict()
-        for n, p in self.node_pval_dict.items():
-            if p > self.alpha:
-                # node isn't significant
-                continue
-            node_p_negz_dict[n] = p, -self.node_z_dict[n]
-
-        # cut to a disjoint set of the most compelling nodes
-        sig_node = self.merge_record._cut_greedy(node_p_negz_dict,
+        # cut to a disjoint set of the most compelling nodes (min pval)
+        sig_node = self.merge_record._cut_greedy(signode_pval_dict,
                                                  max_flag=False)
 
         return sig_node
 
     def save(self, size_v_stat=True, size_v_stat_null=True,
-             size_v_stat_pval=True, print_node=True, size_v_stat_z=True):
+             size_v_stat_pval=True, print_node=True, performance=True):
+
+        def plot_thresh(p_list):
+            size = np.arange(1, self.stat_null.shape[1] + 1)
+            plt.plot(size, 10 ** self.log_stat_predict, label='null mean')
+            for idx, p in enumerate(p_list):
+                stat = self.log_stat_predict + \
+                       self.log_stat_err_std * scipy.stats.norm.isf(p)
+                plt.plot(size, 10 ** stat, label=f'null p={p}')
 
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
@@ -180,15 +193,7 @@ class Permute:
             self.merge_record.plot_size_v(self.stat, label=self.stat,
                                           mask=self.mask_target,
                                           log_y=True)
-
-            # get mu, std per size
-            max_size = max(self.merge_record.node_size_dict.values())
-            size = range(1, max_size + 1)
-            p = (1 - self.alpha) * 100
-            max_stat = np.percentile(self.stat_null, p,
-                                     axis=0)
-            plt.plot(size, max_stat, linestyle='-', color='g', linewidth=3,
-                     label=f'{p:.0f}%')
+            plot_thresh(p_list=[.05, .01, .001])
             plt.legend()
 
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
@@ -202,38 +207,39 @@ class Permute:
                                           log_y=True)
             save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
 
-        if size_v_stat_z:
-            self.merge_record.plot_size_v(self.node_z_dict,
-                                          label=f'{self.stat}z',
-                                          mask=self.mask_target,
-                                          log_y=False)
-            save_fig(self.folder / f'size_v_{self.stat}_z_score.pdf')
-
         if size_v_stat_null:
-            # print percentiles of stat per size
-            cmap = plt.get_cmap('viridis')
+            # scatter permutations
             size = np.arange(1, self.stat_null.shape[1] + 1)
-            p_list = [50, 75, 90, 95, 99]
-            for p_idx, p in enumerate(p_list):
-                perc_line = np.percentile(self.stat_null, p, axis=0)
-                plt.plot(size, perc_line, label=f'{p}-th percentile',
-                         color=cmap(p_idx / len(p_list)))
-            plt.ylabel(self.stat)
+            _size = np.repeat(np.atleast_2d(size), self.num_perm, axis=0)
+            xy = np.vstack((_size.flatten(), self.stat_null.flatten())).T
+            xy = xy[~np.isnan(xy[:, 1]), :]
+
+            fig, ax = plt.subplots(1, 1)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            plt.scatter(xy[:, 0], xy[:, 1], color='g', alpha=.15,
+                        label='observed')
+
+            plot_thresh(p_list=[.05, .01, .001])
+            plt.ylabel(f'max {self.stat} in permutation')
             plt.xlabel('size')
-            plt.gca().set_xscale('log')
-            plt.gca().set_yscale('log')
             plt.legend()
+
             save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
 
-        if self.mask_target is not None:
+        if performance and self.mask_target is not None:
             f_mask = self.folder / 'mask_target.nii.gz'
             self.mask_target.to_nii(f_mask)
 
+            s = ''
             for label, mask in self.mode_est_mask_dict.items():
-                compute_print_dice(mask_estimate=mask,
-                                   mask_target=self.mask_target,
-                                   save_folder=self.folder,
-                                   label=label)
+                s += get_performance_str(mask_estimate=mask,
+                                         mask_target=self.mask_target,
+                                         label=label) + '\n'
+
+            print(s)
+            with open(str(self.folder / 'performance.txt'), 'a+') as f:
+                print(s, file=f)
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
@@ -248,18 +254,22 @@ class Permute:
                 save_fig(self.folder / f'node_{n}.pdf')
 
 
-def compute_print_dice(mask_estimate, mask_target, save_folder, label=None):
+def get_performance_str(mask_estimate, mask_target, label=None):
     mask_estimate = mask_estimate.astype(bool)
     mask_target = mask_target.astype(bool)
     dice_score = 1 - dice(mask_estimate.flatten(), mask_target.flatten())
-    with open(str(save_folder / 'dice.txt'), 'a+') as f:
-        print(f'---{label}---', file=f)
-        print(f'dice is {dice_score:.3f}', file=f)
-        print(f'target vox: {mask_target.sum()}', file=f)
-        print(f'detected vox: {mask_estimate.sum()}', file=f)
-        true_detect = (mask_target & mask_estimate).sum()
-        print(f'true detected vox: {true_detect}', file=f)
-        false_detect = (~mask_target & mask_estimate).sum()
-        print(f'false detected vox: {false_detect}', file=f)
+    target = mask_target.sum()
+    target_correct = (mask_target & mask_estimate).sum()
+    sens = target_correct / target
 
-    return dice_score
+    non_target = (~mask_target).sum()
+    non_target_correct = (~mask_target & ~mask_estimate).sum()
+    non_target_wrong = non_target - non_target_correct
+    spec = non_target_correct / non_target
+
+    s = f'---{label}---\n'
+    s += f'dice: {dice_score:.3f}\n'
+    s += f'sens: {sens:.3f} ({target_correct} of {target} vox detected correctly)\n'
+    s += f'spec: {spec:.3f} ({non_target_wrong} of {non_target} vox detected incorrectly)\n'
+
+    return s

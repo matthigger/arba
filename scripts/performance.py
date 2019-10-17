@@ -19,8 +19,6 @@ class Performance:
             sens, spec = arba.effect.get_sens_spec(target=perm_reg.mask_target,
                                                    estimate=est_mask,
                                                    mask=perm_reg.data_img.mask)
-            s = f'{mode} ({self.stat_label}: {stat:.2e}): sens {sens:.3f} spec {spec:.3f}'
-            print(s)
             self.method_stat_ss_list_dict[mode].append((stat, sens, spec))
 
     def plot(self, folder):

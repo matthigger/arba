@@ -45,13 +45,13 @@ if __name__ == '__main__':
     random.seed(1)
 
     # detection params
-    par_flag = False
+    par_flag = True
     num_perm = 24
     alpha = .05
 
     # regression effect params
     # r2_vec = np.logspace(-2, -.1, 7)
-    r2_vec = [.9]
+    r2_vec = [.1]
     num_eff = 1
     num_sbj = 100
     min_var_effect_locations = False
@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     mask_radius = 1000
 
-    effect_num_vox = 5
+    effect_num_vox = 100
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -75,11 +75,10 @@ if __name__ == '__main__':
         contrast = [1, 0, 0]
         dim_sbj = 3
         dim_img = 1
-        shape = 4, 4, 4
-        data_img = arba.data.DataImageSynth(num_sbj=num_sbj, shape=shape,
-                                            mu=np.zeros(dim_img),
-                                            cov=np.eye(dim_img),
-                                            folder=folder / 'raw_data')
+        shape = 8, 8, 8
+        data = np.random.standard_normal((*shape, num_sbj, dim_img))
+        data_img = arba.data.DataImageArray(data)
+        data_img.to_nii(folder=folder / 'raw_data')
 
         sbj_feat = np.random.normal(size=(num_sbj, dim_sbj))
         data_sbj = arba.data.DataSubject(feat=sbj_feat,

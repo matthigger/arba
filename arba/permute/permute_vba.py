@@ -1,8 +1,11 @@
+import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
+import seaborn as sns
 
 from .permute_discrim import PermuteDiscriminate
 from .permute_regress import PermuteRegress
+from ..plot import save_fig
 from ..space import Mask
 from ..tfce import apply_tfce
 
@@ -13,11 +16,11 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
     """ runs vanilla VBA and TFCE alongside permutation testing
 
     Attributes:
-        mode_stat_dict (dict): keys are vba subtype labels ('vba', 'tfce'),
-                               values are arrays of stats in shape of image
-        mode_null_dict (dict): keys are vba subtype labels, values are sorted
-                               arrays of size num_perm, each containing max
-                               stat across image per permutation
+        vba_stat_dict (dict): keys are vba subtype labels ('vba', 'tfce'),
+                              values are arrays of stats in shape of image
+        vba_null_dict (dict): keys are vba subtype labels, values are sorted
+                              arrays of size num_perm, each containing max
+                              stat across image per permutation
     """
 
     def __init__(self, *args, **kwargs):
@@ -46,38 +49,46 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
         return val_list
 
     def run_single_permute(self, seed):
-        # this method needs access to sg_hist, we build and pass to avoid
-        # redundant computation
-        sg_hist = self.get_sg_hist(seed)
-        stat_dict = super().run_single_permute(_sg_hist=sg_hist)
-
         # get stat img and apply tfce
+        sg_hist = self.get_sg_hist(seed)
         stat = sg_hist.to_array(attr=self.stat)
         stat_tfce = apply_tfce(stat)
+
+        # this method needs access to sg_hist, we build and pass to avoid
+        # redundant computation
+        stat_dict = super().run_single_permute(_sg_hist=sg_hist)
 
         # sort tfce values from largest to smallest
         stat_dict['tfce'] = max(stat_tfce[self.data_img.mask])
 
         return stat_dict
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, null_vba=True, **kwargs):
         super().save(*args, **kwargs)
 
         for label, img in self.vba_stat_dict.items():
             f = self.folder / f'{self.stat}_{label}.nii.gz'
             img = nib.Nifti1Image(img, affine=self.data_img.ref.affine)
             img.to_filename(str(f))
+
+        if null_vba:
+            for label, stat in self.vba_null_dict.items():
+                sns.set()
+                plt.hist(stat, bins=25)
+                plt.xlabel(label)
+                plt.ylabel('count')
+                save_fig(self.folder / f'vba_hist_{label}.pdf')
 
 
 class PermuteRegressVBA(PermuteRegress):
     """ runs vanilla VBA and TFCE alongside permutation testing
 
     Attributes:
-        mode_stat_dict (dict): keys are vba subtype labels ('vba', 'tfce'),
-                               values are arrays of stats in shape of image
-        mode_null_dict (dict): keys are vba subtype labels, values are sorted
-                               arrays of size num_perm, each containing max
-                               stat across image per permutation
+        vba_stat_dict (dict): keys are vba subtype labels ('vba', 'tfce'),
+                              values are arrays of stats in shape of image
+        vba_null_dict (dict): keys are vba subtype labels, values are sorted
+                              arrays of size num_perm, each containing max
+                              stat across image per permutation
     """
 
     def __init__(self, *args, **kwargs):
@@ -120,10 +131,18 @@ class PermuteRegressVBA(PermuteRegress):
 
         return stat_dict
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, null_vba=True, **kwargs):
         super().save(*args, **kwargs)
 
         for label, img in self.vba_stat_dict.items():
             f = self.folder / f'{self.stat}_{label}.nii.gz'
             img = nib.Nifti1Image(img, affine=self.data_img.ref.affine)
             img.to_filename(str(f))
+
+        if null_vba:
+            for label, stat in self.vba_null_dict.items():
+                sns.set()
+                plt.hist(stat, bins=25)
+                plt.xlabel(label)
+                plt.ylabel('count')
+                save_fig(self.folder / f'vba_hist_{label}.pdf')

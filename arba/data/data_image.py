@@ -1,22 +1,13 @@
-import os
+import abc
 import pathlib
 import tempfile
 from contextlib import contextmanager
 
 import nibabel as nib
 import numpy as np
-from tqdm import tqdm
 
+import arba.space
 from arba.region import FeatStat
-from arba.space import get_ref, Mask
-
-
-def check_loaded(fnc):
-    def wrapped(self, *args, **kwargs):
-        assert self.is_loaded, 'DataImage must be loaded to call'
-        return fnc(self, *args, **kwargs)
-
-    return wrapped
 
 
 class DataImage:
@@ -28,27 +19,20 @@ class DataImage:
     allowing for parallel processes to operate on shared memory.
 
     Attributes:
-        sbj_ifeat_data_img (tree): key0 is sbj, key2 is imaging feat, vals are
-                                    files which contain imaging feat of sbj
         sbj_list (list): list of sbj (defines indexing)
         feat_list (list): list of features (defines indexing)
-        scale (np.array): defines scaling of data
         ref (RefSpace): defines shape and affine of data
-        fnc_list (list): each is a function which is passed self, may
-                         operate on data as needed before it is write
-                         protected
+        mask (np.array): mask of active area (boolean)
 
     Attributes available after load()
-        mask (Mask): mask of active area
-        fs (FeatStat): feature statistics across active area of all sbj
-        data (np.memmap): (space0, space1, space2, sbj_idx, feat_idx)
-                          if data is loaded, a read only memmap of data
+        data (np.array): (space0, space1, space2, sbj_idx, feat_idx) data
         offset (np.array): an offset which has been added to data
-
-    Hidden Attributes:
-        __mask (Mask): mask of intersection of all files (only available when
-                       loaded)
+        f_data (Pathlib.Path): location of memmap of data.  None if not memmap
     """
+
+    @property
+    def is_memmap(self):
+        return bool(self.f_data)
 
     @property
     def is_loaded(self):
@@ -56,69 +40,88 @@ class DataImage:
 
     @property
     def num_sbj(self):
-        return len(self.sbj_ifeat_data_img)
+        return len(self.sbj_list)
 
     @property
-    def d(self):
+    def num_feat(self):
         return len(self.feat_list)
 
-    def __len__(self):
-        return len(self.sbj_ifeat_data_img.keys())
-
-    def __init__(self, sbj_ifeat_data_img, sbj_list=None, fnc_list=None,
-                 mask=None):
-        self.sbj_ifeat_data_img = sbj_ifeat_data_img
-        if sbj_list is None:
-            self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
-        else:
-            self.sbj_list = sbj_list
-            assert set(sbj_list) == set(sbj_ifeat_data_img), 'sbj_list error'
-
-        feat_file_dict = next(iter(self.sbj_ifeat_data_img.values()))
-        self.feat_list = sorted(feat_file_dict.keys())
-        self.scale = np.eye(self.d)
-        self.ref = get_ref(next(iter(feat_file_dict.values())))
-
-        self.fnc_list = fnc_list
-        if fnc_list is None:
-            self.fnc_list = list()
-
-        self.fs = None
-        self.data = None
-        self.f_data = None
+    def __init__(self, sbj_list, feat_list, ref, mask=None):
+        self.sbj_list = sbj_list
+        self.feat_list = feat_list
+        self.ref = ref
 
         self.mask = mask
-        self.__mask = None
+        if self.mask is None:
+            self.mask = np.ones(ref.shape).astype(bool)
 
+        self.data = None
         self.offset = None
+        self.f_data = None
 
-    def discard_to(self, n_sbj, split=None):
-        """ discards sbj so only num_sbj remains (in place)
+    def trim(self, mask=None):
+        """ returns a DataImageSynth which discards dims with only zeros
+
+        if the input mask is:
+        array([[1., 0., 0.],
+               [0., 1., 0.],
+               [0., 0., 0.]])
+
+        then the output mask is
+        array([[1., 0.],
+               [0., 1.]])
+
+        because the last row and column contain zeros (exclusively)
 
         Args:
-            n_sbj (int):
-            split (Split): if passed, ensures at most num_sbj per split grp
+            mask (np.array): mask to apply before trimming
+
+        Returns:
+            data_image (DataImageArray): reduced DataImage
+            trim_slice (np.slice): the slice of self.data used
         """
-        if self.is_loaded:
-            raise AttributeError('may not be loaded during discard_to()')
+        from .data_image_array import DataImageArray
 
-        # get appropriate grp_list_iter, iter of grp, sbj_list
-        if split is None:
-            grp_list_iter = iter(('grp0', self.sbj_list))
+        assert self.is_loaded
+
+        if mask is None:
+            mask = self.mask
         else:
-            grp_list_iter = split.grp_list_iter()
+            mask = np.logical_and(self.mask, mask)
 
-        # prune tree to approrpiate sbj
-        for _, sbj_list in grp_list_iter:
-            for sbj in sbj_list[n_sbj:]:
-                del self.sbj_ifeat_data_img[sbj]
+        # get min, max ijk
+        min_ijk = []
+        max_ijk = []
+        for idx in range(3):
+            not_idx = set(range(3)) - {idx}
+            idx_present = np.nonzero(mask.any(axis=tuple(not_idx)))[0]
+            min_ijk.append(idx_present[0])
+            max_ijk.append(idx_present[-1])
 
-        # update sbj_list
-        self.sbj_list = sorted(self.sbj_ifeat_data_img.keys())
+        # build slice
+        trim_slice = np.s_[
+                     min_ijk[0]: max_ijk[0],
+                     min_ijk[1]: max_ijk[1],
+                     min_ijk[2]: max_ijk[2]]
 
-    @check_loaded
+        # build new ref space
+        shape = np.array(max_ijk) - np.array(min_ijk)
+        affine = np.array(self.ref.affine)
+        affine[:3, -1] += np.diag(affine)[:3] * np.array(min_ijk)
+        ref = arba.space.RefSpace(affine=affine, shape=shape)
+
+        # build reduced DataImage
+        data_image = DataImageArray(data=self.data[trim_slice],
+                                    sbj_list=self.sbj_list,
+                                    feat_list=self.feat_list,
+                                    ref=ref,
+                                    mask=self.mask[trim_slice])
+        return data_image, trim_slice
+
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
                sbj_bool=None):
+
+        assert self.is_loaded, 'data_image is not loaded'
         assert not ((sbj_list is not None) and (sbj_bool is not None)), \
             'nand(sbj_list, sbj_bool) required'
         assert 2 == ((ijk is None) + (mask is None) + (pc_ijk is None)), \
@@ -126,8 +129,6 @@ class DataImage:
 
         # get sbj_bool
         if sbj_bool is None:
-            if sbj_list is None:
-                sbj_list = self.sbj_list
             sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # get data array
@@ -135,26 +136,27 @@ class DataImage:
             # single point
             i, j, k = ijk
             x = self.data[i, j, k, :, :]
-            x = x[sbj_bool, :].reshape((-1, self.d), order='F')
+            x = x[sbj_bool, :].reshape((-1, self.num_feat), order='F')
         elif mask is not None:
             # mask
             x = self.data[mask, :, :]
-            x = x[:, sbj_bool, :].reshape((-1, self.d), order='F')
+            x = x[:, sbj_bool, :].reshape((-1, self.num_feat), order='F')
         else:
+            # point cloud
             n = len(pc_ijk)
-            x = np.empty((n, self.d))
+            x = np.empty((n, self.num_feat))
             for idx, (i, j, k) in enumerate(pc_ijk):
                 _x = self.data[i, j, k, :, :]
-                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.d), order='F')
+                x[idx, :] = _x[sbj_bool, :].reshape((-1, self.num_feat),
+                                                    order='F')
 
         return FeatStat.from_array(x.T)
 
     @contextmanager
     def loaded(self, offset=None, **kwargs):
-        """ provides context manager with loaded data
+        """ context manager which ensures data is loaded into object
 
-        note: we only load() and unload() if the object was previously not
-        loaded
+        this context manager may be nested without error
         """
         was_loaded = self.is_loaded
 
@@ -178,127 +180,113 @@ class DataImage:
                 # return to original state
                 self.unload()
 
-    def reset_offset(self, offset=None):
-        """ discards old offset, adds a new one.
+    @contextmanager
+    def data_writable(self):
+        if self.is_memmap:
+            self.data = np.array(self.data)
 
-        (faster than reloadeding for each new offset)
+        try:
+            yield self
+        finally:
+            if self.is_memmap:
+                self.flush_to_memmap()
+
+    def flush_to_memmap(self):
+        assert self.f_data is None, 'cannot flush until last memmap deleted'
+
+        self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
+        self.f_data = pathlib.Path(self.f_data)
+
+        x = np.memmap(self.f_data, dtype='float32', mode='w',
+                      shape=self.data.shape)
+        x[:] = self.data[:]
+        x.flush()
+        self.data = np.memmap(self.f_data, dtype='float32', mode='r',
+                              shape=self.data.shape)
+
+    def reset_offset(self, offset=None):
+        """ discards old offset, adds a new one (faster than reloading)
 
         Args:
             offset (np.array):
         """
-        memmap = isinstance(self.data, np.memmap)
-        if memmap:
-            self.data = np.array(self.data)
+        with self.data_writable():
+            # out with the old
+            if self.offset is not None:
+                self.data -= self.offset
 
-        # subtract old
-        if self.offset is not None:
-            self.data -= self.offset
+            # in with the new
+            if offset is not None:
+                self.data += offset
+            self.offset = offset
 
-        # add new, record it
-        if offset is not None:
-            self.data += offset
-        self.offset = offset
-
-        if memmap:
-            # write to memmap
-            x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                          shape=self.data.shape)
-            x[:] = self.data[:]
-            x.flush()
-            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                                  shape=self.data.shape)
-
-    def load(self, offset=None, verbose=False, memmap=False, scale_norm=False):
-        """ loads data, applies fnc in self.fnc_list
+    @abc.abstractmethod
+    def load(self, _data, offset=None, memmap=False):
+        """ loads data
 
         Args:
+            _data (np.array): data to be loaded
             offset (np.array): image offset
-            verbose (bool): toggles command line output
-            memmap (bool): toggles memory map (self.data becomes read only, but
-                           accesible from all threads to save on memory)
-            scale_norm (bool): toggles scaling data to unit variance
+            memmap (bool): toggles whether array is written to memory map
         """
-
-        if self.is_loaded:
-            raise AttributeError('already loaded')
-
-        # build memmap file
-        shape = (*self.ref.shape, self.num_sbj, self.d)
-        self.data = np.empty(shape)
-
-        # load data
-        for sbj_idx, sbj in tqdm(enumerate(self.sbj_list),
-                                 desc='load per sbj',
-                                 disable=not verbose):
-            for feat_idx, feat in enumerate(self.feat_list):
-                f = self.sbj_ifeat_data_img[sbj][feat]
-                img = nib.load(str(f))
-                self.data[:, :, :, sbj_idx, feat_idx] = img.get_data()
-
-        # get mask of data
-        self.__mask = Mask(np.all(self.data, axis=(3, 4)), ref=self.ref)
-
-        # get mask
-        if self.mask is not None:
-            self.mask = np.logical_and(self.__mask, self.mask)
-        else:
-            self.mask = self.__mask
-
-        # apply all fnc
-        for fnc in self.fnc_list:
-            fnc(self)
+        # save
+        self.data = _data
 
         # apply offset
         if offset is not None:
             self.data += offset
         self.offset = offset
 
-        if scale_norm:
-            fs = self.get_fs(mask=self.mask)
-            self.data = self.data @ np.diag((1 / np.diag(fs.cov)) ** .5)
+        # apply mask
+        self.data[np.logical_not(self.mask)] = 0
 
-        # flush data to memmap, make read only copy
+        # memmap
         if memmap:
-            self.f_data = tempfile.NamedTemporaryFile(suffix='.dat').name
-            self.f_data = pathlib.Path(self.f_data)
-            x = np.memmap(self.f_data, dtype='float32', mode='w+',
-                          shape=shape)
-            x[:] = self.data[:]
-            x.flush()
-            self.data = np.memmap(self.f_data, dtype='float32', mode='r',
-                                  shape=shape)
+            self.flush_to_memmap()
 
+    @abc.abstractmethod
     def unload(self):
-        # delete memory map file
-        if self.f_data is not None and self.f_data.exists():
-            os.remove(str(self.f_data))
-            self.f_data = None
-
+        if self.is_memmap:
+            self.f_data.unlink(missing_ok=True)
         self.data = None
-        self.__mask = None
         self.offset = None
 
-    @check_loaded
-    def to_nii(self, folder=None, mean_flag=True):
-        """ writes each feature to a nii file
+    def to_nii(self, folder=None, mean=False, sbj_list=None):
+        """ prints nii of each sbj's features, optionally averages across sbj
 
         Args:
-            folder (str or Path): output folder
+            folder (str or Path): output folder, defaults to random tmp folder
+            mean (bool): toggles averaging across sbj
+            sbj_list (list): which sbj to include
 
         Returns:
-            f_out (Path): nii file out
+            folder (Path): output folder
         """
+        assert self.is_loaded, 'data_image is not loaded'
+
+        def save_img(x, f):
+            img = nib.Nifti1Image(x, affine=self.ref.affine)
+            img.to_filename(str(folder / f))
+
+        # get output folder, make it if need be
         if folder is None:
             folder = tempfile.TemporaryDirectory().name
         folder = pathlib.Path(folder)
+        folder.mkdir(parents=True, exist_ok=True)
+
+        # get sbj which are to be saved
+        sbj_bool = self.sbj_list_to_bool(sbj_list)
 
         # write to file
         for feat_idx, feat in enumerate(self.feat_list):
-            x = self.data[:, :, :, :, feat_idx]
-            if mean_flag:
-                x = np.mean(x, axis=3)
-            img = nib.Nifti1Image(x, affine=self.ref.affine)
-            img.to_filename(str(folder / f'{feat}.nii.gz'))
+            if mean:
+                x = self.data[:, :, :, sbj_bool, feat_idx].mean(axis=3)
+                save_img(x=x, f=f'{feat}.nii.gz')
+            else:
+                for sbj_idx in np.where(sbj_bool)[0]:
+                    x = self.data[:, :, :, sbj_idx, feat_idx]
+                    sbj = self.sbj_list[sbj_idx]
+                    save_img(x=x, f=f'{feat}_{sbj}.nii.gz')
 
         return folder
 
@@ -308,21 +296,3 @@ class DataImage:
 
         sbj_set = set(sbj_list)
         return np.array([sbj in sbj_set for sbj in self.sbj_list])
-
-    def __eq__(self, other):
-        if self.sbj_ifeat_data_img != other.sbj_ifeat_data_img:
-            return False
-
-        if self.ref != other.ref:
-            return False
-
-        if self.mask != other.mask:
-            return False
-
-        if self.scale != other.scale:
-            return False
-
-        if self.fnc_list != other.fnc_list:
-            return False
-
-        return True
