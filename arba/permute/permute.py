@@ -7,6 +7,7 @@ import numpy as np
 import scipy.stats
 from scipy.spatial.distance import dice
 from tqdm import tqdm
+from sklearn.linear_model import LinearRegression
 
 from mh_pytools import parallel
 from ..plot import save_fig
@@ -41,9 +42,9 @@ class Permute:
         self.mask_target = mask_target
         self.verbose = verbose
 
-        self.stat_null = None
-        self.node_pval_dict = dict()
-        self.node_z_dict = dict()
+        self.null_perc = None
+        self.model_mu_lin_reg = None
+        self.model_err_lin_reg = None
 
         self.sg_hist = None
         self.merge_record = None
@@ -67,7 +68,7 @@ class Permute:
         arba_mask = self.merge_record.build_mask(self.sig_node)
         self.mode_est_mask_dict = {'arba': arba_mask}
 
-    def permute_model(self):
+    def permute_model(self, *args, **kwargs):
         """ estimates distribution of how statistic varies with size
 
         this is achieved by bootstrap sampling stats from the null distribution
@@ -79,20 +80,43 @@ class Permute:
 
         for linear functions a, b and sig
         """
-        raise NotImplementedError
-
         # draw samples from permutation testing
+        val_list = self.permute(*args, **kwargs)
 
         # estimate mean stat per size
+        size = np.vstack(d['size'] for d in val_list)
+        stat = np.vstack(d['stat'] for d in val_list)
+        self.model_mu_lin_reg = LinearRegression()
+        self.model_mu_lin_reg.fit(size, stat)
 
         # compute error per size given model above
+        err = stat - self.model_mu_lin_reg.predict(size)
 
         # estimate error bandwidth given model above
+        self.model_err_lin_reg = LinearRegression()
+        self.model_err_lin_reg.fit(size, np.abs(err))
 
-    def permute_samples(self):
+    def get_percentile(self, stat, size):
+        """ computes percentile of stat under model
+        """
+        stat = np.atleast_2d(stat).T
+        size = np.atleast_2d(size).T
+
+        diff = stat - self.model_mu_lin_reg.predict(size)
+        z = np.divide(diff, self.model_err_lin_reg.predict(size))
+
+        return scipy.stats.norm.cdf(z)
+
+    def permute_samples(self, *args, **kwargs):
         """ draws samples from null distribution, saves max percentile
         """
-        raise NotImplementedError
+        # draw samples from permutation testing
+        val_list = self.permute(*args, **kwargs)
+
+        # comptue percentile and store
+        size = np.vstack(d['size'] for d in val_list)
+        stat = np.vstack(d['stat'] for d in val_list)
+        self.null_perc = self.get_percentile(stat, size)
 
     @abc.abstractmethod
     def _set_seed(self, seed=None):
@@ -113,14 +137,14 @@ class Permute:
 
         sg_hist.reduce_to(1, verbose=self.verbose)
 
-        size_stat = np.empty((len(sg_hist.nodes, 2)))
         merge_record = sg_hist.merge_record
+        size = np.empty((len(merge_record.nodes, 1)))
+        stat = np.empty((len(merge_record.nodes, 1)))
         for node_idx, node in enumerate(merge_record.nodes):
-            size = merge_record.node_size_dict[n]
-            stat = merge_record.stat_node_val_dict[self.stat][n]
-            size_stat[node_idx, :] = size, stat
+            size = merge_record.node_size_dict[node]
+            stat = merge_record.stat_node_val_dict[self.stat][node]
 
-        return {'size_stat': size_stat}
+        return {'size': size, 'stat': stat}
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
@@ -147,20 +171,22 @@ class Permute:
         return val_list
 
     def get_sig_node(self):
-        raise NotImplementedError
-        # get percentile threshold
-
-        node_perc_dict = dict()
+        # get size and stat
+        size = np.empty((len(self.merge_record, 1)))
+        stat = np.empty((len(self.merge_record, 1)))
         for n in self.merge_record.nodes:
-            # compute percentile
+            size[n] = self.merge_record.node_size_dict[n]
+            stat[n] = self.merge_record.stat_node_val_dict[self.stat][n]
+        perc = self.get_percentile(stat, size)
+        node_perc_dict = dict(enumerate(perc))
 
-            # store if significant
+        # cut to a disjoint set of the most compelling nodes (max perc)
+        node_best = self.merge_record._cut_greedy(node_perc_dict,
+                                                 max_flag=True)
 
-            pass
-
-        # cut to a disjoint set of the most compelling nodes (min pval)
-        sig_node = self.merge_record._cut_greedy(node_perc_dict,
-                                                 max_flag=False)
+        # get only the significant nodes
+        thresh = np.percentile(self.null_perc, 100 * (1 - self.alpha))
+        sig_node = {n for n in node_best if node_perc_dict[n] >= thresh}
 
         return sig_node
 
