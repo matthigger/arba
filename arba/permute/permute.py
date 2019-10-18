@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats
 from scipy.spatial.distance import dice
-from tqdm import tqdm
 from sklearn.linear_model import LinearRegression
+from tqdm import tqdm
 
 from mh_pytools import parallel
 from ..plot import save_fig
@@ -84,26 +84,39 @@ class Permute:
         val_list = self.permute(*args, **kwargs)
 
         # estimate mean stat per size
-        size = np.vstack(d['size'] for d in val_list)
-        stat = np.vstack(d['stat'] for d in val_list)
+        log_size = np.log10(np.vstack(d['size'] for d in val_list))
+        log_stat = np.log10(np.vstack(d['stat'] for d in val_list))
         self.model_mu_lin_reg = LinearRegression()
-        self.model_mu_lin_reg.fit(size, stat)
+        self.model_mu_lin_reg.fit(log_size, log_stat)
 
         # compute error per size given model above
-        err = stat - self.model_mu_lin_reg.predict(size)
+        err = log_stat - self.model_mu_lin_reg.predict(log_size)
 
         # estimate error bandwidth given model above
         self.model_err_lin_reg = LinearRegression()
-        self.model_err_lin_reg.fit(size, np.abs(err))
+        self.model_err_lin_reg.fit(log_size, np.abs(err))
 
-    def get_percentile(self, stat, size):
+    def get_percentile(self, stat, size, _no_log=False):
         """ computes percentile of stat under model
-        """
-        stat = np.atleast_2d(stat).T
-        size = np.atleast_2d(size).T
 
-        diff = stat - self.model_mu_lin_reg.predict(size)
-        z = np.divide(diff, self.model_err_lin_reg.predict(size))
+        Args:
+            stat (np.array): see self.stat
+            size (np.array): size of region
+            _no_log (bool): if true, disable taking log so one may pass log-ed
+                            data
+        """
+        stat = make_sklearn_2d(stat)
+        size = make_sklearn_2d(size)
+
+        if _no_log:
+            log_stat = stat
+            log_size = size
+        else:
+            log_stat = np.log10(stat)
+            log_size = np.log10(size)
+
+        diff = log_stat - self.model_mu_lin_reg.predict(log_size)
+        z = np.divide(diff, self.model_err_lin_reg.predict(log_size))
 
         return scipy.stats.norm.cdf(z)
 
@@ -138,11 +151,11 @@ class Permute:
         sg_hist.reduce_to(1, verbose=self.verbose)
 
         merge_record = sg_hist.merge_record
-        size = np.empty((len(merge_record.nodes, 1)))
-        stat = np.empty((len(merge_record.nodes, 1)))
-        for node_idx, node in enumerate(merge_record.nodes):
-            size = merge_record.node_size_dict[node]
-            stat = merge_record.stat_node_val_dict[self.stat][node]
+        size = np.empty((len(merge_record.nodes), 1))
+        stat = np.empty((len(merge_record.nodes), 1))
+        for node in merge_record.nodes:
+            size[node] = merge_record.node_size_dict[node]
+            stat[node] = merge_record.stat_node_val_dict[self.stat][node]
 
         return {'size': size, 'stat': stat}
 
@@ -172,8 +185,8 @@ class Permute:
 
     def get_sig_node(self):
         # get size and stat
-        size = np.empty((len(self.merge_record, 1)))
-        stat = np.empty((len(self.merge_record, 1)))
+        size = np.empty((len(self.merge_record), 1))
+        stat = np.empty((len(self.merge_record), 1))
         for n in self.merge_record.nodes:
             size[n] = self.merge_record.node_size_dict[n]
             stat[n] = self.merge_record.stat_node_val_dict[self.stat][n]
@@ -182,7 +195,7 @@ class Permute:
 
         # cut to a disjoint set of the most compelling nodes (max perc)
         node_best = self.merge_record._cut_greedy(node_perc_dict,
-                                                 max_flag=True)
+                                                  max_flag=True)
 
         # get only the significant nodes
         thresh = np.percentile(self.null_perc, 100 * (1 - self.alpha))
@@ -288,3 +301,12 @@ def get_performance_str(mask_estimate, mask_target, label=None):
     s += f'spec: {spec:.3f} ({non_target_wrong} of {non_target} vox detected incorrectly)\n'
 
     return s
+
+
+def make_sklearn_2d(x):
+    """ given a vector, makes it 2d assuming more observations than features
+    """
+    x = np.atleast_2d(x)
+    if x.shape[0] < x.shape[1]:
+        x = x.T
+    return x
