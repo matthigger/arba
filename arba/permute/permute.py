@@ -2,9 +2,7 @@ import abc
 import pathlib
 import tempfile
 
-import matplotlib.pyplot as plt
 import numpy as np
-import scipy.stats
 from scipy.spatial.distance import dice
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
@@ -42,7 +40,7 @@ class Permute:
         self.mask_target = mask_target
         self.verbose = verbose
 
-        self.null_perc = None
+        self.null_z = None
         self.model_mu_lin_reg = None
         self.model_err_lin_reg = None
 
@@ -96,8 +94,8 @@ class Permute:
         self.model_err_lin_reg = LinearRegression()
         self.model_err_lin_reg.fit(log_size, np.abs(err))
 
-    def get_percentile(self, stat, size, _no_log=False):
-        """ computes percentile of stat under model
+    def get_model_z(self, stat, size, _no_log=False):
+        """ computes z-score of stat under model (adjusts for size)
 
         Args:
             stat (np.array): see self.stat
@@ -118,18 +116,20 @@ class Permute:
         diff = log_stat - self.model_mu_lin_reg.predict(log_size)
         z = np.divide(diff, self.model_err_lin_reg.predict(log_size))
 
-        return scipy.stats.norm.cdf(z)
+        return z
 
     def permute_samples(self, *args, **kwargs):
-        """ draws samples from null distribution, saves max percentile
+        """ draws samples from null distribution
         """
         # draw samples from permutation testing
         val_list = self.permute(*args, **kwargs)
 
         # comptue percentile and store
-        size = np.vstack(d['size'] for d in val_list)
-        stat = np.vstack(d['stat'] for d in val_list)
-        self.null_perc = self.get_percentile(stat, size)
+        self.null_z = list()
+        for d in val_list:
+            z = self.get_model_z(size=d['size'], stat=d['stat'])
+            self.null_z.append(max(z))
+        self.null_z = np.array(self.null_z)
 
     @abc.abstractmethod
     def _set_seed(self, seed=None):
@@ -190,29 +190,21 @@ class Permute:
         for n in self.merge_record.nodes:
             size[n] = self.merge_record.node_size_dict[n]
             stat[n] = self.merge_record.stat_node_val_dict[self.stat][n]
-        perc = self.get_percentile(stat, size)
-        node_perc_dict = dict(enumerate(perc))
+        z = self.get_model_z(stat, size)
+        self.node_z_dict = dict(enumerate(z))
 
-        # cut to a disjoint set of the most compelling nodes (max perc)
-        node_best = self.merge_record._cut_greedy(node_perc_dict,
+        # cut to a disjoint set of the most compelling nodes (max z)
+        node_best = self.merge_record._cut_greedy(self.node_z_dict,
                                                   max_flag=True)
 
         # get only the significant nodes
-        thresh = np.percentile(self.null_perc, 100 * (1 - self.alpha))
-        sig_node = {n for n in node_best if node_perc_dict[n] >= thresh}
+        z_thresh = np.percentile(self.null_z, 100 * (1 - self.alpha))
+        sig_node = {n for n in node_best if self.node_z_dict[n] >= z_thresh}
 
         return sig_node
 
-    def save(self, size_v_stat=True, size_v_stat_null=True,
-             size_v_stat_pval=True, print_node=True, performance=True):
-
-        def plot_thresh(p_list):
-            size = np.arange(1, self.stat_null.shape[1] + 1)
-            plt.plot(size, 10 ** self.log_stat_predict, label='null mean')
-            for idx, p in enumerate(p_list):
-                stat = self.log_stat_predict + \
-                       self.log_stat_err_std * scipy.stats.norm.isf(p)
-                plt.plot(size, 10 ** stat, label=f'null p={p}')
+    def save(self, size_v_stat=True, size_v_z=True, print_node=True,
+             performance=True):
 
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
@@ -221,39 +213,17 @@ class Permute:
             self.merge_record.plot_size_v(self.stat, label=self.stat,
                                           mask=self.mask_target,
                                           log_y=True)
-            plot_thresh(p_list=[.05, .01, .001])
-            plt.legend()
 
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
 
         for label, mask in self.mode_est_mask_dict.items():
             mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
-        if size_v_stat_pval:
-            self.merge_record.plot_size_v(self.node_pval_dict, label='pval',
+        if size_v_z:
+            self.merge_record.plot_size_v(self.node_z_dict, label='z-model',
                                           mask=self.mask_target,
-                                          log_y=True)
-            save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
-
-        if size_v_stat_null:
-            # scatter permutations
-            size = np.arange(1, self.stat_null.shape[1] + 1)
-            _size = np.repeat(np.atleast_2d(size), self.num_perm, axis=0)
-            xy = np.vstack((_size.flatten(), self.stat_null.flatten())).T
-            xy = xy[~np.isnan(xy[:, 1]), :]
-
-            fig, ax = plt.subplots(1, 1)
-            ax.set_xscale('log')
-            ax.set_yscale('log')
-            plt.scatter(xy[:, 0], xy[:, 1], color='g', alpha=.15,
-                        label='observed')
-
-            plot_thresh(p_list=[.05, .01, .001])
-            plt.ylabel(f'max {self.stat} in permutation')
-            plt.xlabel('size')
-            plt.legend()
-
-            save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
+                                          log_y=False)
+            save_fig(self.folder / f'size_v_{self.stat}_z.pdf')
 
         if performance and self.mask_target is not None:
             f_mask = self.folder / 'mask_target.nii.gz'
