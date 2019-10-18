@@ -71,7 +71,7 @@ def get_t2_stats(fs_dict, grp_tuple=None):
                fs_dict[grp1].cov * lam1
 
     # compute t2
-    t2 = delta @ np.linalg.inv(cov_pool) @ delta
+    t2 = delta @ np.linalg.inv(cov_pool) @ delta * (n0 * n1) / (n0 + n1)
 
     # todo: t2 actually refers to mean t2 per observation
     return delta, cov_pool, t2
