@@ -135,6 +135,8 @@ class Permute:
             self.null_z.append(max(z))
         self.null_z = np.array(self.null_z)
 
+        return val_list
+
     @abc.abstractmethod
     def _set_seed(self, seed=None):
         raise NotImplementedError
