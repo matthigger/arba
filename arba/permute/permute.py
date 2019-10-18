@@ -2,7 +2,9 @@ import abc
 import pathlib
 import tempfile
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from scipy.spatial.distance import dice
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
@@ -43,6 +45,7 @@ class Permute:
         self.null_z = None
         self.model_mu_lin_reg = None
         self.model_err_lin_reg = None
+        self.model_log_size_stat = None
 
         self.sg_hist = None
         self.merge_record = None
@@ -84,6 +87,7 @@ class Permute:
         # estimate mean stat per size
         log_size = np.log10(np.vstack(d['size'] for d in val_list))
         log_stat = np.log10(np.vstack(d['stat'] for d in val_list))
+        self.model_log_size_stat = np.hstack((log_size, log_stat))
         self.model_mu_lin_reg = LinearRegression()
         self.model_mu_lin_reg.fit(log_size, log_stat)
 
@@ -203,11 +207,61 @@ class Permute:
 
         return sig_node
 
-    def save(self, size_v_stat=True, size_v_z=True, print_node=True,
+    def save(self, size_v_stat=True, size_v_z=True, null=True, print_node=True,
              performance=True):
 
+        sns.set()
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
+
+        if null:
+            fig, ax = plt.subplots(1, 2)
+            ax[1].set_xscale('log')
+            ax[0].set_xscale('log')
+            ax[0].set_yscale('log')
+
+            # get stats
+            log_size = self.model_log_size_stat[:, 0]
+            log_stat = self.model_log_size_stat[:, 1]
+            _log_size = np.linspace(min(log_size), max(log_size), 100)
+
+            # downsample (for plotting)
+            idx = np.random.choice(range(log_size.size), 750)
+            log_size = log_size[idx]
+            log_stat = log_stat[idx]
+
+            # plot adjusted z score
+            plt.sca(ax[1])
+            z = self.get_model_z(size=log_size, stat=log_stat, _no_log=True)
+            plt.scatter(10 ** log_size, z, label='after adjustment', alpha=.4)
+            plt.legend()
+            plt.ylabel('z')
+            plt.xlabel('size')
+
+            # plot observed stats
+            plt.sca(ax[0])
+            plt.scatter(10 ** log_size, 10 ** log_stat, label='null observed',
+                        alpha=.4)
+
+            # compute / plot model expected
+            log_stat_predict = self.model_mu_lin_reg.predict(
+                make_sklearn_2d(_log_size))
+            label = f'model expected (m={self.model_mu_lin_reg.coef_[0, 0]:.2f})'
+            plt.plot(10 ** _log_size, 10 ** log_stat_predict, label=label,
+                     linewidth=3,
+                     color='k')
+
+            # plot 1 std dev above
+            std = self.model_err_lin_reg.predict(make_sklearn_2d(_log_size))
+            label = f'+1 std dev (m={self.model_err_lin_reg.coef_[0, 0]:.2f})'
+            plt.plot(10 ** _log_size, 10 ** (log_stat_predict + std),
+                     label=label, linewidth=3, color='k', linestyle='--')
+            plt.legend()
+            plt.ylabel(self.stat)
+            plt.xlabel('size')
+
+            plt.suptitle(f'adjusting {self.stat} per region size')
+            save_fig(self.folder / f'size_adjust.pdf')
 
         if size_v_stat:
             self.merge_record.plot_size_v(self.stat, label=self.stat,
