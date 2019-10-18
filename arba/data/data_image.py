@@ -54,6 +54,7 @@ class DataImage:
         self.mask = mask
         if self.mask is None:
             self.mask = np.ones(ref.shape).astype(bool)
+        self.mask = arba.space.Mask(self.mask, ref=self.ref)
 
         self.data = None
         self.offset = None
