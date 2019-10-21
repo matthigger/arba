@@ -20,17 +20,19 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
         vba_null_dict (dict): keys are vba subtype labels, values are sorted
                               arrays of size num_perm, each containing max
                               stat across image per permutation
+        vba_thresh_dict (dict): keys are vba subtype labels, values are sig
+                                thresholds
     """
 
     def __init__(self, *args, **kwargs):
         self.vba_stat_dict = dict()
         self.vba_null_dict = dict()
+        self.vba_thresh_dict = dict()
 
         super().__init__(*args, **kwargs)
 
         for mode, null in self.vba_null_dict.items():
-            cutoff = np.percentile(null, 100 * (1 - self.alpha))
-            mask = self.vba_stat_dict[mode] >= cutoff
+            mask = self.vba_stat_dict[mode] >= self.vba_thresh_dict[mode]
             self.mode_est_mask_dict[mode] = Mask(mask, ref=self.data_img.ref)
 
     def run_single(self):
@@ -44,6 +46,11 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
 
         self.vba_null_dict['vba'] = np.array([d['vba'] for d in val_list])
         self.vba_null_dict['tfce'] = np.array([d['tfce'] for d in val_list])
+
+        # compute signifigance thresholds
+        perc = 100 * (1 - self.alpha)
+        for mode, null in self.vba_null_dict.items():
+            self.vba_thresh_dict[mode] = np.percentile(null, perc)
 
         return val_list
 
@@ -63,7 +70,7 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
 
         return stat_dict
 
-    def save(self, *args, null_vba=True, **kwargs):
+    def save(self, *args, null_vba=False, **kwargs):
         super().save(*args, **kwargs)
 
         for label, img in self.vba_stat_dict.items():
@@ -75,6 +82,9 @@ class PermuteDiscriminateVBA(PermuteDiscriminate):
             for label, stat in self.vba_null_dict.items():
                 sns.set()
                 plt.hist(stat, bins=25)
+                plt.axvline(self.vba_thresh_dict[label], label='sig thresh',
+                            color='g', linewidth=3)
+                plt.legend()
                 plt.xlabel(label)
                 plt.ylabel('count')
                 save_fig(self.folder / f'vba_hist_{label}.pdf')
