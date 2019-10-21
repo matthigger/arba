@@ -112,11 +112,11 @@ class DataImage:
         ref = arba.space.RefSpace(affine=affine, shape=shape)
 
         # build reduced DataImage
-        data_image = DataImageArray(data=self.data[trim_slice],
+        data_image = DataImageArray(data=np.array(self.data[trim_slice]),
                                     sbj_list=self.sbj_list,
                                     feat_list=self.feat_list,
                                     ref=ref,
-                                    mask=self.mask[trim_slice])
+                                    mask=np.array(self.mask[trim_slice]))
         return data_image, trim_slice
 
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,
