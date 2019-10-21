@@ -53,14 +53,14 @@ if __name__ == '__main__':
     # r2_vec = np.logspace(-2, -.1, 7)
     r2_vec = [.1]
     num_eff = 1
-    num_sbj = 100
+    num_sbj = 20
     min_var_effect_locations = False
 
     str_img_data = 'synth'  # 'hcp100' or 'synth'
 
     mask_radius = 1000
 
-    effect_num_vox = 100
+    effect_num_vox = 150
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -75,7 +75,7 @@ if __name__ == '__main__':
         contrast = [1, 0, 0]
         dim_sbj = 3
         dim_img = 1
-        shape = 8, 8, 8
+        shape = 10, 10, 10
         data = np.random.standard_normal((*shape, num_sbj, dim_img))
         data_img = arba.data.DataImageArray(data)
         data_img.to_nii(folder=folder / 'raw_data')
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     perf = Performance(stat_label='r2')
     with data_img.loaded():
         mask_img_full = data_img.mask
-        data_img.to_nii(folder, mean_flag=True)
+        data_img.to_nii(folder, mean=True)
 
         # sample effects
         idx_r2_eff_dict = sample_effects(r2_vec=r2_vec,
@@ -114,24 +114,28 @@ if __name__ == '__main__':
 
         # run each effect
         for (eff_idx, r2), eff in idx_r2_eff_dict.items():
-            data_img.mask = np.logical_and(eff.mask.dilate(mask_radius),
-                                           mask_img_full)
+            # build smaller DataImage which cuts the zeros out
+            _data_img, trim_slice = data_img.trim(
+                mask=eff.mask.dilate(mask_radius))
+            eff.mask = eff.mask[trim_slice]
+            eff.mask.ref = _data_img.ref
 
             # impose effect on data
             offset = eff.get_offset_array(data_sbj.feat)
-            data_img.reset_offset(offset)
+            _data_img.reset_offset(offset)
 
             # find extent
             _folder = folder / f'eff{eff_idx}_r2_{r2:.2e}'
             file.save(eff, _folder / 'effect.p.gz')
-            perm_reg = arba.permute.PermuteRegressVBA(data_sbj, data_img,
+            perm_reg = arba.permute.PermuteRegressVBA(data_img=_data_img,
+                                                      data_sbj=data_sbj,
                                                       num_perm=num_perm,
                                                       par_flag=par_flag,
                                                       alpha=alpha,
                                                       mask_target=eff.mask,
                                                       verbose=True,
                                                       folder=_folder)
-            perm_reg.save()
+            perm_reg.save(size_v_z=True, null=True)
 
             # record performance
             perf.check_in(stat=r2, perm_reg=perm_reg)
