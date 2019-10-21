@@ -42,7 +42,8 @@ class Permute:
         self.mask_target = mask_target
         self.verbose = verbose
 
-        self.null_z = None
+        self.z_null = None
+        self.z_thresh = None
         self.model_mu_lin_reg = None
         self.model_err_lin_reg = None
         self.model_log_size_stat = None
@@ -94,9 +95,14 @@ class Permute:
         # compute error per size given model above
         err = log_stat - self.model_mu_lin_reg.predict(log_size)
 
+        # only take positive error (we're only interested in top of dist)
+        log_size = log_size[err >= 0]
+        err = err[err >= 0]
+
         # estimate error bandwidth given model above
         self.model_err_lin_reg = LinearRegression()
-        self.model_err_lin_reg.fit(log_size, np.abs(err))
+        self.model_err_lin_reg.fit(log_size.reshape(-1, 1),
+                                   np.abs(err).reshape(-1, 1))
 
     def get_model_z(self, stat, size, _no_log=False):
         """ computes z-score of stat under model (adjusts for size)
@@ -129,11 +135,11 @@ class Permute:
         val_list = self.permute(*args, **kwargs)
 
         # comptue percentile and store
-        self.null_z = list()
+        self.z_null = list()
         for d in val_list:
             z = self.get_model_z(size=d['size'], stat=d['stat'])
-            self.null_z.append(max(z))
-        self.null_z = np.array(self.null_z)
+            self.z_null.append(max(z))
+        self.z_null = np.array(self.z_null)
 
         return val_list
 
@@ -204,17 +210,22 @@ class Permute:
                                                   max_flag=True)
 
         # get only the significant nodes
-        z_thresh = np.percentile(self.null_z, 100 * (1 - self.alpha))
-        sig_node = {n for n in node_best if self.node_z_dict[n] >= z_thresh}
+        self.z_thresh = np.percentile(self.z_null, 100 * (1 - self.alpha))
+        sig_node = {n for n in node_best
+                    if self.node_z_dict[n] >= self.z_thresh}
 
         return sig_node
 
-    def save(self, size_v_stat=True, size_v_z=True, null=True, print_node=True,
-             performance=True):
+    def save(self, plot_mask=True, size_v_stat=False, size_v_z=False,
+             null=False, print_node=False, performance=True):
 
         sns.set()
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
+
+        if plot_mask:
+            for label, mask in self.mode_est_mask_dict.items():
+                mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
         if null:
             fig, ax = plt.subplots(1, 2)
@@ -272,13 +283,13 @@ class Permute:
 
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
 
-        for label, mask in self.mode_est_mask_dict.items():
-            mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
-
         if size_v_z:
             self.merge_record.plot_size_v(self.node_z_dict, label='z-model',
                                           mask=self.mask_target,
                                           log_y=False)
+            plt.axhline(self.z_thresh, label='sig thresh',
+                        color='g', linewidth=3)
+            plt.legend()
             save_fig(self.folder / f'size_v_{self.stat}_z.pdf')
 
         if performance and self.mask_target is not None:
