@@ -60,7 +60,7 @@ class DataImage:
         self.offset = None
         self.f_data = None
 
-    def trim(self, mask=None):
+    def trim(self, mask=None, n_buff=0):
         """ returns a DataImageSynth which discards dims with only zeros
 
         if the input mask is:
@@ -76,6 +76,7 @@ class DataImage:
 
         Args:
             mask (np.array): mask to apply before trimming
+            n_buff (int): leaves a buffer of zeros this thick around img
 
         Returns:
             data_image (DataImageArray): reduced DataImage
@@ -96,8 +97,8 @@ class DataImage:
         for idx in range(3):
             not_idx = set(range(3)) - {idx}
             idx_present = np.nonzero(mask.any(axis=tuple(not_idx)))[0]
-            min_ijk.append(idx_present[0])
-            max_ijk.append(idx_present[-1])
+            min_ijk.append(max(idx_present[0] - n_buff, 0))
+            max_ijk.append(idx_present[-1] + n_buff)
 
         # build slice
         trim_slice = np.s_[

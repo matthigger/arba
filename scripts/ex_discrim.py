@@ -2,11 +2,14 @@ import pathlib
 import random
 from string import ascii_uppercase
 
+import matplotlib
 import numpy as np
 
 import arba
 from pnl_data.set import hcp_100
 from scripts.performance import Performance
+
+matplotlib.use('TkAgg')
 
 
 def sample_effects(t2_vec, grp_sbj_list_dict, grp_target=None, **kwargs):
@@ -37,17 +40,17 @@ if __name__ == '__main__':
     alpha = .05
 
     # regression effect params
-    # t2_vec = np.logspace(-1, 1, 5)
-    t2_vec = [.5]
-    num_eff = 1
+    t2_vec = np.logspace(-1, 1, 5)
+    # t2_vec = [.5]
+    num_eff = 25
     num_sbj = 100
-    min_var_effect_locations = False
+    min_var_effect_locations = True
 
-    str_img_data = 'synth'  # 'hcp100' or 'synth'
+    str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
     mask_radius = 5
 
-    effect_num_vox = 150
+    effect_num_vox = 250
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -57,7 +60,7 @@ if __name__ == '__main__':
     # duild bummy images
     if str_img_data == 'synth':
         dim_img = 1
-        shape = 12, 12, 12
+        shape = 8, 8, 8
         data = np.random.standard_normal((*shape, num_sbj, dim_img))
         data_img = arba.data.DataImageArray(data)
         data_img.to_nii(folder=folder / 'raw_data')
@@ -93,8 +96,10 @@ if __name__ == '__main__':
 
         # run each effect
         for (eff_idx, t2), eff in idx_t2_eff_dict.items():
-            _data_img, trim_slice = data_img.trim(
-                mask=eff.mask.dilate(mask_radius))
+            # build smaller DataImage which cuts the zeros out
+            _data_img, \
+            trim_slice = data_img.trim(mask=eff.mask.dilate(mask_radius),
+                                       n_buff=1)
             eff.mask = eff.mask[trim_slice]
             eff.mask.ref = _data_img.ref
 

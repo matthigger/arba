@@ -51,12 +51,12 @@ if __name__ == '__main__':
 
     # regression effect params
     # r2_vec = np.logspace(-2, -.1, 7)
-    r2_vec = [.1]
+    r2_vec = [.2]
     num_eff = 1
     num_sbj = 20
     min_var_effect_locations = False
 
-    str_img_data = 'synth'  # 'hcp100' or 'synth'
+    str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
     mask_radius = 1000
 
@@ -72,8 +72,8 @@ if __name__ == '__main__':
 
     # duild bummy images
     if str_img_data == 'synth':
-        contrast = [1, 0, 0]
-        dim_sbj = 3
+        contrast = [1]
+        dim_sbj = 1
         dim_img = 1
         shape = 10, 10, 10
         data = np.random.standard_normal((*shape, num_sbj, dim_img))
@@ -115,8 +115,9 @@ if __name__ == '__main__':
         # run each effect
         for (eff_idx, r2), eff in idx_r2_eff_dict.items():
             # build smaller DataImage which cuts the zeros out
-            _data_img, trim_slice = data_img.trim(
-                mask=eff.mask.dilate(mask_radius))
+            _data_img, \
+            trim_slice = data_img.trim(mask=eff.mask.dilate(mask_radius),
+                                       n_buff=1)
             eff.mask = eff.mask[trim_slice]
             eff.mask.ref = _data_img.ref
 
@@ -135,7 +136,7 @@ if __name__ == '__main__':
                                                       mask_target=eff.mask,
                                                       verbose=True,
                                                       folder=_folder)
-            perm_reg.save(size_v_z=True, null=True)
+            perm_reg.save(size_v_z=True, null=True, size_v_stat=True)
 
             # record performance
             perf.check_in(stat=r2, perm_reg=perm_reg)
