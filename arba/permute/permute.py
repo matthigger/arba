@@ -95,10 +95,6 @@ class Permute:
         # compute error per size given model above
         err = log_stat - self.model_mu_lin_reg.predict(log_size)
 
-        # only take positive error (we're only interested in top of dist)
-        log_size = log_size[err >= 0]
-        err = err[err >= 0]
-
         # estimate error bandwidth given model above
         self.model_err_lin_reg = LinearRegression()
         self.model_err_lin_reg.fit(log_size.reshape(-1, 1),
