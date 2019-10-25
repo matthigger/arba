@@ -202,13 +202,16 @@ class Permute:
         if null:
             self.fsize_model.plot()
             plt.suptitle(f'adjusting f per region size')
-            save_fig(self.folder / f'size_adjust.pdf')
+            save_fig(self.folder / f'size_adjust.pdf', size_inches=(15, 5))
 
         if size_v_f:
             self.merge_record.plot_size_v('f', label='f',
                                           mask=self.mask_target,
                                           log_y=True)
-
+            plt.plot(self.fsize_model.size,
+                     self.fsize_model.get_f(saf=self.saf_thresh),
+                     color='g', linewidth=2, label='significant')
+            plt.legend()
             save_fig(self.folder / f'size_v_f.pdf')
 
         if size_v_saf:

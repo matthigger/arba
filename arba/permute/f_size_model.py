@@ -108,7 +108,8 @@ class FSizeModel:
 
         return fas
 
-    def plot_model(self, ax=None):
+    def plot_model(self, ax=None, model_mu=True, model_std=True, train=True,
+                   label=True):
         """ plots model """
         if ax is None:
             fig, ax = plt.subplots(1, 1)
@@ -117,23 +118,29 @@ class FSizeModel:
 
         ax.set_yscale('log')
         ax.set_xscale('log')
+        handle_label_dict = dict()
 
         for _logf in self.logf_train:
-            h = plt.plot(self.size, 10 ** _logf, alpha=.4, color='k')
+            h = plt.plot(self.size, 10 ** _logf, alpha=.4, color='k',
+                         linewidth=.5)
+        handle_label_dict[h[0]] = 'null max'
 
-        mu = 10 ** self.logf_expect
-        top = 10 ** (self.logf_expect + self.std_expect)
-        btm = 10 ** (self.logf_expect - self.std_expect)
+        h = plt.plot(self.size, self.get_f(saf=0), color='g', linewidth=2)
+        handle_label_dict[h[0]] = 'model'
 
-        h_model = plt.plot(self.size, mu, color='b', linewidth=3)
-        h_model_fill = plt.fill_between(self.size, top, btm,
-                                        color='b', linewidth=3, alpha=.5)
+        h = plt.fill_between(self.size, self.get_f(saf=1), self.get_f(saf=-1),
+                             color='g', linewidth=2,
+                             alpha=.5)
+        handle_label_dict[h] = 'model +/- 1 std'
+
         plt.ylabel('F stat')
         plt.xlabel('Region Size')
-        plt.legend((h[0], h_model[0], h_model_fill),
-                   ('null max', 'model', 'model +/- 1 std'))
+        plt.legend(handle_label_dict.keys(), handle_label_dict.values())
 
         return ax
+
+    def get_f(self, saf=0):
+        return 10 ** (self.logf_expect + self.std_expect * saf)
 
     def plot_f(self, ax=None, size_correct=True):
         if ax is None:
