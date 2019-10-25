@@ -44,10 +44,9 @@ class FSizeModel:
                           per each each (0 if unobserved in permutation)
         """
         self.size = size.astype(int)
-        self.logf_train = np.log10(f)
-        logf_train_mono = make_monotonic_up(self.logf_train)
-        self.logf_expect = np.median(logf_train_mono, axis=0)
-        err = logf_train_mono - self.logf_expect
+        self.logf_train = make_monotonic_up(np.log10(f))
+        self.logf_expect = np.median(self.logf_train, axis=0)
+        err = self.logf_train - self.logf_expect
         self.std_expect = np.mean(np.abs(err), axis=0)
 
     def get_logf_std(self, size):
@@ -136,31 +135,41 @@ class FSizeModel:
 
         return ax
 
-    def plot_saf_train(self, ax=None):
+    def plot_f(self, ax=None, size_correct=True):
         if ax is None:
             fig, ax = plt.subplots(1, 1)
         else:
             plt.sca(ax)
 
         ax.set_xscale('log')
+        if not size_correct:
+            ax.set_yscale('log')
         plt.xlabel('Region Size')
-        plt.ylabel('Size Adjusted F Stat')
 
         for idx in range(self.logf_train.shape[0]):
-            saf = self.get_saf(size=self.size,
-                               f_stats=self.logf_train[idx, :],
-                               log_flag=False)
-            h = plt.scatter(self.size, saf)
+            y = self.logf_train[idx, :]
+            if size_correct:
+                y = self.get_saf(size=self.size,
+                                 f_stats=y,
+                                 log_flag=False)
+            else:
+                # unlog
+                y = 10 ** y
+            h = plt.scatter(self.size, y)
 
+        if size_correct:
+            plt.ylabel('Size Adjusted F Stat')
+        else:
+            plt.ylabel('F Stat')
         plt.legend((h,), ('null region',))
 
         return ax
 
     def plot(self):
-        fig, ax = plt.subplots(1, 2)
-
-        self.plot_model(ax=ax[0])
-        self.plot_saf_train(ax=ax[1])
+        fig, ax = plt.subplots(1, 3)
+        self.plot_f(ax=ax[0], size_correct=False)
+        self.plot_model(ax=ax[1])
+        self.plot_f(ax=ax[2], size_correct=True)
 
 
 def make_monotonic_up(x, copy=False):
