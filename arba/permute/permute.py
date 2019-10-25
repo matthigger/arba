@@ -7,6 +7,7 @@ import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
 from sklearn.linear_model import LinearRegression
+from mh_pytools.file import save
 from tqdm import tqdm
 
 from mh_pytools import parallel
@@ -223,6 +224,20 @@ class Permute:
             for label, mask in self.mode_est_mask_dict.items():
                 mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
+        if performance and self.mask_target is not None:
+            f_mask = self.folder / 'mask_target.nii.gz'
+            self.mask_target.to_nii(f_mask)
+
+            s = ''
+            for label, mask in self.mode_est_mask_dict.items():
+                s += get_performance_str(mask_estimate=mask,
+                                         mask_target=self.mask_target,
+                                         label=label) + '\n'
+
+            print(s)
+            with open(str(self.folder / 'performance.txt'), 'a+') as f:
+                print(s, file=f)
+
         if null:
             fig, ax = plt.subplots(1, 2)
             ax[1].set_xscale('log')
@@ -287,20 +302,6 @@ class Permute:
                         color='g', linewidth=3)
             plt.legend()
             save_fig(self.folder / f'size_v_{self.stat}_z.pdf')
-
-        if performance and self.mask_target is not None:
-            f_mask = self.folder / 'mask_target.nii.gz'
-            self.mask_target.to_nii(f_mask)
-
-            s = ''
-            for label, mask in self.mode_est_mask_dict.items():
-                s += get_performance_str(mask_estimate=mask,
-                                         mask_target=self.mask_target,
-                                         label=label) + '\n'
-
-            print(s)
-            with open(str(self.folder / 'performance.txt'), 'a+') as f:
-                print(s, file=f)
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
