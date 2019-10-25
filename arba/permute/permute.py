@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from scipy.spatial.distance import dice
-from sklearn.linear_model import LinearRegression
-from mh_pytools.file import save
 from tqdm import tqdm
 
 from mh_pytools import parallel
+from .f_size_model import FSizeModel
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
 
@@ -43,16 +42,14 @@ class Permute:
         self.mask_target = mask_target
         self.verbose = verbose
 
-        self.z_null = None
-        self.z_thresh = None
-        self.model_mu_lin_reg = None
-        self.model_err_lin_reg = None
-        self.model_log_size_stat = None
-
+        self.fsize_model = None
+        self.saf_null = None
+        self.saf_thresh = None
         self.sg_hist = None
         self.merge_record = None
+        self.node_saf_dict = None
 
-        self.stat_save = (*stat_save, self.stat)
+        self.stat_save = (*stat_save, self.stat, 'f')
 
         self.folder = folder
         if self.folder is None:
@@ -86,44 +83,8 @@ class Permute:
         # draw samples from permutation testing
         val_list = self.permute(*args, **kwargs)
 
-        # estimate mean stat per size
-        log_size = np.log10(np.vstack(d['size'] for d in val_list))
-        log_stat = np.log10(np.vstack(d['stat'] for d in val_list))
-        self.model_log_size_stat = np.hstack((log_size, log_stat))
-        self.model_mu_lin_reg = LinearRegression()
-        self.model_mu_lin_reg.fit(log_size, log_stat)
-
-        # compute error per size given model above
-        err = log_stat - self.model_mu_lin_reg.predict(log_size)
-
-        # estimate error bandwidth given model above
-        self.model_err_lin_reg = LinearRegression()
-        self.model_err_lin_reg.fit(log_size.reshape(-1, 1),
-                                   np.abs(err).reshape(-1, 1))
-
-    def get_model_z(self, stat, size, _no_log=False):
-        """ computes z-score of stat under model (adjusts for size)
-
-        Args:
-            stat (np.array): see self.stat
-            size (np.array): size of region
-            _no_log (bool): if true, disable taking log so one may pass log-ed
-                            data
-        """
-        stat = make_sklearn_2d(stat)
-        size = make_sklearn_2d(size)
-
-        if _no_log:
-            log_stat = stat
-            log_size = size
-        else:
-            log_stat = np.log10(stat)
-            log_size = np.log10(size)
-
-        diff = log_stat - self.model_mu_lin_reg.predict(log_size)
-        z = np.divide(diff, self.model_err_lin_reg.predict(log_size))
-
-        return z
+        # build model
+        self.fsize_model = FSizeModel.from_list_dict(val_list)
 
     def permute_samples(self, *args, **kwargs):
         """ draws samples from null distribution
@@ -132,11 +93,11 @@ class Permute:
         val_list = self.permute(*args, **kwargs)
 
         # comptue percentile and store
-        self.z_null = list()
+        self.saf_null = list()
         for d in val_list:
-            z = self.get_model_z(size=d['size'], stat=d['stat'])
-            self.z_null.append(max(z))
-        self.z_null = np.array(self.z_null)
+            saf = self.fsize_model.get_saf(size=d['size'], f_stats=d['f'])
+            self.saf_null.append(max(saf))
+        self.saf_null = np.array(self.saf_null)
 
         return val_list
 
@@ -161,12 +122,12 @@ class Permute:
 
         merge_record = sg_hist.merge_record
         size = np.empty((len(merge_record.nodes), 1))
-        stat = np.empty((len(merge_record.nodes), 1))
+        f = np.empty((len(merge_record.nodes), 1))
         for node in merge_record.nodes:
             size[node] = merge_record.node_size_dict[node]
-            stat[node] = merge_record.stat_node_val_dict[self.stat][node]
+            f[node] = merge_record.stat_node_val_dict['f'][node]
 
-        return {'size': size, 'stat': stat}
+        return {'size': size, 'f': f}
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
@@ -195,25 +156,25 @@ class Permute:
     def get_sig_node(self):
         # get size and stat
         size = np.empty((len(self.merge_record), 1))
-        stat = np.empty((len(self.merge_record), 1))
+        f = np.empty((len(self.merge_record), 1))
         for n in self.merge_record.nodes:
             size[n] = self.merge_record.node_size_dict[n]
-            stat[n] = self.merge_record.stat_node_val_dict[self.stat][n]
-        z = self.get_model_z(stat, size)
-        self.node_z_dict = dict(enumerate(z))
+            f[n] = self.merge_record.stat_node_val_dict[self.stat][n]
+        saf = self.fsize_model.get_saf(size=size, f_stats=f)
+        self.node_saf_dict = dict(enumerate(saf))
 
         # cut to a disjoint set of the most compelling nodes (max z)
-        node_best = self.merge_record._cut_greedy(self.node_z_dict,
+        node_best = self.merge_record._cut_greedy(self.node_saf_dict,
                                                   max_flag=True)
 
         # get only the significant nodes
-        self.z_thresh = np.percentile(self.z_null, 100 * (1 - self.alpha))
+        self.saf_thresh = np.percentile(self.saf_null, 100 * (1 - self.alpha))
         sig_node = {n for n in node_best
-                    if self.node_z_dict[n] >= self.z_thresh}
+                    if self.node_saf_dict[n] >= self.saf_thresh}
 
         return sig_node
 
-    def save(self, plot_mask=True, size_v_stat=False, size_v_z=False,
+    def save(self, plot_mask=True, size_v_stat=False, size_v_saf=False,
              null=False, print_node=False, performance=True):
 
         sns.set()
@@ -239,51 +200,7 @@ class Permute:
                 print(s, file=f)
 
         if null:
-            fig, ax = plt.subplots(1, 2)
-            ax[1].set_xscale('log')
-            ax[0].set_xscale('log')
-            ax[0].set_yscale('log')
-
-            # get stats
-            log_size = self.model_log_size_stat[:, 0]
-            log_stat = self.model_log_size_stat[:, 1]
-            _log_size = np.linspace(min(log_size), max(log_size), 100)
-
-            # downsample (for plotting)
-            idx = np.random.choice(range(log_size.size), 750)
-            log_size = log_size[idx]
-            log_stat = log_stat[idx]
-
-            # plot adjusted z score
-            plt.sca(ax[1])
-            z = self.get_model_z(size=log_size, stat=log_stat, _no_log=True)
-            plt.scatter(10 ** log_size, z, label='after adjustment', alpha=.4)
-            plt.legend()
-            plt.ylabel('z')
-            plt.xlabel('size')
-
-            # plot observed stats
-            plt.sca(ax[0])
-            plt.scatter(10 ** log_size, 10 ** log_stat, label='null observed',
-                        alpha=.4)
-
-            # compute / plot model expected
-            log_stat_predict = self.model_mu_lin_reg.predict(
-                make_sklearn_2d(_log_size))
-            label = f'model expected (m={self.model_mu_lin_reg.coef_[0, 0]:.2f})'
-            plt.plot(10 ** _log_size, 10 ** log_stat_predict, label=label,
-                     linewidth=3,
-                     color='k')
-
-            # plot 1 std dev above
-            std = self.model_err_lin_reg.predict(make_sklearn_2d(_log_size))
-            label = f'+1 std dev (m={self.model_err_lin_reg.coef_[0, 0]:.2f})'
-            plt.plot(10 ** _log_size, 10 ** (log_stat_predict + std),
-                     label=label, linewidth=3, color='k', linestyle='--')
-            plt.legend()
-            plt.ylabel(self.stat)
-            plt.xlabel('size')
-
+            self.fsize_model.plot()
             plt.suptitle(f'adjusting {self.stat} per region size')
             save_fig(self.folder / f'size_adjust.pdf')
 
@@ -294,14 +211,15 @@ class Permute:
 
             save_fig(self.folder / f'size_v_{self.stat}.pdf')
 
-        if size_v_z:
-            self.merge_record.plot_size_v(self.node_z_dict, label='z-model',
+        if size_v_saf:
+            self.merge_record.plot_size_v(self.node_saf_dict,
+                                          label='Size Adjusted F Stat',
                                           mask=self.mask_target,
                                           log_y=False)
-            plt.axhline(self.z_thresh, label='sig thresh',
+            plt.axhline(self.saf_thresh, label='Sig Thresh',
                         color='g', linewidth=3)
             plt.legend()
-            save_fig(self.folder / f'size_v_{self.stat}_z.pdf')
+            save_fig(self.folder / f'size_v_{self.stat}_saf.pdf')
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
