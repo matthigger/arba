@@ -37,7 +37,8 @@ class RegionDiscriminate(Region):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.delta, self.cov_pool, self.t2 = get_t2_stats(fs_dict=self.fs_dict)
+        self.delta, self.cov_pool, self.t2, self.f = \
+            get_t2_stats(fs_dict=self.fs_dict)
 
         self.cov_pool_det = np.linalg.det(self.cov_pool)
 
@@ -73,5 +74,8 @@ def get_t2_stats(fs_dict, grp_tuple=None):
     # compute t2
     t2 = delta @ np.linalg.inv(cov_pool) @ delta * (n0 * n1) / (n0 + n1)
 
-    # todo: t2 actually refers to mean t2 per observation
-    return delta, cov_pool, t2
+    # compute f
+    p = fs_dict[grp0].d
+    f = t2 * (n0 + n1 - p - 1) / ((n0 + n1 - 2) * p)
+
+    return delta, cov_pool, t2, f

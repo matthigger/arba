@@ -77,11 +77,11 @@ class RegionRegress(Region):
                               self.data_sbj.num_sbj
 
         # r2
-        self.r2 = get_r2(x=self.data_sbj.feat,
-                         y=self.feat_img,
-                         beta=self.beta,
-                         y_pool_cov=self.space_cov_pool,
-                         contrast=self.data_sbj.contrast)
+        self.r2, self.f = get_r2(x=self.data_sbj.feat,
+                                 y=self.feat_img,
+                                 beta=self.beta,
+                                 y_pool_cov=self.space_cov_pool,
+                                 contrast=self.data_sbj.contrast)
 
     def __add__(self, other):
         # allows use of sum(reg_iter)

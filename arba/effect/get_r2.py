@@ -16,6 +16,7 @@ def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
 
     Returns:
         r2 (float): coefficient of determination
+        f (float): f stat
     """
     # get beta
     if beta is None:
@@ -49,4 +50,9 @@ def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
     # compute r2
     r2 = 1 - (np.trace(mse) + tr_pool_cov) / (np.trace(y_cov) + tr_pool_cov)
 
-    return r2
+    # compute f
+    # todo: doesn't dimension of y show up somewhere?
+    n, k = x.shape
+    f = r2 / (1 - r2) * (n - k) / (k - 1)
+
+    return r2, f
