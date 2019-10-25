@@ -81,7 +81,8 @@ class RegionRegress(Region):
                                  y=self.feat_img,
                                  beta=self.beta,
                                  y_pool_cov=self.space_cov_pool,
-                                 contrast=self.data_sbj.contrast)
+                                 contrast=self.data_sbj.contrast,
+                                 sample_scale=len(self))
 
     def __add__(self, other):
         # allows use of sum(reg_iter)
