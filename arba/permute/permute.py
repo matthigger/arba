@@ -159,7 +159,7 @@ class Permute:
         f = np.empty((len(self.merge_record), 1))
         for n in self.merge_record.nodes:
             size[n] = self.merge_record.node_size_dict[n]
-            f[n] = self.merge_record.stat_node_val_dict[self.stat][n]
+            f[n] = self.merge_record.stat_node_val_dict['f'][n]
         saf = self.fsize_model.get_saf(size=size, f_stats=f)
         self.node_saf_dict = dict(enumerate(saf))
 
@@ -174,7 +174,7 @@ class Permute:
 
         return sig_node
 
-    def save(self, plot_mask=True, size_v_stat=False, size_v_saf=False,
+    def save(self, plot_mask=True, size_v_f=False, size_v_saf=False,
              null=False, print_node=False, performance=True):
 
         sns.set()
@@ -201,15 +201,15 @@ class Permute:
 
         if null:
             self.fsize_model.plot()
-            plt.suptitle(f'adjusting {self.stat} per region size')
+            plt.suptitle(f'adjusting f per region size')
             save_fig(self.folder / f'size_adjust.pdf')
 
-        if size_v_stat:
-            self.merge_record.plot_size_v(self.stat, label=self.stat,
+        if size_v_f:
+            self.merge_record.plot_size_v('f', label='f',
                                           mask=self.mask_target,
                                           log_y=True)
 
-            save_fig(self.folder / f'size_v_{self.stat}.pdf')
+            save_fig(self.folder / f'size_v_f.pdf')
 
         if size_v_saf:
             self.merge_record.plot_size_v(self.node_saf_dict,
@@ -219,7 +219,7 @@ class Permute:
             plt.axhline(self.saf_thresh, label='Sig Thresh',
                         color='g', linewidth=3)
             plt.legend()
-            save_fig(self.folder / f'size_v_{self.stat}_saf.pdf')
+            save_fig(self.folder / f'size_v_saf.pdf')
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
