@@ -509,49 +509,60 @@ class MergeRecord(nx.DiGraph):
 
         return f_out, n_list
 
-    def plot_size_v(self, fnc, label=None, mask=None, log_y=False):
+    def plot_size_v(self, fnc, label=None, mask=None, log_y=False,
+                    max_nodes=750):
         if label is None:
             label = fnc.__name__
 
-        num_nodes = len(self.nodes)
+        # find the largest max_nodes nodes
+        node_set = sorted(self.node_size_dict.items(), key=lambda x: x[1])
+        node_set = {x[0] for x in node_set[-max_nodes:]}
 
         if mask is None:
             node_color = None
         else:
             # compute node_color
             node_color = dict()
-            for node in range(num_nodes):
-                if node < len(self.leaf_ijk_dict.keys()):
-                    ijk = self.leaf_ijk_dict[node]
-                    node_color[node] = mask[ijk].astype(bool)
-                else:
+            for node in node_set:
+                if node in node_color.keys():
+                    # color is weighted sum of its neighbors
                     n0, n1 = list(self.neighbors(node))
                     s0, s1 = self.node_size_dict[n0], self.node_size_dict[n1]
                     c0, c1 = node_color[n0], node_color[n1]
                     lam0 = s0 / (s0 + s1)
                     node_color[node] = c0 * lam0 + c1 * (1 - lam0)
+                else:
+                    # compute color as ratio in mask to total voxels
+                    mask_hits = 0
+                    count = 0
+                    for leaf in self.leaf_iter(node=node):
+                        count += 1
+                        mask_hits += mask[self.leaf_ijk_dict[leaf]]
+                    node_color[node] = mask_hits / count
 
         node_pos = dict()
-        for n, size in self.node_size_dict.items():
+        for node in node_set:
+            size = self.node_size_dict[node]
             if isinstance(fnc, dict):
-                node_pos[n] = size, fnc[n]
+                node_pos[node] = size, fnc[node]
             else:
-                node_pos[n] = size, self.stat_node_val_dict[fnc][n]
+                node_pos[node] = size, self.stat_node_val_dict[fnc][node]
 
-        nodelist = [n for n, c in node_color.items() if c > 0]
-        node_color = {n: node_color[n] for n in nodelist}
-        nx.draw_networkx_nodes(self, nodelist=nodelist, pos=node_pos,
+        node_color = {n: node_color[n] for n in node_set}
+        nx.draw_networkx_nodes(self, nodelist=node_set, pos=node_pos,
                                node_color=np.array(list(node_color.values())),
                                vmin=0, vmax=1, cmap=plt.get_cmap('bwr'))
-        nx.draw_networkx_edges(self, pos=node_pos)
-        plt.xlabel('size')
+
+        edgelist = [e for e in self.edges if node_set.issuperset(e)]
+        nx.draw_networkx_edges(self, pos=node_pos, edgelist=edgelist)
+        plt.xlabel('Region Size')
         plt.ylabel(label)
 
         ax = plt.gca()
         if log_y:
             ax.set_yscale('log')
         ax.set_xscale('log')
-        ax.set_xlim(left=1, right=num_nodes)
+        ax.set_xlim(left=1, right=len(self.ijk_leaf_dict))
 
     def build_mask(self, node_list):
         # init empty mask
