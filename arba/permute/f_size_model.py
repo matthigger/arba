@@ -44,10 +44,15 @@ class FSizeModel:
                           per each each (0 if unobserved in permutation)
         """
         self.size = size.astype(int)
+
+        # make observations monotonic up, take their median as expected value
         self.logf_train = make_monotonic_up(np.log10(f))
         self.logf_expect = np.median(self.logf_train, axis=0)
+
+        # compute error and std dev, make monotonic decreasing with size
         err = self.logf_train - self.logf_expect
         self.std_expect = np.mean(np.abs(err), axis=0)
+        self.std_expect = make_monotonic_up(self.std_expect[::-1])[::-1]
 
     def get_logf_std(self, size):
         """ returns logf expected and std dev for a given size
