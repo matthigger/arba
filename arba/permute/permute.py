@@ -1,16 +1,15 @@
 import abc
 import pathlib
 import tempfile
-import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.stats
+import seaborn as sns
 from scipy.spatial.distance import dice
-from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 
 from mh_pytools import parallel
+from .f_size_model import FSizeModel
 from ..plot import save_fig
 from ..seg_graph import SegGraphHistory
 
@@ -20,31 +19,37 @@ class Permute:
 
     additionally, this object serves as a container for the result objects
 
+    `model' refers to a distribution of how the statistic changes with region
+    size.  it is estimated via bootstrapping from the permutation dataset, see
+    permute_model()
+
     Attributes:
         num_perm (int): number of permutations to run
         alpha (float): confidence threshold
         data_img (DataImage): observed imaging data
     """
 
-    def __init__(self, data_img, alpha=.05, num_perm=100, mask_target=None,
-                 verbose=True, folder=None, par_flag=False, stat_save=tuple()):
+    def __init__(self, data_img, alpha=.05, num_perm=100, num_perm_model=10,
+                 mask_target=None, verbose=True, folder=None, par_flag=False,
+                 stat_save=tuple()):
         assert alpha >= 1 / (num_perm + 1), \
             'not enough perm for alpha, never sig'
 
         self.alpha = alpha
         self.num_perm = num_perm
+        self.num_perm_model = num_perm_model
         self.data_img = data_img
         self.mask_target = mask_target
         self.verbose = verbose
 
-        self.stat_null = None
-        self.node_pval_dict = dict()
-        self.node_z_dict = dict()
-
+        self.fsize_model = None
+        self.saf_null = None
+        self.saf_thresh = None
         self.sg_hist = None
         self.merge_record = None
+        self.node_saf_dict = None
 
-        self.stat_save = (*stat_save, self.stat)
+        self.stat_save = (*stat_save, self.stat, 'f')
 
         self.folder = folder
         if self.folder is None:
@@ -52,8 +57,8 @@ class Permute:
 
         with data_img.loaded():
             self.run_single()
-
-            self.permute(par_flag=par_flag)
+            self.permute_model(par_flag=par_flag)
+            self.permute_samples(par_flag=par_flag)
 
         # get mask of estimate
         self.node_stat_dict = self.merge_record.stat_node_val_dict[self.stat]
@@ -62,6 +67,39 @@ class Permute:
         # build estimate mask
         arba_mask = self.merge_record.build_mask(self.sig_node)
         self.mode_est_mask_dict = {'arba': arba_mask}
+
+    def permute_model(self, *args, **kwargs):
+        """ estimates distribution of how statistic varies with size
+
+        this is achieved by bootstrap sampling stats from the null distribution
+        via permutation testing.  once the stats are collected, we assume that
+
+        log stat = a(size) + b(size) log size + err
+
+        for err ~ N(0, sig(size))
+
+        for linear functions a, b and sig
+        """
+        # draw samples from permutation testing
+        val_list = self.permute(*args, **kwargs)
+
+        # build model
+        self.fsize_model = FSizeModel.from_list_dict(val_list)
+
+    def permute_samples(self, *args, **kwargs):
+        """ draws samples from null distribution
+        """
+        # draw samples from permutation testing
+        val_list = self.permute(*args, **kwargs)
+
+        # comptue percentile and store
+        self.saf_null = list()
+        for d in val_list:
+            saf = self.fsize_model.get_saf(size=d['size'], f_stats=d['f'])
+            self.saf_null.append(max(saf))
+        self.saf_null = np.array(self.saf_null)
+
+        return val_list
 
     @abc.abstractmethod
     def _set_seed(self, seed=None):
@@ -83,17 +121,13 @@ class Permute:
         sg_hist.reduce_to(1, verbose=self.verbose)
 
         merge_record = sg_hist.merge_record
-        max_size = len(merge_record.leaf_ijk_dict)
+        size = np.empty((len(merge_record.nodes), 1))
+        f = np.empty((len(merge_record.nodes), 1))
+        for node in merge_record.nodes:
+            size[node] = merge_record.node_size_dict[node]
+            f[node] = merge_record.stat_node_val_dict['f'][node]
 
-        # record max stat per size
-        node_stat_dict = merge_record.stat_node_val_dict[self.stat]
-        max_stat = np.zeros(max_size) * np.nan
-        for node, stat in node_stat_dict.items():
-            size = merge_record.node_size_dict[node]
-            if np.isnan(max_stat[size - 1]) or stat > max_stat[size - 1]:
-                max_stat[size - 1] = stat
-
-        return {self.stat: max_stat}
+        return {'size': size, 'f': f}
 
     def run_single(self):
         """ runs a single Agglomerative Clustering run
@@ -117,115 +151,39 @@ class Permute:
             for d in tqdm(arg_list, desc='permute', disable=not self.verbose):
                 val_list.append(self.run_single_permute(**d))
 
-        # reset permutation to original data
-        self._set_seed(seed=None)
-
-        # record null stats
-        self.stat_null = np.vstack(d[self.stat] for d in val_list)
-        self.stat_null = np.sort(self.stat_null, axis=0)
-
-        # average stat across permutations (same regression, quicker comp)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            stat_null_mean = np.nanmean(self.stat_null, axis=0)
-
-        # get weights (num observations per mean) and size
-        weight = self.num_perm - np.isnan(self.stat_null).sum(axis=0)
-        size = np.arange(1, self.stat_null.shape[1] + 1)
-
-        # drop all sizes which were never observed
-        observed = weight.astype(bool)
-        _size = size[observed]
-        _stat_null_mean = stat_null_mean[observed]
-        _weight = weight[observed]
-
-        # fit linear model
-        lin_reg = LinearRegression()
-        lin_reg.fit(np.atleast_2d(np.log10(_size)).T,
-                    np.atleast_2d(np.log10(_stat_null_mean)).T,
-                    sample_weight=_weight)
-
-        # record prediction
-        self.log_stat_predict = lin_reg.predict(
-            np.atleast_2d(np.log10(size)).T)
-
-        # compute prediction error
-        err = np.log10(self.stat_null) - self.log_stat_predict.T
-        self.log_stat_err_std = np.nanstd(err.flatten())
-
         return val_list
 
     def get_sig_node(self):
-        # get nodes with largest stat
-        self.node_pval_dict = dict()
+        # get size and stat
+        size = np.empty((len(self.merge_record), 1))
+        f = np.empty((len(self.merge_record), 1))
         for n in self.merge_record.nodes:
-            reg_size = self.merge_record.node_size_dict[n]
-            log_stat = np.log10(self.node_stat_dict[n])
-            log_stat_null = self.log_stat_predict[reg_size - 1]
-            z = (log_stat - log_stat_null) / self.log_stat_err_std
-            self.node_pval_dict[n] = 1 - scipy.stats.norm.cdf(z)
+            size[n] = self.merge_record.node_size_dict[n]
+            f[n] = self.merge_record.stat_node_val_dict['f'][n]
+        saf = self.fsize_model.get_saf(size=size, f_stats=f)
+        self.node_saf_dict = dict(enumerate(saf))
 
-        # trim to sig nodes
-        signode_pval_dict = {n: p for n, p in self.node_pval_dict.items()
-                             if p <= self.alpha}
+        # cut to a disjoint set of the most compelling nodes (max z)
+        node_best = self.merge_record._cut_greedy(self.node_saf_dict,
+                                                  max_flag=True)
 
-        # cut to a disjoint set of the most compelling nodes (min pval)
-        sig_node = self.merge_record._cut_greedy(signode_pval_dict,
-                                                 max_flag=False)
+        # get only the significant nodes
+        self.saf_thresh = np.percentile(self.saf_null, 100 * (1 - self.alpha))
+        sig_node = {n for n in node_best
+                    if self.node_saf_dict[n] >= self.saf_thresh}
 
         return sig_node
 
-    def save(self, size_v_stat=True, size_v_stat_null=True,
-             size_v_stat_pval=True, print_node=True, performance=True):
+    def save(self, plot_mask=True, size_v_f=False, size_v_saf=False,
+             null=False, print_node=False, performance=True):
 
-        def plot_thresh(p_list):
-            size = np.arange(1, self.stat_null.shape[1] + 1)
-            plt.plot(size, 10 ** self.log_stat_predict, label='null mean')
-            for idx, p in enumerate(p_list):
-                stat = self.log_stat_predict + \
-                       self.log_stat_err_std * scipy.stats.norm.isf(p)
-                plt.plot(size, 10 ** stat, label=f'null p={p}')
-
+        sns.set()
         self.folder = pathlib.Path(self.folder)
         self.folder.mkdir(exist_ok=True, parents=True)
 
-        if size_v_stat:
-            self.merge_record.plot_size_v(self.stat, label=self.stat,
-                                          mask=self.mask_target,
-                                          log_y=True)
-            plot_thresh(p_list=[.05, .01, .001])
-            plt.legend()
-
-            save_fig(self.folder / f'size_v_{self.stat}.pdf')
-
-        for label, mask in self.mode_est_mask_dict.items():
-            mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
-
-        if size_v_stat_pval:
-            self.merge_record.plot_size_v(self.node_pval_dict, label='pval',
-                                          mask=self.mask_target,
-                                          log_y=True)
-            save_fig(self.folder / f'size_v_{self.stat}pval.pdf')
-
-        if size_v_stat_null:
-            # scatter permutations
-            size = np.arange(1, self.stat_null.shape[1] + 1)
-            _size = np.repeat(np.atleast_2d(size), self.num_perm, axis=0)
-            xy = np.vstack((_size.flatten(), self.stat_null.flatten())).T
-            xy = xy[~np.isnan(xy[:, 1]), :]
-
-            fig, ax = plt.subplots(1, 1)
-            ax.set_xscale('log')
-            ax.set_yscale('log')
-            plt.scatter(xy[:, 0], xy[:, 1], color='g', alpha=.15,
-                        label='observed')
-
-            plot_thresh(p_list=[.05, .01, .001])
-            plt.ylabel(f'max {self.stat} in permutation')
-            plt.xlabel('size')
-            plt.legend()
-
-            save_fig(self.folder / f'size_v_{self.stat}_null.pdf')
+        if plot_mask:
+            for label, mask in self.mode_est_mask_dict.items():
+                mask.to_nii(self.folder / f'mask_est_{label}.nii.gz')
 
         if performance and self.mask_target is not None:
             f_mask = self.folder / 'mask_target.nii.gz'
@@ -240,6 +198,31 @@ class Permute:
             print(s)
             with open(str(self.folder / 'performance.txt'), 'a+') as f:
                 print(s, file=f)
+
+        if null:
+            self.fsize_model.plot()
+            plt.suptitle(f'adjusting f per region size')
+            save_fig(self.folder / f'size_adjust.pdf', size_inches=(15, 5))
+
+        if size_v_f:
+            self.merge_record.plot_size_v('f', label='f',
+                                          mask=self.mask_target,
+                                          log_y=True)
+            plt.plot(self.fsize_model.size,
+                     self.fsize_model.get_f(saf=self.saf_thresh),
+                     color='g', linewidth=2, label='significant')
+            plt.legend()
+            save_fig(self.folder / f'size_v_f.pdf')
+
+        if size_v_saf:
+            self.merge_record.plot_size_v(self.node_saf_dict,
+                                          label='Size Adjusted F Stat',
+                                          mask=self.mask_target,
+                                          log_y=False)
+            plt.axhline(self.saf_thresh, label='Sig Thresh',
+                        color='g', linewidth=3)
+            plt.legend()
+            save_fig(self.folder / f'size_v_saf.pdf')
 
         if print_node and hasattr(self.reg_cls, 'plot'):
             for n in self.sig_node:
@@ -273,3 +256,12 @@ def get_performance_str(mask_estimate, mask_target, label=None):
     s += f'spec: {spec:.3f} ({non_target_wrong} of {non_target} vox detected incorrectly)\n'
 
     return s
+
+
+def make_sklearn_2d(x):
+    """ given a vector, makes it 2d assuming more observations than features
+    """
+    x = np.atleast_2d(x)
+    if x.shape[0] < x.shape[1]:
+        x = x.T
+    return x

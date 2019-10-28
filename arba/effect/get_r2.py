@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
+def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None, sample_scale=1):
     """ computes r2
 
     Args:
@@ -13,9 +13,11 @@ def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
                              feature is a target variable (True) or nuisance
                              (False).  all nuisance effects in a given beta are
                              subtracted before r2 is computed
+        sample_scale (int): scales samples in f stat
 
     Returns:
         r2 (float): coefficient of determination
+        f (float): f stat
     """
     # get beta
     if beta is None:
@@ -49,4 +51,10 @@ def get_r2(x, y, beta=None, y_pool_cov=None, contrast=None):
     # compute r2
     r2 = 1 - (np.trace(mse) + tr_pool_cov) / (np.trace(y_cov) + tr_pool_cov)
 
-    return r2
+    # compute f
+    # todo: doesn't dimension of y show up somewhere?
+    n, k = x.shape
+    n *= sample_scale
+    f = r2 / (1 - r2) * (n - k) / (k - 1)
+
+    return r2, f

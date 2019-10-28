@@ -54,12 +54,13 @@ class DataImage:
         self.mask = mask
         if self.mask is None:
             self.mask = np.ones(ref.shape).astype(bool)
+        self.mask = arba.space.Mask(self.mask, ref=self.ref)
 
         self.data = None
         self.offset = None
         self.f_data = None
 
-    def trim(self, mask=None):
+    def trim(self, mask=None, n_buff=0):
         """ returns a DataImageSynth which discards dims with only zeros
 
         if the input mask is:
@@ -75,6 +76,7 @@ class DataImage:
 
         Args:
             mask (np.array): mask to apply before trimming
+            n_buff (int): leaves a buffer of zeros this thick around img
 
         Returns:
             data_image (DataImageArray): reduced DataImage
@@ -95,8 +97,8 @@ class DataImage:
         for idx in range(3):
             not_idx = set(range(3)) - {idx}
             idx_present = np.nonzero(mask.any(axis=tuple(not_idx)))[0]
-            min_ijk.append(idx_present[0])
-            max_ijk.append(idx_present[-1])
+            min_ijk.append(max(idx_present[0] - n_buff, 0))
+            max_ijk.append(idx_present[-1] + n_buff)
 
         # build slice
         trim_slice = np.s_[
@@ -111,11 +113,11 @@ class DataImage:
         ref = arba.space.RefSpace(affine=affine, shape=shape)
 
         # build reduced DataImage
-        data_image = DataImageArray(data=self.data[trim_slice],
+        data_image = DataImageArray(data=np.array(self.data[trim_slice]),
                                     sbj_list=self.sbj_list,
                                     feat_list=self.feat_list,
                                     ref=ref,
-                                    mask=self.mask[trim_slice])
+                                    mask=np.array(self.mask[trim_slice]))
         return data_image, trim_slice
 
     def get_fs(self, ijk=None, mask=None, pc_ijk=None, sbj_list=None,

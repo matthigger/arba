@@ -1,3 +1,4 @@
+from .f_size_model import *
 from .get_perm_matrix import *
 from .get_pval import *
 from .permute_discrim import *

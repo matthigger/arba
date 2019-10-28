@@ -85,7 +85,7 @@ class EffectConstant(Effect):
         for grp, sbj_list in split.items():
             fs_dict[grp] = data_img.get_fs(sbj_list=sbj_list, mask=mask)
 
-        delta, cov_pool, _ = get_t2_stats(fs_dict, grp_tuple=grp_tuple)
+        delta, cov_pool, _, _ = get_t2_stats(fs_dict, grp_tuple=grp_tuple)
 
         # compute scale
         if edge_n is None:
