@@ -50,17 +50,17 @@ if __name__ == '__main__':
     alpha = .05
 
     # regression effect params
-    # r2_vec = np.logspace(-2, -.1, 7)
-    r2_vec = [.2]
-    num_eff = 1
+    r2_vec = np.logspace(-2, -.1, 7)
+    # r2_vec = [.2]
+    num_eff = 10
     num_sbj = 20
-    min_var_effect_locations = False
+    min_var_effect_locations = True
 
     str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
-    mask_radius = 1000
+    mask_radius = 5
 
-    effect_num_vox = 150
+    effect_num_vox = 200
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -136,7 +136,8 @@ if __name__ == '__main__':
                                                       mask_target=eff.mask,
                                                       verbose=True,
                                                       folder=_folder)
-            perm_reg.save(size_v_z=True, null=True, size_v_stat=True)
+            print(_folder)
+            perm_reg.save(size_v_saf=True, null=True, size_v_f=True)
 
             # record performance
             perf.check_in(stat=r2, perm_reg=perm_reg)

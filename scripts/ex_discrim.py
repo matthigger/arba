@@ -40,17 +40,17 @@ if __name__ == '__main__':
     alpha = .05
 
     # regression effect params
-    t2_vec = np.logspace(-1, 1, 5)
-    # t2_vec = [.5]
-    num_eff = 25
+    t2_vec = np.logspace(-1, .5, 4)
+    # t2_vec = [.1]
+    num_eff = 1
     num_sbj = 100
-    min_var_effect_locations = True
+    min_var_effect_locations = False
 
     str_img_data = 'hcp100'  # 'hcp100' or 'synth'
 
     mask_radius = 5
 
-    effect_num_vox = 250
+    effect_num_vox = 200
 
     # build dummy folder
     folder = pathlib.Path(tempfile.mkdtemp())
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     # duild bummy images
     if str_img_data == 'synth':
         dim_img = 1
-        shape = 8, 8, 8
+        shape = 10, 10, 10
         data = np.random.standard_normal((*shape, num_sbj, dim_img))
         data_img = arba.data.DataImageArray(data)
         data_img.to_nii(folder=folder / 'raw_data')
@@ -120,8 +120,10 @@ if __name__ == '__main__':
                                                            verbose=True,
                                                            folder=_folder)
 
-            perm_reg.save()
+            perm_reg.save(size_v_saf=True, null=True, size_v_f=True)
 
             # record performance
             perf.check_in(stat=t2, perm_reg=perm_reg)
+
+            print(_folder)
         perf.plot(folder)
